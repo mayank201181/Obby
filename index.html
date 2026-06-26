@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#d9c6ff"/>
+<title>Obby Blobs 🫧 — Climb to the Top!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="bg-decor" id="bgDecor"></div>
+<div class="toast" id="toast"></div>
+
+<!-- ============ LOBBY ============ -->
+<section class="screen active" id="lobbyScreen">
+  <div class="topbar">
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+    <div style="text-align:right">
+      <div class="muted" style="margin-bottom:4px">🎨 Background</div>
+      <div class="bgpick" id="bgPicker"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1 class="title">Obby Blobs</h1>
+    <p class="subtitle">Bounce, climb &amp; race to the top! 🫧</p>
+    <div class="preview-wrap"><canvas id="lobbyPreview"></canvas></div>
+    <input class="text" id="nameInput" maxlength="12" placeholder="Type your name…"/>
+    <button class="btn pink" onclick="openPlay()">▶ Play</button>
+    <div class="row">
+      <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
+      <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
+        <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CUSTOMIZE / SHOP ============ -->
+<section class="screen" id="customizeScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>Customise your Blob</h2>
+    <div class="preview-wrap"><canvas id="customPreview"></canvas></div>
+    <div class="tabs" id="customTabs">
+      <div class="tab active" data-tab="skins" onclick="setTab('skins')">Skins 🎨</div>
+      <div class="tab" data-tab="accessories" onclick="setTab('accessories')">Items 🎀</div>
+      <div class="tab" data-tab="faces" onclick="setTab('faces')">Faces 😊</div>
+    </div>
+    <p class="hint">Skins cost 🪙10 · Items 🪙15 · ✨ rare ones come from the Daily Chest</p>
+    <div class="grid scroll" id="customGrid"></div>
+  </div>
+</section>
+
+<!-- ============ PLAY MENU ============ -->
+<section class="screen" id="playScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>How do you want to play?</h2>
+    <button class="btn pink" onclick="playSolo()">🧍 Solo Climb</button>
+    <p class="hint">Just you vs the obby — 5 levels, 10 checkpoints each.</p>
+    <button class="btn blue" onclick="createRoom()">➕ Create Room</button>
+    <p class="hint">Get a code &amp; play with a friend (race or team-up).</p>
+    <div class="row">
+      <input class="text" id="joinCodeInput" maxlength="6" placeholder="ROOM CODE" style="text-transform:uppercase"/>
+    </div>
+    <button class="btn gold" onclick="joinRoomWithCode()">🔑 Join Room</button>
+  </div>
+</section>
+
+<!-- ============ ROOM LOBBY ============ -->
+<section class="screen" id="roomScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="leaveRoom()">← Leave</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2 id="roomTitle">Room</h2>
+    <div class="code-box" id="roomCodeBox">·····</div>
+    <p class="hint" id="roomHint">Share this code with your friend.</p>
+    <div class="players-list" id="rosterList"></div>
+    <p class="muted">Players: <span id="rosterCount">1</span></p>
+
+    <div id="hostControls" style="display:none">
+      <p class="hint">Pick a mode:</p>
+      <div class="row" id="modeBtns">
+        <button class="btn ghost small" data-mode="coop" onclick="selectRoomMode('coop')">🤝 Team-up</button>
+        <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
+      </div>
+      <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
+      <button class="btn pink" onclick="hostStart()">🚀 Start Game</button>
+    </div>
+    <div id="guestWait" style="display:none">
+      <p class="timer-big">Waiting for host to start… 🫧</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section class="screen" id="gameScreen">
+  <canvas id="gameCanvas"></canvas>
+  <div id="gameOverlay">
+    <div class="hud">
+      <div style="display:flex;gap:8px;flex-direction:column">
+        <div class="panel" id="hudLevel">Level 1/5</div>
+        <div class="panel small" id="hudCp">⛳ 0/10</div>
+      </div>
+      <div class="hud-btns">
+        <div class="panel" id="hudCoins">🪙 0</div>
+        <button class="btn ghost small" style="width:auto;pointer-events:auto" onclick="quitGame()">⏏ Quit</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="joystick" id="joystick"><div class="knob" id="joyKnob"></div></div>
+      <button class="jbtn" id="jumpBtn">⬆<br><span style="font-size:13px">JUMP</span></button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-back" id="chestModal">
+  <div class="card">
+    <div id="chestBody"></div>
+    <button class="btn pink" id="chestClaim">Claim 🎁</button>
+    <button class="btn ghost" onclick="closeChest()">Close</button>
+  </div>
+</div>
+<div class="modal-back" id="winModal">
+  <div class="card" id="winBody"></div>
+</div>
+
+<script src="js/peerjs.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/character.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/multiplayer.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+node_modules
+scratch_*.mjs
+shot_*.png
+.git
