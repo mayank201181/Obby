@@ -241,7 +241,7 @@ function onStand(p, pl, now){
   if(pl.type==='disappear'){
     const d=Game.disappear[pl.id]||(Game.disappear[pl.id]={});
     if(!d.standSince) d.standSince=now;
-    if(!d.gone && now-d.standSince>5000){ d.gone=true; d.goneAt=now; }
+    if(!d.gone && now-d.standSince > (pl.crumbleMs||5000)){ d.gone=true; d.goneAt=now; }
   }
   // conveyor: auto-move forward
   if(pl.type==='conveyor'){
@@ -366,8 +366,10 @@ function drawPlatform(ctx,pl){
       if(d&&d.gone) return;
       let alpha=1;
       if(d&&d.standSince){
-        const left=5000-(Game.t-d.standSince);
-        const blink = left<1600 ? (Math.sin(Game.t/70)*0.4+0.6) : 1;
+        const total=pl.crumbleMs||5000;
+        const left=total-(Game.t-d.standSince);
+        const warn=Math.min(1700, total*0.45);
+        const blink = left<warn ? (Math.sin(Game.t/55)*0.45+0.55) : 1;
         alpha=blink;
       }
       ctx.globalAlpha=alpha;

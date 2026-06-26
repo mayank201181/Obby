@@ -33,9 +33,10 @@ function generateLevel(level, seed, mode){
   // difficulty scales with level
   const diff = Math.min(1, (level-1)/(TOTAL_LEVELS-1));
 
-  // distinct block sizes (widths) for clear variety: tiny..extra-large
+  // distinct block sizes (widths) for clear variety: tiny..extra-large.
+  // Later levels lean toward SMALLER blocks (harder to land on).
   const SIZES   = [60, 86, 120, 160, 210];
-  const SIZE_W  = [2,  4,   5,   3,   2];   // weights (medium most common)
+  const SIZE_W  = [2+diff*5, 4+diff*3, 5, Math.max(0.5,3-diff*1.8), Math.max(0.4,2-diff*1.3)];
   const SIZE_WSUM = SIZE_W.reduce((a,b)=>a+b,0);
   function pickSize(){
     let r = rnd()*SIZE_WSUM;
@@ -44,9 +45,10 @@ function generateLevel(level, seed, mode){
   }
   // max horizontal centre offset is scaled to the TARGET size so small blocks
   // are placed closer (fair) and within the measured jump-reach envelope.
+  // Gaps stretch wider on later levels but stay inside the reachable envelope.
   function maxOffsetFor(w){
-    let m = w>=200?185 : w>=150?170 : w>=110?150 : w>=80?120 : 95;
-    return m + diff*12;          // a touch harder on later levels, still reachable
+    let m = w>=200?188 : w>=150?172 : w>=110?152 : w>=80?122 : 98;
+    return m + diff*20;          // harder on later levels, still reachable
   }
 
   // start ground platform
@@ -76,11 +78,15 @@ function generateLevel(level, seed, mode){
       let type='normal';
       const roll=rnd();
       if(band>0){
-        if(roll < 0.13+diff*0.12) type='disappear';
-        else if(roll < 0.26+diff*0.12) type='conveyor';
+        const dThresh = 0.22 + diff*0.30;          // L1 ~22% -> L5 ~52% disappearing
+        const cThresh = dThresh + 0.13 + diff*0.07; // plus conveyors
+        if(roll < dThresh) type='disappear';
+        else if(roll < cThresh) type='conveyor';
       }
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
+      // disappearing blocks crumble faster on later levels (5.0s -> 2.4s)
+      if(type==='disappear') p.crumbleMs = Math.round(5000 - diff*2600);
       platforms.push(p);
     }
     y = bandTop;
