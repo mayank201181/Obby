@@ -157,32 +157,38 @@ function update(dt){
 function moveAndCollide(p){
   const plats=Game.world.platforms;
   const now=Game.t;
-  // ---- horizontal ----
+
+  // ---- horizontal: free movement (one-way platforms don't block sideways) ----
   p.x+=p.vx;
-  for(const pl of plats){
-    if(!solidNow(pl)) continue;
-    if(rectsOverlap(p.x,p.y,p.w,p.h, pl.x,pl.y,pl.w,pl.h)){
-      if(p.vx>0){ p.x=pl.x-p.w; }
-      else if(p.vx<0){ p.x=pl.x+pl.w; }
-      p.vx=0;
-    }
-  }
-  // world horizontal bounds
   if(p.x<0)p.x=0; if(p.x+p.w>Game.world.width)p.x=Game.world.width-p.w;
 
-  // ---- vertical ----
-  p.y+=p.vy;
-  let standingOn=null;
-  for(const pl of plats){
-    if(!solidNow(pl)) continue;
-    if(rectsOverlap(p.x,p.y,p.w,p.h, pl.x,pl.y,pl.w,pl.h)){
-      if(p.vy>0){            // falling -> land on top
-        p.y=pl.y-p.h; p.vy=0; if(!p.onGround && p.squash>-0.4)p.squash=0.9; p.onGround=true; standingOn=pl;
-      }else if(p.vy<0){      // hit head
-        p.y=pl.y+pl.h; p.vy=0;
+  // ---- vertical: ONE-WAY (jump-through) platforms ----
+  // You pass through blocks while jumping up, and only land on top when your
+  // feet cross the platform's top edge from above while falling.
+  const prevBottom = p.y + p.h;     // feet position before moving this step
+  p.y += p.vy;
+  const newBottom = p.y + p.h;
+
+  let standingOn=null, bestTop=Infinity;
+  if(p.vy >= 0){                    // only when falling or resting
+    for(const pl of plats){
+      if(!solidNow(pl)) continue;
+      // horizontal overlap with the platform?
+      if(p.x < pl.x+pl.w && p.x+p.w > pl.x){
+        const top = pl.y;
+        // feet were at/above the top last frame and are now at/below it
+        if(prevBottom <= top + 1 && newBottom >= top){
+          if(top < bestTop){ bestTop = top; standingOn = pl; } // highest surface first
+        }
       }
     }
   }
+  if(standingOn){
+    p.y = bestTop - p.h; p.vy = 0;
+    if(!p.onGround && p.squash > -0.4) p.squash = 0.9;
+    p.onGround = true;
+  }
+
   // handle effects of the platform we're standing on
   Game.curPad=null;
   if(standingOn){ onStand(p, standingOn, now); }
