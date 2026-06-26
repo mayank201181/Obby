@@ -101,13 +101,15 @@ function readInput(){
   let dir=0;
   if(Game.keys['ArrowLeft']||Game.keys['a']) dir-=1;
   if(Game.keys['ArrowRight']||Game.keys['d']) dir+=1;
-  if(i.joyX) dir=i.joyX;             // joystick overrides
-  return dir;
+  if(i.btnL) dir-=1;                 // on-screen left arrow held
+  if(i.btnR) dir+=1;                 // on-screen right arrow held
+  if(i.joyX) dir=i.joyX;             // explicit override (tests)
+  return Math.max(-1,Math.min(1,dir));
 }
 
 function update(dt){
   const p=Game.player; if(!p) return;
-  const GRAV=0.82, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-16.6;
+  const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.6;
 
   const dir=Math.max(-1,Math.min(1,readInput()));
   // horizontal

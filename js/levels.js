@@ -60,8 +60,8 @@ function generateLevel(level, seed, mode){
   for(let band=0; band<=CHECKPOINTS; band++){
     const bandTop = bottomY - (band+1)*BAND;     // y of this band's checkpoint
     // place stepping platforms upward with guaranteed-clearable gaps
-    while(y - 116 > bandTop){
-      y -= rint(72, 108);                         // vertical gap (well under jump height)
+    while(y - 104 > bandTop){
+      y -= rint(72, 104);                         // vertical gap: clears one block, never two
 
       // size first, then a reachable horizontal offset for that size
       const w = pickSize();
@@ -85,8 +85,8 @@ function generateLevel(level, seed, mode){
       }
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
-      // disappearing blocks crumble faster on later levels (5.0s -> 2.4s)
-      if(type==='disappear') p.crumbleMs = Math.round(5000 - diff*2600);
+      // disappearing blocks crumble after 3s (a bit faster on later levels)
+      if(type==='disappear') p.crumbleMs = Math.round(3000 - diff*800);
       platforms.push(p);
     }
     y = bandTop;

@@ -140,16 +140,17 @@ input.text:focus{border-color:var(--purple-2);}
 
 /* ===== Mobile controls ===== */
 .controls{position:absolute;inset:0;z-index:4;pointer-events:none;}
-.joystick{
-  position:absolute;left:24px;bottom:34px;width:150px;height:150px;
-  border-radius:50%;background:rgba(255,255,255,.28);border:3px solid rgba(255,255,255,.6);
-  pointer-events:auto;touch-action:none;
+.dpad{
+  position:absolute;left:20px;bottom:32px;display:flex;gap:14px;pointer-events:none;
 }
-.joystick .knob{
-  position:absolute;left:50%;top:50%;width:64px;height:64px;border-radius:50%;
-  background:rgba(255,255,255,.85);box-shadow:var(--shadow);
-  transform:translate(-50%,-50%);transition:transform .04s;
+.arrow-btn{
+  width:90px;height:90px;border-radius:26px;
+  background:radial-gradient(circle at 40% 35%,#ffe1f3,#ff9bce);
+  border:4px solid #fff;color:#fff;font-size:40px;font-weight:900;line-height:1;
+  box-shadow:var(--shadow);pointer-events:auto;touch-action:none;
+  display:flex;align-items:center;justify-content:center;text-shadow:0 2px 3px rgba(0,0,0,.2);
 }
+.arrow-btn.active, .arrow-btn:active{transform:scale(.9);filter:brightness(1.06);}
 .jbtn{
   position:absolute;right:28px;bottom:40px;width:118px;height:118px;border-radius:50%;
   background:radial-gradient(circle at 40% 35%,#cdeaff,#7fb0ff);
