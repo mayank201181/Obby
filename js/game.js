@@ -169,6 +169,7 @@ function moveAndCollide(p){
   p.y += p.vy;
   const newBottom = p.y + p.h;
 
+  const SNAP = 14;                  // forgiveness so you don't slip off when landing
   let standingOn=null, bestTop=Infinity;
   if(p.vy >= 0){                    // only when falling or resting
     for(const pl of plats){
@@ -176,8 +177,13 @@ function moveAndCollide(p){
       // horizontal overlap with the platform?
       if(p.x < pl.x+pl.w && p.x+p.w > pl.x){
         const top = pl.y;
-        // feet were at/above the top last frame and are now at/below it
-        if(prevBottom <= top + 1 && newBottom >= top){
+        // Land if EITHER:
+        //  (a) your feet crossed the top edge from above this frame (clean drop), OR
+        //  (b) your feet are only slightly past the top while your body is still
+        //      mostly above it (caught a ledge after a diagonal/side approach).
+        const crossedFromAbove = prevBottom <= top + 1 && newBottom >= top;
+        const caughtLedge = newBottom >= top && newBottom <= top + SNAP && p.y < top;
+        if(crossedFromAbove || caughtLedge){
           if(top < bestTop){ bestTop = top; standingOn = pl; } // highest surface first
         }
       }
