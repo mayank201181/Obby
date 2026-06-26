@@ -32,33 +32,53 @@ function generateLevel(level, seed, mode){
 
   // difficulty scales with level
   const diff = Math.min(1, (level-1)/(TOTAL_LEVELS-1));
-  const gapBoost = diff*40;
+
+  // distinct block sizes (widths) for clear variety: tiny..extra-large
+  const SIZES   = [60, 86, 120, 160, 210];
+  const SIZE_W  = [2,  4,   5,   3,   2];   // weights (medium most common)
+  const SIZE_WSUM = SIZE_W.reduce((a,b)=>a+b,0);
+  function pickSize(){
+    let r = rnd()*SIZE_WSUM;
+    for(let i=0;i<SIZES.length;i++){ r-=SIZE_W[i]; if(r<=0) return SIZES[i]; }
+    return SIZES[2];
+  }
+  // max horizontal centre offset is scaled to the TARGET size so small blocks
+  // are placed closer (fair) and within the measured jump-reach envelope.
+  function maxOffsetFor(w){
+    let m = w>=200?185 : w>=150?170 : w>=110?150 : w>=80?120 : 95;
+    return m + diff*12;          // a touch harder on later levels, still reachable
+  }
 
   // start ground platform
   platforms.push({id:id++, x:WORLD_W/2-130, y:bottomY, w:260, h:40, type:'big'});
   const start = {x:WORLD_W/2, y:bottomY-40};
 
   let prevX = WORLD_W/2;
-  let y = bottomY - 70;
+  let y = bottomY;                               // ground platform top
   for(let band=0; band<=CHECKPOINTS; band++){
     const bandTop = bottomY - (band+1)*BAND;     // y of this band's checkpoint
-    // place stepping platforms upward with solvable gaps until we near the band top
-    while(y - 130 > bandTop){
-      y -= rint(86,118);                          // vertical gap (clearable by jump)
-      let nx = prevX + (rnd()<0.5?-1:1)*rint(70,135+gapBoost);
-      nx = Math.max(70, Math.min(WORLD_W-70, nx));
+    // place stepping platforms upward with guaranteed-clearable gaps
+    while(y - 116 > bandTop){
+      y -= rint(72, 108);                         // vertical gap (well under jump height)
+
+      // size first, then a reachable horizontal offset for that size
+      const w = pickSize();
+      const maxOff = maxOffsetFor(w);
+      const off = rint(52, Math.round(maxOff));
+      let dir = (rnd()<0.5?-1:1);
+      let nx = prevX + dir*off;
+      // keep on-screen; if we'd clip an edge, bounce the direction
+      if(nx < 60 || nx > WORLD_W-60){ nx = prevX - dir*off; }
+      nx = Math.max(60+w/2, Math.min(WORLD_W-60-w/2, nx));
       prevX = nx;
 
-      // choose a block type
+      // mechanic (independent of size) — gentle on the first band
       let type='normal';
       const roll=rnd();
-      if(band>0){ // keep first band gentle
-        if(roll<0.14+diff*0.12) type='disappear';
-        else if(roll<0.27+diff*0.13) type='conveyor';
-        else if(roll<0.39) type='small';
-        else if(roll<0.49) type='big';
+      if(band>0){
+        if(roll < 0.13+diff*0.12) type='disappear';
+        else if(roll < 0.26+diff*0.12) type='conveyor';
       }
-      let w = type==='small'?72 : type==='big'?180 : type==='disappear'?116 : rint(104,150);
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
       platforms.push(p);

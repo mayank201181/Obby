@@ -107,7 +107,7 @@ function readInput(){
 
 function update(dt){
   const p=Game.player; if(!p) return;
-  const GRAV=0.7, MAXFALL=18, MOVE=4.7, ACCEL=0.6, FRICT=0.75, JUMP=-15.6;
+  const GRAV=0.82, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-16.6;
 
   const dir=Math.max(-1,Math.min(1,readInput()));
   // horizontal
