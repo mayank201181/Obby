@@ -64,18 +64,23 @@
   </div>
   <div class="card">
     <h2>How do you want to play?</h2>
-    <p class="hint" style="margin-top:0">🧍 Solo Climb — 5 levels, 10 checkpoints each. Pick a difficulty:</p>
+
+    <h3 style="margin:6px 0 2px">🧍 Solo</h3>
+    <p class="hint" style="margin-top:0">Climb on your own — 5 levels, 10 checkpoints. Pick a difficulty:</p>
     <div class="row">
       <button class="btn blue" onclick="playSolo('easy')">🌸 Easy<br><span style="font-size:12px;font-weight:700">no guns</span></button>
       <button class="btn pink" onclick="playSolo('hard')">🔥 Hard<br><span style="font-size:12px;font-weight:700">shooting guns!</span></button>
     </div>
-    <hr style="border:none;border-top:2px dashed #efe7fb;margin:14px 0">
-    <button class="btn blue" onclick="createRoom()">➕ Create Room</button>
-    <p class="hint">Get a code &amp; play with a friend (race or team-up).</p>
+
+    <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
+
+    <h3 style="margin:6px 0 2px">🤝 Team — 2 players</h3>
+    <p class="hint" style="margin-top:0">Make a room, share the code with your friend, then solve co-op puzzles together — stand on both <b>A</b> &amp; <b>B</b> pads to make bridges appear!</p>
+    <button class="btn pink" onclick="createTeam()">➕ Create Team</button>
     <div class="row">
-      <input class="text" id="joinCodeInput" maxlength="6" placeholder="ROOM CODE" style="text-transform:uppercase"/>
+      <input class="text" id="joinCodeInput" maxlength="6" placeholder="ENTER TEAM CODE" style="text-transform:uppercase"/>
     </div>
-    <button class="btn gold" onclick="joinRoomWithCode()">🔑 Join Room</button>
+    <button class="btn gold" onclick="joinRoomWithCode()">🔑 Join Team</button>
   </div>
 </section>
 

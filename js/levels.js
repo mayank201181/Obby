@@ -114,14 +114,27 @@ function generateLevel(level, seed, mode){
       checkpoints.push({index:band+1, x:cx+cw/2, y:bandTop});
       prevX = cx+cw/2;
 
-      // co-op puzzle: every other band in coop mode, insert a two-pad bridge gate
-      if(mode==='coop' && band>0 && band%2===0){
-        const padY = bandTop - 70;
-        const padW=80;
-        platforms.push({id:id++, x:120, y:padY, w:padW, h:24, type:'pad', pad:'A', grp:band});
-        platforms.push({id:id++, x:WORLD_W-120-padW, y:padY, w:padW, h:24, type:'pad', pad:'B', grp:band});
-        // the bridge that appears for 10s when both pads pressed
-        platforms.push({id:id++, x:120, y:padY-150, w:WORLD_W-240, h:24, type:'bridge', active:false, grp:band});
+      // ---- REQUIRED co-op gate (every 3rd band) ----
+      // A chasm only crossable when BOTH players stand on pads A & B, which
+      // makes a bridge appear for 10 seconds. Solo can't pass this.
+      if(mode==='coop' && band>0 && band%3===0 && band<CHECKPOINTS){
+        const Y0=bandTop, cxC=prevX;
+        const padW=86, padH=24;
+        // pads flank the checkpoint (a small hop up & out) — dead ends
+        const padAC=Math.max(70, cxC-150), padBC=Math.min(WORLD_W-70, cxC+150);
+        const padY=Y0-44;
+        platforms.push({id:id++, x:padAC-padW/2, y:padY, w:padW, h:padH, type:'pad', pad:'A', grp:band});
+        platforms.push({id:id++, x:padBC-padW/2, y:padY, w:padW, h:padH, type:'pad', pad:'B', grp:band});
+        // bridge spans the chasm centre; appears 10s when both pads are pressed
+        const brW=300, brY=Y0-110;
+        const brX=Math.max(40, Math.min(WORLD_W-40-brW, cxC-brW/2));
+        platforms.push({id:id++, x:brX, y:brY, w:brW, h:24, type:'bridge', active:false, grp:band});
+        // landing platform above the bridge — the only way onward
+        const npW=160, npY=brY-90;
+        const npX=Math.max(60, Math.min(WORLD_W-60-npW, cxC-npW/2));
+        platforms.push({id:id++, x:npX, y:npY, w:npW, h:26, type:'normal'});
+        // continue the climb from above the bridge (chasm below stays empty)
+        prevX=npX+npW/2; y=npY;
       }
     }
   }

@@ -244,6 +244,10 @@ function playSolo(diff){
 
 let pendingRoomMode='coop';
 let pendingRoomDiff='hard';
+
+// Team button -> a co-op room by default (the 2-player teamwork puzzles)
+function createTeam(){ pendingRoomMode='coop'; createRoom(); }
+
 async function createRoom(){
   const profile=profileObj();
   showScreen('roomScreen');

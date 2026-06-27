@@ -189,9 +189,10 @@ function mpSetPad(playerId,grp,pad,on){
   if(!MP.padState[grp]) MP.padState[grp]={A:new Set(),B:new Set()};
   const set=MP.padState[grp][pad];
   if(on) set.add(playerId); else set.delete(playerId);
-  // need at least one player on A and one (different) on B
+  // need TWO DIFFERENT players: one on pad A and a different one on pad B
   const a=MP.padState[grp].A, b=MP.padState[grp].B;
-  const both = a.size>0 && b.size>0;
+  let both=false;
+  for(const ia of a){ for(const ib of b){ if(ia!==ib){ both=true; } } }
   if(both && (!MP.bridges[grp] || MP.bridges[grp] < nowMs())){
     const until = nowMs()+10000;
     MP.bridges[grp]=until;
