@@ -244,15 +244,17 @@ function generateLevel(level, seed, mode){
       if(band>0 && type!=='disappear' && rnd()<0.06){
         platforms.push({id:id++, type:'powerup', pw:POWERUP_KINDS[Math.floor(rnd()*POWERUP_KINDS.length)], x:nx-14, y:y-46, w:28, h:28});
       }
-      // dodge hazards near the path — deadly only in Hard, frozen in tests
-      if(band>0){
+      // dodge hazards near the path — deadly only in Hard, frozen in tests.
+      // Start after a 2-band warm-up and keep the density gentle so Hard stacks
+      // fairly with cannons / disappearing blocks.
+      if(band>=2){
         const hr=rnd();
-        if(hr<0.07){
-          hazards.push({kind:'pendulum', px:nx, py:y-165, len:rint(96,150), amp:0.85, phase:rnd()*6.283, r:15, omega:(2*Math.PI)/rint(1700,2600)});
+        if(hr<0.05){
+          hazards.push({kind:'pendulum', px:nx, py:y-165, len:rint(96,150), amp:0.85, phase:rnd()*6.283, r:15, omega:(2*Math.PI)/rint(1800,2700)});
+        } else if(hr<0.085){
+          hazards.push({kind:'spike', x:nx-38, y:y-30, w:76, h:18, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1600,2400)});
         } else if(hr<0.115){
-          hazards.push({kind:'spike', x:nx-38, y:y-30, w:76, h:18, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1500,2300)});
-        } else if(hr<0.155){
-          hazards.push({kind:'lasergate', x:Math.max(40,nx-90), y:y-72, w:Math.min(180,WORLD_W-80), h:12, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1500,2400)});
+          hazards.push({kind:'lasergate', x:Math.max(40,nx-90), y:y-72, w:Math.min(180,WORLD_W-80), h:12, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1600,2500)});
         }
       }
     }

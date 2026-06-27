@@ -29,7 +29,9 @@ const Game = {
   trap:{},                      // trap-door id -> {since, openUntil}
   theme:null, weather:null, weatherParticles:[],  // per-level look & weather
   tagCdUntil:0,                 // Tag mode: cooldown before you can tag again
+  tagEscaped:false,             // Tag mode: finished while NOT "it"
   abilityFx:[],                 // visible pet-ability particles
+  shakeMag:0,                   // screen-shake magnitude (decays each frame)
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
@@ -135,7 +137,7 @@ function loadLevel(level){
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
-  Game.trap={}; Game.abilityFx=[]; Game.tagCdUntil=0;
+  Game.trap={}; Game.abilityFx=[]; Game.tagCdUntil=0; Game.shakeMag=0; Game.tagEscaped=false;
   applyTheme();                     // per-level backdrop + weather
   applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
@@ -160,8 +162,12 @@ function makeTurrets(level){
   return t;
 }
 
+/* a quick camera shake for impacts (juice) */
+function addShake(mag){ Game.shakeMag = Math.min(14, Math.max(Game.shakeMag, mag)); }
+
 function respawn(){
   const p=Game.player;
+  addShake(7);
   Game.deaths++;
   p.x=p.respawnX; p.y=p.respawnY; p.vx=0; p.vy=0;
   p.invuln=Math.max(p.invuln||0, 900);   // brief safety so turrets can't instakill on respawn
@@ -210,6 +216,7 @@ function triggerAbility(){
 function update(dt){
   if(Game.spectating){ spectateUpdate(); return; }
   const p=Game.player; if(!p) return;
+  if(Game.shakeMag){ Game.shakeMag*=0.86; if(Game.shakeMag<0.2) Game.shakeMag=0; }
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.0;
 
   updateMovers();                       // slide moving blocks before collision
@@ -347,6 +354,7 @@ function updateBoss(){
   }
 }
 function bossReward(floorNo){
+  addShake(9);
   addCoins(25); unlockAchievement('boss');
   if(typeof questEvent==='function') questEvent('boss',1);
   let creature=null;
@@ -417,6 +425,12 @@ function moveAndCollide(p){
       p.vy = -15.2; p.onGround = false; p.jumps = 0; p.squash = -1.1;
       if(!standingOn._bt || Game.t-standingOn._bt>140){ standingOn._bt=Game.t; SFX.jump(); }
     } else {
+      // landing dust puff (most landings) + a tiny shake only on a big drop
+      if(!p.onGround && p.vy>9){
+        const n = p.vy>13?4:2;
+        for(let i=0;i<n;i++) Game.abilityFx.push({kind:'dust', x:p.x+p.w/2+(Math.random()*22-11), y:p.y+p.h-2, vx:(Math.random()*2-1)*1.3, vy:-Math.random()*0.8, life:1, born:Game.t});
+        if(p.vy>14) addShake(2.5);
+      }
       p.vy = 0;
       if(!p.onGround && p.squash > -0.4) p.squash = 0.9;
       p.onGround = true;
@@ -926,6 +940,10 @@ function levelFinished(){
   Game.finished=true;
   gainPetXp(4);
   if(typeof questEvent==='function'){ questEvent('finish',1); if(Game.deaths===0) questEvent('deathless',1); }
+  // Tag mode: reaching the top while NOT "it" means you escaped
+  if(Game.multiplayer && Game.mode==='tag'){
+    Game.tagEscaped = (MP.itId !== MP.selfId);
+  }
   // race standings: your place = (players who already finished) + 1
   if(Game.multiplayer && Game.mode==='race'){
     Game.racePlace = (typeof mpFinishedCount==='function' ? mpFinishedCount() : 0) + 1;
@@ -987,8 +1005,10 @@ function render(){
   const ctx=Game.ctx; if(!ctx) return;
   ctx.clearRect(0,0,Game.W,Game.H);
   const s=gameScale();
+  const shx = Game.shakeMag ? (Math.random()*2-1)*Game.shakeMag : 0;
+  const shy = Game.shakeMag ? (Math.random()*2-1)*Game.shakeMag : 0;
   ctx.save();
-  ctx.translate(Game.W/2, Game.H/2);
+  ctx.translate(Game.W/2 + shx, Game.H/2 + shy);
   ctx.scale(s,s);
   ctx.translate(-Game.cam.x, -Game.cam.y);
 

@@ -493,6 +493,10 @@ function onLevelComplete(level, earned, isFinal, res){
       const ord = place===1?'1st':place===2?'2nd':place===3?'3rd':place+'th';
       waitMsg=`<p class="timer-big">${medal} ${place===1?'You WON the race!':ord+' place'}</p>
         <p class="muted">Your record: ${SAVE.raceWins||0} W · ${SAVE.raceLosses||0} L</p>`;
+    } else if(Game.mode==='tag'){
+      waitMsg = Game.tagEscaped
+        ? `<p class="timer-big">🎉 You escaped to the top!</p><p class="muted">You reached safety without being IT 🏃</p>`
+        : `<p class="timer-big">🏃 Tagged out!</p><p class="muted">You were IT at the top — better luck next round!</p>`;
     } else if(Game.mode==='coop'){
       waitMsg=`<p class="muted">Teammates finished: ${doneCount}/${others.length}</p>`;
     }
