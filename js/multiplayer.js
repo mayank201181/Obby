@@ -17,6 +17,7 @@ const MP = {
   lifts:{},            // grp -> start time (ms) of a co-op lift rise
   padState:{},         // grp -> {station -> Set(ids)}  (host only)
   trade:null,          // live Adopt-Me-style trade state
+  itId:null,           // Tag mode: id of the player who is currently "it"
   startConfig:null,    // {level,seed,mode}
   // callbacks (assigned by game/ui):
   onStart:null,
@@ -173,6 +174,12 @@ function mpOnMessage(conn,msg){
       if(typeof onBoostFrom==='function') onBoostFrom(msg.id);
       break;
     }
+    case 'it': {
+      MP.itId=msg.id;
+      if(MP.isHost) mpRelay(conn,msg);
+      if(typeof onItChange==='function') onItChange(msg.id);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -260,6 +267,8 @@ function mpSendCheckpoint(index){ MP.roster[MP.selfId]&&(MP.roster[MP.selfId].cp
 function mpSendFinish(){ mpSend({t:'finish', id:MP.selfId}); }
 function mpSendEmote(e){ mpSend({t:'emote', id:MP.selfId, e}); }
 function mpSendBoost(){ mpSend({t:'boost', id:MP.selfId}); }
+/* Tag mode: announce who is now "it" (everyone, host relays) */
+function mpSendIt(id){ MP.itId=id; mpSend({t:'it', id}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 
@@ -319,7 +328,7 @@ function nowMs(){ return new Date().getTime(); }
 function mpLeave(){
   try{ MP.peer && MP.peer.destroy(); }catch(e){}
   MP.peer=null;MP.conns=[];MP.inRoom=false;MP.isHost=false;MP.roomCode='';
-  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.lifts={};MP.padState={};MP.startConfig=null;MP.trade=null;
+  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.lifts={};MP.padState={};MP.startConfig=null;MP.trade=null;MP.itId=null;
 }
 
 function mpRemoteList(){ return Object.keys(MP.remote).map(id=>Object.assign({id},MP.remote[id])); }

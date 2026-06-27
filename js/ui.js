@@ -380,7 +380,9 @@ function selectRoomMode(m){
   const d=document.getElementById('modeDesc');
   if(d) d.textContent = m==='coop'
     ? 'Team-up: stand on both pads together to make bridges appear for 10s!'
-    : 'Race: same obby, separate climbs — first to the top wins! 🏁';
+    : m==='tag'
+      ? "Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃"
+      : 'Race: same obby, separate climbs — first to the top wins! 🏁';
 }
 function wireRoomCallbacks(){
   MP.onRosterChange=refreshRoster;
@@ -391,6 +393,7 @@ function wireRoomCallbacks(){
     startGame({level:config.level, seed:config.seed, mode:config.mode,
                multiplayer:true, difficulty:config.difficulty||'hard'});
     startMusicIfOn('game');
+    if(MP.isHost && config.mode==='tag') setTimeout(()=>mpSendIt(MP.selfId), 600);  // host starts as "it"
   };
 }
 function selectRoomDiff(d){
@@ -507,7 +510,8 @@ function onLevelComplete(level, earned, isFinal, res){
             : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`));
   const heading = res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
-    <div class="win-emoji">${res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <canvas id="winDance" class="win-dance"></canvas>
+    <div class="win-emoji" style="font-size:30px">${res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
     ${isFinal&&!res.daily?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
@@ -515,6 +519,26 @@ function onLevelComplete(level, earned, isFinal, res){
     ${nav}`;
   openModal('winModal');
   spawnConfetti(document.getElementById('confettiBox'));
+  startWinDance();
+}
+let winDanceRaf=0;
+function startWinDance(){
+  const cv=document.getElementById('winDance'); if(!cv) return;
+  const dpr=Math.min(window.devicePixelRatio||1,2), size=92;
+  cv.width=size*dpr; cv.height=size*dpr; cv.style.width=size+'px'; cv.style.height=size+'px';
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  cancelAnimationFrame(winDanceRaf);
+  const loop=t=>{
+    if(!document.getElementById('winModal').classList.contains('active')) return;
+    ctx.clearRect(0,0,size,size);
+    const sq=Math.sin(t/110)*0.5, tilt=Math.sin(t/190)*0.2, hop=Math.abs(Math.sin(t/110))*6;
+    ctx.save(); ctx.translate(size/2, size/2+6-hop); ctx.rotate(tilt);
+    drawCharacter(ctx,0,0,56,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,
+      facing:(Math.sin(t/300)>0?1:-1), t, squash:sq, petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin)});
+    ctx.restore();
+    winDanceRaf=requestAnimationFrame(loop);
+  };
+  winDanceRaf=requestAnimationFrame(loop);
 }
 function spawnConfetti(box){
   if(!box) return;
@@ -543,6 +567,13 @@ function backToLobby(){
   showScreen('lobbyScreen'); initLobby();
 }
 
+/* build the in-game quick-emoji bar from the player's owned emotes */
+function buildEmoteBar(){
+  const bar=document.getElementById('emoteBar'); if(!bar) return;
+  const owned=(SAVE.ownedEmotes||[]).map(emoteById).filter(Boolean).slice(0,8);
+  bar.innerHTML = owned.map(em=>`<button onclick="sendEmote('${em.e}')">${em.e}</button>`).join('');
+}
+
 /* ---------------- Spectate ---------------- */
 function watchFriends(){ closeModal('winModal'); startSpectate(); }
 function setSpectateChrome(on){
@@ -567,6 +598,7 @@ function shopPool(){
   SKINS.forEach(s=>{ if(s.price>0) items.push({kind:'skin', id:s.id, price:s.price, label:s.id, swatch:s.color}); });
   ACCESSORIES.forEach(a=>{ if(a.price>0) items.push({kind:'acc', id:a.id, price:a.price, label:a.label, emoji:a.emoji}); });
   TRAILS.forEach(t=>{ if(t.price>0) items.push({kind:'trail', id:t.id, price:t.price, label:t.name, emoji:t.emoji}); });
+  EMOTES.forEach(e=>{ if(e.price>0) items.push({kind:'emote', id:e.id, price:e.price, label:e.e+' emote', emoji:e.e}); });
   return items;
 }
 function todaysShop(){
@@ -578,6 +610,7 @@ function todaysShop(){
 function isOwnedShopItem(it){
   if(it.kind==='skin') return SAVE.ownedSkins.includes(it.id);
   if(it.kind==='acc') return SAVE.ownedAccessories.includes(it.id);
+  if(it.kind==='emote') return (SAVE.ownedEmotes||[]).includes(it.id);
   return SAVE.ownedTrails.includes(it.id);
 }
 function buyShopItem(idx){
@@ -587,11 +620,63 @@ function buyShopItem(idx){
   SAVE.coins-=it.sale;
   if(it.kind==='skin') SAVE.ownedSkins.push(it.id);
   else if(it.kind==='acc') SAVE.ownedAccessories.push(it.id);
+  else if(it.kind==='emote'){ if(!SAVE.ownedEmotes) SAVE.ownedEmotes=[]; SAVE.ownedEmotes.push(it.id); }
   else SAVE.ownedTrails.push(it.id);
   persist(); SFX.chest();
   toast('Bought '+it.label+'! 🛍️');
   renderShop();
 }
+/* ---------------- Pet Playground ---------------- */
+let playgroundRaf=0;
+function openPlayground(){
+  showScreen('playgroundScreen');
+  const cv=document.getElementById('playgroundCanvas');
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=Math.min(380, window.innerWidth-70), H=300;
+  cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const ids=[];
+  for(const id in (SAVE.pets||{})) if(SAVE.pets[id]>0) ids.push(id);
+  for(const id in (SAVE.shinies||{})) if(SAVE.shinies[id]>0 && !ids.includes(id)) ids.push(id);
+  document.getElementById('playgroundHint').textContent = ids.length
+    ? 'Tap your pets to play with them! 🐾' : 'Get pets from chests — then play with them here!';
+  const pets = ids.slice(0,12).map(id=>{ const c=creatureById(id);
+    return { id, emoji:c?c.emoji:'🐾', shiny:isShiny(id),
+      x:24+Math.random()*(W-48), y:60+Math.random()*(H-110),
+      vx:(Math.random()<0.5?-1:1)*(0.4+Math.random()*0.6), t:Math.random()*6.28, hop:0 }; });
+  const hearts=[];
+  cv.onclick=e=>{
+    const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    let best=null,bd=1e9;
+    for(const p of pets){ const d=(p.x-mx)*(p.x-mx)+(p.y-my)*(p.y-my); if(d<bd){bd=d;best=p;} }
+    if(best && bd<2600){ best.hop=1; hearts.push({x:best.x,y:best.y-18,life:1}); SFX.coin(); }
+  };
+  cancelAnimationFrame(playgroundRaf);
+  const loop=t=>{
+    if(!document.getElementById('playgroundScreen').classList.contains('active')) return;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#eef9f0'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#cdeccf'; ctx.fillRect(0,H-26,W,26);
+    ctx.font='16px serif'; ctx.textAlign='center';
+    for(let i=0;i<W;i+=46) ctx.fillText('🌷', i+23, H-9);
+    for(const p of pets){
+      p.x+=p.vx; if(p.x<18||p.x>W-18) p.vx*=-1; p.x=Math.max(18,Math.min(W-18,p.x));
+      p.t+=0.045; const bob=Math.sin(p.t)*3 - (p.hop>0? Math.sin((1-p.hop)*Math.PI)*16 : 0);
+      if(p.hop>0) p.hop-=0.04;
+      if(p.shiny){ ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,210,90,.85)';
+        ctx.beginPath(); ctx.arc(p.x,p.y+bob,21,0,6.283); ctx.fill(); ctx.globalAlpha=1; }
+      ctx.font='30px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(p.emoji, p.x, p.y+bob);
+    }
+    for(let i=hearts.length-1;i>=0;i--){ const h=hearts[i]; h.y-=1.2; h.life-=0.02;
+      if(h.life<=0){ hearts.splice(i,1); continue; }
+      ctx.globalAlpha=h.life; ctx.font='18px serif'; ctx.fillText('💖',h.x,h.y); ctx.globalAlpha=1; }
+    playgroundRaf=requestAnimationFrame(loop);
+  };
+  playgroundRaf=requestAnimationFrame(loop);
+}
+function closePlayground(){ cancelAnimationFrame(playgroundRaf); showScreen('lobbyScreen'); initLobby(); }
+
 /* ---------------- Daily Quests ---------------- */
 function openQuests(){ showScreen('questsScreen'); renderQuests(); }
 function renderQuests(){

@@ -81,7 +81,26 @@ const ACHIEVEMENTS = [
   { id:'boss',   name:'Boss Slayer',   desc:'Beat a Tower boss',            emoji:'👹' },
   { id:'questmaster',name:'Go-Getter', desc:'Complete a daily quest',       emoji:'✅' },
   { id:'streak', name:'On Fire',       desc:'Hit a 7-day quest streak',     emoji:'🔥' },
+  { id:'tagger', name:"Tag, You're It",desc:'Tag a friend in Tag mode',     emoji:'🏃' },
 ];
+
+// Quick-chat emotes. The first six are free; the rest unlock in the shop.
+const EMOTES = [
+  { id:'happy', e:'😀', price:0 },
+  { id:'laugh', e:'😂', price:0 },
+  { id:'heart', e:'❤️', price:0 },
+  { id:'thumb', e:'👍', price:0 },
+  { id:'wow',   e:'😮', price:0 },
+  { id:'party', e:'🎉', price:0 },
+  { id:'dance',  e:'💃', price:120, rare:true },
+  { id:'dance2', e:'🕺', price:120, rare:true },
+  { id:'cool',   e:'😎', price:90,  rare:true },
+  { id:'cry',    e:'😭', price:80,  rare:true },
+  { id:'fire',   e:'🔥', price:100, rare:true },
+  { id:'crown',  e:'👑', price:150, rare:true },
+  { id:'mind',   e:'🤯', price:90,  rare:true },
+];
+const emoteById = id => EMOTES.find(x=>x.id===id);
 
 /* ===== Daily Quests ===== three refresh each day, seeded by the date ===== */
 const QUEST_DEFS = [
@@ -189,6 +208,7 @@ function defaultSave(){
     raceLosses:0,          // multiplayer race losses
     questStreak:0,         // consecutive days completing all 3 quests
     questStreakDay:0,      // day index a streak bonus was last awarded
+    ownedEmotes:['happy','laugh','heart','thumb','wow','party'],  // unlocked quick emotes
   };
 }
 

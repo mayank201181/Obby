@@ -38,7 +38,10 @@
       <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
       <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
     </div>
-    <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
+    <div class="row">
+      <button class="btn ghost" onclick="openPlayground()">🐾 Playground</button>
+      <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
+    </div>
     <button class="btn ghost" onclick="openShop()">🛍️ Daily Shop <span class="badge" style="background:var(--gold);color:#7a5512">sale!</span></button>
     <button class="btn ghost" id="dailyBtn" onclick="startDaily()">🗓️ Daily Challenge</button>
     <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
@@ -86,6 +89,19 @@
     <h2>🏆 Badges</h2>
     <p class="hint" id="achProgress"></p>
     <div class="scroll" id="achBody"></div>
+  </div>
+</section>
+
+<!-- ============ PET PLAYGROUND ============ -->
+<section class="screen" id="playgroundScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="closePlayground()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🐾 Pet Playground</h2>
+    <p class="hint" id="playgroundHint">Tap your pets to play with them!</p>
+    <div class="playground-wrap"><canvas id="playgroundCanvas"></canvas></div>
   </div>
 </section>
 
@@ -183,6 +199,7 @@
       <div class="row" id="modeBtns">
         <button class="btn ghost small" data-mode="coop" onclick="selectRoomMode('coop')">🤝 Team-up</button>
         <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
+        <button class="btn ghost small" data-mode="tag" onclick="selectRoomMode('tag')">🏃 Tag</button>
       </div>
       <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
       <p class="hint">Difficulty:</p>
@@ -215,14 +232,7 @@
       </div>
     </div>
 
-    <div class="emote-bar" id="emoteBar" style="display:none">
-      <button onclick="sendEmote('😀')">😀</button>
-      <button onclick="sendEmote('😂')">😂</button>
-      <button onclick="sendEmote('❤️')">❤️</button>
-      <button onclick="sendEmote('👍')">👍</button>
-      <button onclick="sendEmote('😮')">😮</button>
-      <button onclick="sendEmote('🎉')">🎉</button>
-    </div>
+    <div class="emote-bar" id="emoteBar" style="display:none"></div>
 
     <div class="controls">
       <div class="dpad">

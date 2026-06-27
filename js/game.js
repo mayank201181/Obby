@@ -28,6 +28,8 @@ const Game = {
   bossShots:[], activeBoss:null,// Tower boss projectiles + current boss
   trap:{},                      // trap-door id -> {since, openUntil}
   theme:null, weather:null, weatherParticles:[],  // per-level look & weather
+  tagCdUntil:0,                 // Tag mode: cooldown before you can tag again
+  abilityFx:[],                 // visible pet-ability particles
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
@@ -110,7 +112,7 @@ function startGame(opts){
   showScreen('gameScreen');
   applyTheme();                       // themed backdrop + weather (overrides plain bg)
   // multiplayer-only chrome: quick emojis (all modes) + boost button (co-op)
-  const eb=document.getElementById('emoteBar'); if(eb) eb.style.display = Game.multiplayer ? 'flex':'none';
+  const eb=document.getElementById('emoteBar'); if(eb){ eb.style.display = Game.multiplayer ? 'flex':'none'; if(Game.multiplayer && typeof buildEmoteBar==='function') buildEmoteBar(); }
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
   if(typeof setSpectateChrome==='function') setSpectateChrome(false);
   Game.running=true; Game.finished=false; Game.last=performance.now(); Game.acc=0;
@@ -133,7 +135,7 @@ function loadLevel(level){
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
-  Game.trap={};
+  Game.trap={}; Game.abilityFx=[]; Game.tagCdUntil=0;
   applyTheme();                     // per-level backdrop + weather
   applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
@@ -268,6 +270,20 @@ function update(dt){
   // clamp camera horizontally to world
   const half=(Game.W/gameScale())/2;
   Game.cam.x=Math.max(half, Math.min(Game.world.width-half, Game.cam.x));
+
+  // Tag mode: if I'm "it", tagging a friend passes it on
+  if(Game.multiplayer && Game.mode==='tag' && MP.itId===MP.selfId && Game.t>Game.tagCdUntil){
+    for(const r of mpRemoteList()){
+      if(typeof r.x!=='number') continue;
+      if(rectsOverlap(p.x,p.y,p.w,p.h, r.x,r.y,34,34)){
+        mpSendIt(r.id); Game.tagCdUntil=Game.t+2200;
+        unlockAchievement('tagger');
+        if(typeof toast==='function') toast('🏃 You tagged '+(r.name||'a friend')+'!');
+        SFX.win(); break;
+      }
+    }
+  }
+  updateAbilityFx();
 
   // multiplayer net update ~18Hz
   if(Game.multiplayer){
@@ -823,6 +839,53 @@ function sendBoost(){
   if(typeof toast==='function') toast('🙌 Boost!');
   SFX.jump();
 }
+/* Tag mode: react when the "it" player changes */
+function onItChange(id){
+  if(id===MP.selfId){
+    Game.tagCdUntil=Game.t+2500;              // grace so you can't instantly tag back
+    if(typeof toast==='function') toast("🏃 You're IT! Catch a friend!");
+    SFX.hit();
+  } else if(typeof toast==='function'){
+    const r=MP.remote[id];
+    toast('🏃 '+((r&&r.name)||'A friend')+' is IT!');
+  }
+}
+
+/* visible pet-ability effects: speed = dust puffs, glide = floaty sparkles */
+function updateAbilityFx(){
+  const p=Game.player; if(!p) return;
+  // speed pet: kick up dust when moving fast on the ground
+  if(Game.petMoveMul>1 && p.onGround && Math.abs(p.vx)>3 && Game.t%60<17){
+    Game.abilityFx.push({kind:'dust', x:p.x+p.w/2 - Math.sign(p.vx)*10, y:p.y+p.h-2, vx:-Math.sign(p.vx)*1.2, vy:-0.6, life:1, born:Game.t});
+  }
+  // glide pet: trailing sparkles while floating gently down
+  if(Game.petFallMul<1 && !p.onGround && p.vy>1 && p.vy<8 && Game.t%80<17){
+    Game.abilityFx.push({kind:'spark', x:p.x+p.w/2+(Math.random()*16-8), y:p.y+p.h, vx:0, vy:0.4, life:1, born:Game.t});
+  }
+  for(let i=Game.abilityFx.length-1;i>=0;i--){
+    const f=Game.abilityFx[i]; f.x+=f.vx; f.y+=f.vy; f.life-=0.035;
+    if(f.life<=0) Game.abilityFx.splice(i,1);
+  }
+}
+function drawAbilityFx(ctx){
+  for(const f of Game.abilityFx){
+    ctx.globalAlpha=Math.max(0,f.life)*0.7;
+    if(f.kind==='dust'){ ctx.fillStyle='#e8dcc8'; ctx.beginPath(); ctx.arc(f.x,f.y,4*(1.4-f.life)+2,0,6.283); ctx.fill(); }
+    else { ctx.font='12px serif'; ctx.textAlign='center'; ctx.fillText('✨', f.x, f.y); }
+  }
+  ctx.globalAlpha=1;
+}
+/* a red "IT" marker over the tagged player in Tag mode */
+function drawItMarker(ctx,cx,topY){
+  ctx.save();
+  ctx.globalAlpha=Math.sin(Game.t/120)*0.2+0.8;
+  ctx.fillStyle='#ff5a5a';
+  ctx.beginPath(); ctx.arc(cx,topY-30,3,0,6.283); ctx.fill();
+  ctx.font='bold 12px Nunito'; ctx.textAlign='center';
+  ctx.fillText('🏃 IT', cx, topY-30);
+  ctx.restore();
+}
+
 /* received a boost from another player — if they're below & under me, hop up */
 function onBoostFrom(senderId){
   const p=Game.player; if(!p || !Game.running) return;
@@ -983,12 +1046,13 @@ function render(){
                     petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
       drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
       if(r.emote && nowMs()-r.emoteAt < 2200) drawEmoteBubble(ctx, r.x+17, r.y-22, r.emote);
+      if(Game.mode==='tag' && MP.itId===r.id) drawItMarker(ctx, r.x+17, r.y);
     }
   }
 
   const p=Game.player;
-  // cosmetic trail behind the player
-  if(!Game.spectating) drawTrail(ctx, p);
+  // visible pet-ability effects + cosmetic trail behind the player
+  if(!Game.spectating){ drawAbilityFx(ctx); drawTrail(ctx, p); }
 
   // local player (worn pet / team colour; blink while invulnerable after a hit)
   if(!Game.spectating){
@@ -1003,6 +1067,7 @@ function render(){
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
     if(Game.myEmote && Game.t-Game.myEmoteAt < 2200) drawEmoteBubble(ctx, p.x+p.w/2, p.y-22, Game.myEmote);
+    if(Game.mode==='tag' && MP.itId===MP.selfId) drawItMarker(ctx, p.x+p.w/2, p.y);
   }
 
   ctx.restore();
