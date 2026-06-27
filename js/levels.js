@@ -78,15 +78,30 @@ function generateLevel(level, seed, mode){
       let type='normal';
       const roll=rnd();
       if(band>0){
-        const dThresh = 0.22 + diff*0.30;          // L1 ~22% -> L5 ~52% disappearing
-        const cThresh = dThresh + 0.13 + diff*0.07; // plus conveyors
+        const dThresh = 0.18 + diff*0.22;          // disappearing
+        const cThresh = dThresh + 0.10 + diff*0.05; // conveyors
+        const mThresh = cThresh + 0.10 + diff*0.06; // moving blocks
         if(roll < dThresh) type='disappear';
         else if(roll < cThresh) type='conveyor';
+        else if(roll < mThresh) type='mover';
       }
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
-      // disappearing blocks crumble after 3s (a bit faster on later levels)
-      if(type==='disappear') p.crumbleMs = Math.round(3000 - diff*800);
+      // disappearing blocks crumble after 2s (a bit faster on later levels)
+      if(type==='disappear') p.crumbleMs = Math.round(2000 - diff*500);
+      // moving blocks slide left<->right around their placed (mid) position.
+      if(type==='mover'){
+        const room = Math.min(nx-30-w/2, (WORLD_W-30-w/2)-nx);
+        const amp = Math.min(rint(70,108), room);
+        if(amp < 45){ p.type='normal'; }          // not enough room -> static
+        else{
+          p.base = p.x;                            // left coord at mid-swing
+          p.amp = amp;
+          p.omega = (2*Math.PI)/rint(1400,2000);   // rad per ms (fairly fast)
+          p.phase = rnd()*Math.PI*2;
+          p.dx = 0;
+        }
+      }
       platforms.push(p);
     }
     y = bandTop;

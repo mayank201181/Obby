@@ -16,6 +16,8 @@ const Game = {
   finished:false,
   startedAt:0,
   padReport:{},                 // grp+pad -> bool (local)
+  guns:[], bullets:[],          // side cannons + their projectiles
+  freezeHazards:false,          // used by automated reachability tests
 };
 
 const SCALE_TARGET_H = 560;     // world-units shown vertically (camera zoom baseline)
@@ -71,10 +73,27 @@ function loadLevel(level){
   const st=Game.world.start;
   Game.player={
     x:st.x, y:st.y-22, vx:0, vy:0, w:34, h:34, facing:1,
-    onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22,
+    onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0,
   };
+  // screen-anchored turrets ride the left/right edges, glide up/down, fire across
+  Game.guns = makeTurrets(level);
+  Game.bullets=[];
+  Game.player.invuln = 1200;        // brief grace at the start of a level
   Game.cam.x=st.x; Game.cam.y=st.y-200;
   updateHud();
+}
+
+function makeTurrets(level){
+  const fire=2000;                  // shoot every 2 seconds
+  const t=[
+    {side:'L', mid:0.42, amp:0.24, omega:(2*Math.PI)/2600, phase:0.0, fireEvery:fire, lastFire:Game.t-600},
+    {side:'R', mid:0.50, amp:0.24, omega:(2*Math.PI)/2300, phase:1.6, fireEvery:fire, lastFire:Game.t-1600},
+  ];
+  if(level>=4){                     // extra pressure on the last two levels
+    t.push({side:'L', mid:0.60, amp:0.22, omega:(2*Math.PI)/2000, phase:3.0, fireEvery:fire, lastFire:Game.t-1100});
+    t.push({side:'R', mid:0.34, amp:0.22, omega:(2*Math.PI)/2100, phase:0.7, fireEvery:fire, lastFire:Game.t-300});
+  }
+  return t;
 }
 
 function respawn(){
@@ -111,6 +130,9 @@ function update(dt){
   const p=Game.player; if(!p) return;
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.6;
 
+  updateMovers();                       // slide moving blocks before collision
+  if(p.invuln>0) p.invuln-=dt*1000;
+
   const dir=Math.max(-1,Math.min(1,readInput()));
   // horizontal
   const target=dir*MOVE;
@@ -134,6 +156,9 @@ function update(dt){
 
   // out of bounds (fell off bottom)
   if(p.y > Game.world.height + 240){ respawn(); }
+
+  // cannons + bullets
+  updateHazards(dt);
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
@@ -195,6 +220,8 @@ function moveAndCollide(p){
     p.y = bestTop - p.h; p.vy = 0;
     if(!p.onGround && p.squash > -0.4) p.squash = 0.9;
     p.onGround = true;
+    // ride moving blocks: carry the player along with the platform
+    if(standingOn.type==='mover'){ p.x += standingOn.dx||0; }
   }
 
   // handle effects of the platform we're standing on
@@ -206,6 +233,52 @@ function moveAndCollide(p){
 
 function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){
   return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+}
+
+/* slide moving blocks horizontally around their base position */
+function updateMovers(){
+  if(Game.freezeHazards || !Game.world) return;
+  for(const pl of Game.world.platforms){
+    if(pl.type==='mover'){
+      const old=pl.x;
+      pl.x = pl.base + pl.amp*Math.sin(Game.t*pl.omega + pl.phase);
+      pl.dx = pl.x - old;
+    }
+  }
+}
+
+/* Screen-anchored turrets: they slide up/down the left & right edges of the
+   screen and fire bullets across your view every 2s. Everything here is in
+   SCREEN coordinates so the cannons are always visible (the world is wider
+   than the viewport). */
+function updateHazards(dt){
+  if(Game.freezeHazards || !Game.world || !Game.W) return;
+  const p=Game.player, s=gameScale(), W=Game.W, H=Game.H;
+  // player's screen-space box
+  const psx=(p.x-Game.cam.x)*s + W/2, psy=(p.y-Game.cam.y)*s + H/2, pw=p.w*s, ph=p.h*s;
+
+  for(const g of Game.guns){
+    g.sx = g.side==='L' ? 26 : W-26;
+    g.sy = H*g.mid + H*g.amp*Math.sin(Game.t*g.omega + g.phase);
+    if(Game.t - g.lastFire >= g.fireEvery){
+      g.lastFire = Game.t;
+      const dir = g.side==='L' ? 1 : -1;
+      Game.bullets.push({ x:g.sx + dir*16, y:g.sy, vx:dir*7.0, r:9 });
+    }
+  }
+  for(let i=Game.bullets.length-1; i>=0; i--){
+    const bl=Game.bullets[i];
+    bl.x += bl.vx;
+    if(bl.x < -40 || bl.x > W+40){ Game.bullets.splice(i,1); continue; }
+    if(p.invuln<=0 &&
+       bl.x+bl.r > psx && bl.x-bl.r < psx+pw &&
+       bl.y+bl.r > psy && bl.y-bl.r < psy+ph){
+      Game.bullets.length=0;            // clear so you aren't instantly re-hit
+      respawn(); p.invuln=1300;
+      toast('💥 Hit! Back to checkpoint');
+      break;
+    }
+  }
 }
 
 /* is a platform currently solid (handles disappearing + bridges) */
@@ -324,13 +397,51 @@ function render(){
     }
   }
 
-  // local player
+  // local player (blink while invulnerable after a hit)
   const p=Game.player;
+  const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
+  ctx.save();
+  if(blink) ctx.globalAlpha=0.4;
   drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash});
+  ctx.restore();
   drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
 
   ctx.restore();
+
+  // hazards drawn in SCREEN space (turrets ride the screen edges)
+  drawHazardsScreen(ctx);
   updateHudLive();
+}
+
+/* draw the screen-anchored turrets and their bullets (screen coordinates) */
+function drawHazardsScreen(ctx){
+  for(const g of Game.guns){
+    if(g.sx==null) continue;
+    const dir = g.side==='L'?1:-1;
+    // body
+    ctx.fillStyle='#6b5b78';
+    roundRect(ctx, g.sx-16, g.sy-18, 32, 36, 9); ctx.fill();
+    // barrel pointing inward
+    ctx.fillStyle='#4a3f55';
+    ctx.fillRect(g.sx + (dir>0?8:-32), g.sy-8, 24, 16);
+    // muzzle glow just before firing
+    if(Game.t - g.lastFire > g.fireEvery-300){
+      ctx.fillStyle='rgba(255,120,90,.9)';
+      ctx.beginPath(); ctx.arc(g.sx+dir*26, g.sy, 7, 0, Math.PI*2); ctx.fill();
+    }
+    // red eye
+    ctx.fillStyle='#ff7a5a';
+    ctx.beginPath(); ctx.arc(g.sx, g.sy-2, 5, 0, Math.PI*2); ctx.fill();
+  }
+  for(const bl of Game.bullets){
+    // trail
+    ctx.fillStyle='rgba(255,150,60,.35)';
+    ctx.beginPath(); ctx.ellipse(bl.x-bl.vx*1.6, bl.y, bl.r*2.4, bl.r*0.7, 0, 0, Math.PI*2); ctx.fill();
+    const g=ctx.createRadialGradient(bl.x,bl.y,1, bl.x,bl.y,bl.r);
+    g.addColorStop(0,'#fff'); g.addColorStop(.4,'#ffd36b'); g.addColorStop(1,'#ff5a3c');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(bl.x, bl.y, bl.r, 0, Math.PI*2); ctx.fill();
+  }
 }
 
 function drawWorldBackdrop(ctx){
@@ -379,6 +490,7 @@ function drawPlatform(ctx,pl){
       break;
     }
     case 'conveyor': fill='#9cd8ff'; edge='#5aa8ee'; break;
+    case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
     case 'pad':{
       const lit = isPadLit(pl.grp);
       fill = lit?'#ffe177':'#ffd6f0'; edge=lit?'#ffb300':'#ff9bce'; break;
@@ -413,6 +525,10 @@ function drawPlatform(ctx,pl){
     const arrow=pl.dir>0?'»»»':'«««';
     const shift=((Game.t/60)*pl.dir)%24;
     ctx.fillText(arrow, pl.x+pl.w/2+ (pl.dir>0?shift:-shift), pl.y+pl.h/2+1);
+  }
+  if(pl.type==='mover'){
+    ctx.fillStyle='rgba(120,80,20,.7)';ctx.font='bold 15px Nunito';ctx.textAlign='center';
+    ctx.fillText('↔', pl.x+pl.w/2, pl.y+pl.h/2+1);
   }
   if(pl.type==='pad'){
     ctx.font='14px serif';ctx.textAlign='center';ctx.fillStyle='#a05';
