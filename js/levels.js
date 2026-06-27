@@ -56,51 +56,42 @@ function generateLevel(level, seed, mode){
   // Two gate kinds alternate so the teamwork stays varied.
   if(mode==='coop'){
     const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
-    const cBottomY=3600, levW=82, padW=88, stepW=124;
+    const cBottomY=3600, levW=84, stepW=124;
     platforms.push({id:id++, x:WORLD_W/2-140, y:cBottomY, w:280, h:40, type:'big'});
     const cStart={x:WORLD_W/2, y:cBottomY-40};
     let land={x:WORLD_W/2, y:cBottomY};   // current landing top, we build upward
 
-    // GATE 1 — "Both Pads": both players stand on A & B together => a bridge
-    // appears for 10s across a chasm only crossable as a pair.
-    function timedGate(entry,g){
+    // LEAPFROG gate — the only way up is to help each other:
+    //  1) you stand on the BOTTOM button (HA) -> a staircase of bridges turns solid
+    //  2) your partner climbs it to the next ledge
+    //  3) your partner stands on the TOP button (HB) -> the staircase stays solid
+    //  4) you let go and climb up too.
+    // The bridges vanish the instant nobody holds a button, so one player alone
+    // can never pass (you can't hold a button and climb at the same time).
+    function leapfrogGate(entry, g, nSteps){
       const ex=entry.x, ey=entry.y;
-      const padAC=clamp(ex-150,70,WORLD_W-70), padBC=clamp(ex+150,70,WORLD_W-70);
-      platforms.push({id:id++, x:padAC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'A', grp:g, color:'pink'});
-      platforms.push({id:id++, x:padBC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'B', grp:g, color:'blue'});
-      const brW=300, brY=ey-112, brX=clamp(ex-brW/2,40,WORLD_W-40-brW);
-      platforms.push({id:id++, x:brX, y:brY, w:brW, h:24, type:'bridge', grp:g, gate:'timed'});
-      const npW=190, npY=brY-92, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
-      platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
-      checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
-      // top "hold" pad: the first player across stands here to KEEP the bridge
-      // open so their partner can cross too (even after the 10s timer).
-      const htC=clamp(npX+npW/2+150,70,WORLD_W-70);
-      platforms.push({id:id++, x:htC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HT', grp:g});
-      return {x:npX+npW/2, y:npY};
-    }
-    // GATE 2 — "Hold & Cross": one player holds a lever (HA) keeping a staircase
-    // of bridges solid while the other climbs; the climber then holds HB so the
-    // first can follow. The bridges vanish the instant nobody holds a lever.
-    function holdGate(entry,g){
-      const ex=entry.x, ey=entry.y;
+      // bottom button (you hold this for your partner)
       const haC=clamp(ex-150,70,WORLD_W-70);
-      platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g, color:'pink'});
-      const sy=[ey-95, ey-186, ey-274], sx=[ex-20, ex+40, ex-30];
-      for(let i=0;i<3;i++){
-        const x=clamp(sx[i]-stepW/2,40,WORLD_W-40-stepW);
-        platforms.push({id:id++, x, y:sy[i], w:stepW, h:24, type:'bridge', grp:g, gate:'hold'});
+      platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
+      // staircase of held bridges
+      const sx=[ex+20, ex-20, ex+30, ex-30];
+      let y=ey;
+      for(let i=0;i<nSteps;i++){
+        y -= (i===0?95:92);
+        const x=clamp(sx[i%4]-stepW/2,40,WORLD_W-40-stepW);
+        platforms.push({id:id++, x, y, w:stepW, h:24, type:'bridge', grp:g, gate:'hold'});
       }
-      const npW=190, npY=ey-330, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
+      const npW=190, npY=y-58, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
       platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
       checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      // top button (your partner holds this so YOU can climb up after)
       const hbC=clamp(npX+npW/2+150,70,WORLD_W-70);
-      platforms.push({id:id++, x:hbC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HB', grp:g, color:'blue'});
+      platforms.push({id:id++, x:hbC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HB', grp:g});
       return {x:npX+npW/2, y:npY};
     }
 
     for(let g=0; g<CHECKPOINTS; g++){
-      land = (g%2===0) ? timedGate(land,g) : holdGate(land,g);
+      land = leapfrogGate(land, g, (g%2===0)?2:3);   // alternate 2/3-step climbs
     }
     const fw=240, fY=land.y-100;   // finish a short hop above the last checkpoint
     platforms.push({id:id++, x:WORLD_W/2-fw/2, y:fY, w:fw, h:34, type:'finish'});

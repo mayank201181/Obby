@@ -33,12 +33,17 @@ function gameInit(){
   Game.ctx=Game.canvas.getContext('2d');
   window.addEventListener('resize', gameResize);
   // keyboard (desktop)
+  const typingInField = e => {
+    const t=e.target;
+    return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable);
+  };
   window.addEventListener('keydown',e=>{
+    if(typingInField(e)) return;     // don't hijack keys while typing a name
     if(['ArrowLeft','ArrowRight','ArrowUp',' ','a','d','w'].includes(e.key)) e.preventDefault();
     Game.keys[e.key]=true;
     if(e.key==='ArrowUp'||e.key===' '||e.key==='w') Game.input.jump=true;
   },{passive:false});
-  window.addEventListener('keyup',e=>{ Game.keys[e.key]=false; });
+  window.addEventListener('keyup',e=>{ if(typingInField(e)) return; Game.keys[e.key]=false; });
   setupTouchControls();
 }
 
