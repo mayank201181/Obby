@@ -6,30 +6,30 @@ const SKINS = [
   { id:'mint',    color:'#9be7a0', price:0 },
   { id:'sky',     color:'#9cc4ff', price:0 },
   { id:'bubble',  color:'#ffb8e0', price:0 },
-  { id:'lemon',   color:'#ffe177', price:10 },
-  { id:'peach',   color:'#ffb38a', price:10 },
-  { id:'lilac',   color:'#c8a0ff', price:10 },
-  { id:'coral',   color:'#ff8f8f', price:10 },
-  { id:'aqua',    color:'#7fe6df', price:10 },
-  { id:'grape',   color:'#9b6bff', price:10 },
-  { id:'rose',    color:'#ff7eb6', price:10 },
+  { id:'lemon',   color:'#ffe177', price:50 },
+  { id:'peach',   color:'#ffb38a', price:50 },
+  { id:'lilac',   color:'#c8a0ff', price:50 },
+  { id:'coral',   color:'#ff8f8f', price:50 },
+  { id:'aqua',    color:'#7fe6df', price:50 },
+  { id:'grape',   color:'#9b6bff', price:50 },
+  { id:'rose',    color:'#ff7eb6', price:50 },
   // chest-only specials:
   { id:'rainbow', color:'rainbow', price:-1, special:true },
   { id:'galaxy',  color:'galaxy',  price:-1, special:true },
 ];
 
-// Accessories cost 15 coins each. drawn on top of the blob.
+// Accessories cost 100 coins each. drawn on top of the blob.
 const ACCESSORIES = [
   { id:'none',    emoji:'🚫', label:'None', price:0 },
-  { id:'bow',     emoji:'🎀', label:'Bow',   price:15 },
-  { id:'cap',     emoji:'🧢', label:'Cap',   price:15 },
-  { id:'crown',   emoji:'👑', label:'Crown', price:15 },
-  { id:'glasses', emoji:'🕶️', label:'Shades',price:15 },
-  { id:'flower',  emoji:'🌸', label:'Flower',price:15 },
-  { id:'party',   emoji:'🥳', label:'Party', price:15 },
-  { id:'halo',    emoji:'😇', label:'Halo',  price:15 },
-  { id:'horns',   emoji:'😈', label:'Horns', price:15 },
-  { id:'star',    emoji:'⭐', label:'Star',  price:15 },
+  { id:'bow',     emoji:'🎀', label:'Bow',   price:100 },
+  { id:'cap',     emoji:'🧢', label:'Cap',   price:100 },
+  { id:'crown',   emoji:'👑', label:'Crown', price:100 },
+  { id:'glasses', emoji:'🕶️', label:'Shades',price:100 },
+  { id:'flower',  emoji:'🌸', label:'Flower',price:100 },
+  { id:'party',   emoji:'🥳', label:'Party', price:100 },
+  { id:'halo',    emoji:'😇', label:'Halo',  price:100 },
+  { id:'horns',   emoji:'😈', label:'Horns', price:100 },
+  { id:'star',    emoji:'⭐', label:'Star',  price:100 },
 ];
 
 // Faces. 'classic' is default & free. Specials only come from the daily chest.
