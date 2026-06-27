@@ -38,6 +38,7 @@
       <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
       <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
     </div>
+    <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
     <button class="btn ghost" onclick="openShop()">🛍️ Daily Shop <span class="badge" style="background:var(--gold);color:#7a5512">sale!</span></button>
     <button class="btn ghost" id="dailyBtn" onclick="startDaily()">🗓️ Daily Challenge</button>
     <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
@@ -85,6 +86,19 @@
     <h2>🏆 Badges</h2>
     <p class="hint" id="achProgress"></p>
     <div class="scroll" id="achBody"></div>
+  </div>
+</section>
+
+<!-- ============ DAILY QUESTS ============ -->
+<section class="screen" id="questsScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>📋 Daily Quests</h2>
+    <p class="hint">Three new quests every day. Finish them for coins!</p>
+    <div id="questsBody"></div>
   </div>
 </section>
 
@@ -193,6 +207,7 @@
       <div style="display:flex;gap:8px;flex-direction:column">
         <div class="panel" id="hudLevel">Level 1/5</div>
         <div class="panel small" id="hudCp">⛳ 0/10</div>
+        <div class="panel small" id="hudPower" style="display:none"></div>
       </div>
       <div class="hud-btns">
         <div class="panel" id="hudCoins">🪙 0</div>

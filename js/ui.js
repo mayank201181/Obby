@@ -70,6 +70,7 @@ function initLobby(){
   startPreview('lobbyPreview');
   refreshChestButton();
   refreshDailyButton();
+  refreshQuestButton();
 }
 function applyLobbyBg(){
   document.getElementById('lobbyScreen').style.background =
@@ -589,6 +590,41 @@ function buyShopItem(idx){
   toast('Bought '+it.label+'! 🛍️');
   renderShop();
 }
+/* ---------------- Daily Quests ---------------- */
+function openQuests(){ showScreen('questsScreen'); renderQuests(); }
+function renderQuests(){
+  updateCoinDisplays();
+  const q=ensureQuests();
+  document.getElementById('questsBody').innerHTML = q.list.map(item=>{
+    const def=questById(item.id); if(!def) return '';
+    const pct=Math.min(100, Math.round(item.prog/def.goal*100));
+    const btn = item.claimed
+      ? `<button class="btn ghost small" disabled>Claimed ✓</button>`
+      : item.done
+        ? `<button class="btn gold small" onclick="doClaimQuest('${item.id}')">Claim 🪙${def.reward}</button>`
+        : `<span class="muted" style="font-size:12px;white-space:nowrap">🪙${def.reward}</span>`;
+    return `<div class="quest-row ${item.done?'done':''}">
+      <div class="quest-ico">${def.emoji}</div>
+      <div class="quest-info">
+        <b>${def.text}</b>
+        <div class="qbar"><div class="qfill" style="width:${pct}%"></div></div>
+        <div class="muted" style="font-size:11px">${Math.min(item.prog,def.goal)}/${def.goal}</div>
+      </div>
+      ${btn}
+    </div>`;
+  }).join('');
+}
+function doClaimQuest(id){
+  const r=claimQuest(id);
+  if(r){ SFX.chest(); toast('🪙 +'+r+' claimed!'); renderQuests(); refreshQuestButton(); }
+}
+function refreshQuestButton(){
+  const b=document.getElementById('questBtn'); if(!b) return;
+  b.innerHTML = questsClaimable()
+    ? '📋 Daily Quests <span class="badge">claim!</span>'
+    : '📋 Daily Quests';
+}
+
 function openShop(){ showScreen('shopScreen'); renderShop(); }
 function renderShop(){
   updateCoinDisplays();

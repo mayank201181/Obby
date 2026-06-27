@@ -237,6 +237,11 @@ function generateLevel(level, seed, mode){
       if(band>0 && type!=='disappear' && rnd()<0.28){
         platforms.push({id:id++, type:'coin', x:nx-10, y:y-40, w:20, h:20});
       }
+      // rare power-up pickups (magnet / shield / dash)
+      if(band>0 && type!=='disappear' && rnd()<0.06){
+        const pw=['magnet','shield','dash'][Math.floor(rnd()*3)];
+        platforms.push({id:id++, type:'powerup', pw, x:nx-14, y:y-46, w:28, h:28});
+      }
     }
     y = bandTop;
 
@@ -274,7 +279,7 @@ function generateTower(seed){
   const world = {
     level:1, seed, mode:'tower', tower:true,
     width:WORLD_W, height:bottomY,
-    platforms, checkpoints,
+    platforms, checkpoints, bosses:[],
     start:{x:WORLD_W/2, y:bottomY-40},
     finishY:-1e9,                 // never reached -> no finish banner
     _id:1, _prevX:WORLD_W/2, _y:bottomY, _floor:0, _topY:bottomY,
@@ -295,6 +300,8 @@ function towerFloor(world){
   const pickSize=()=>{ let r=rnd()*SUM; for(let i=0;i<SIZES.length;i++){ r-=SIZE_W[i]; if(r<=0) return SIZES[i]; } return 120; };
   const maxOffFor=w=>(w>=200?188:w>=150?172:w>=110?152:w>=80?122:98)+diff*20;
 
+  const arenaBottom = world._y;              // where this floor's climb begins
+  const isBoss = ((f+1) % 5) === 0;          // every 5th floor is a boss arena
   let prevX = world._prevX, y = world._y;
   const steps = rint(5,7);
   for(let i=0;i<steps;i++){
@@ -328,13 +335,18 @@ function towerFloor(world){
     world.platforms.push(p);
     if(type!=='disappear' && rnd()<0.26)
       world.platforms.push({id:world._id++, type:'coin', x:nx-10, y:y-40, w:20, h:20});
+    if(type!=='disappear' && rnd()<0.05)
+      world.platforms.push({id:world._id++, type:'powerup', pw:['magnet','shield','dash'][Math.floor(rnd()*3)], x:nx-14, y:y-46, w:28, h:28});
   }
-  // floor checkpoint
+  // floor checkpoint (boss floors get a wide safe arena ledge)
   y -= rint(74,96);
-  const cw=180, cx=Math.max(60,Math.min(WORLD_W-60-cw, prevX-cw/2));
+  const cw=isBoss?240:180, cx=Math.max(60,Math.min(WORLD_W-60-cw, prevX-cw/2));
   const floorNo = f+1;
-  world.platforms.push({id:world._id++, x:cx, y, w:cw, h:30, type:'checkpoint', cpIndex:floorNo});
+  const cp={id:world._id++, x:cx, y, w:cw, h:30, type:'checkpoint', cpIndex:floorNo};
+  if(isBoss) cp.boss=true;
+  world.platforms.push(cp);
   world.checkpoints.push({index:floorNo, x:cx+cw/2, y});
+  if(isBoss) world.bosses.push({floorNo, topY:y, bottomY:arenaBottom, defeated:false, lastThrow:0});
   world._prevX = cx+cw/2;
   world._y = y;
   world._topY = y;

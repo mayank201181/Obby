@@ -78,7 +78,59 @@ const ACHIEVEMENTS = [
   { id:'shiny',  name:'Golden Touch',  desc:'Forge a shiny pet',            emoji:'🌟' },
   { id:'maxpet', name:'Best Friend',   desc:'Level a pet to 10',            emoji:'💖' },
   { id:'racewin',name:'Champion',      desc:'Win a race',                   emoji:'🥇' },
+  { id:'boss',   name:'Boss Slayer',   desc:'Beat a Tower boss',            emoji:'👹' },
+  { id:'questmaster',name:'Go-Getter', desc:'Complete a daily quest',       emoji:'✅' },
 ];
+
+/* ===== Daily Quests ===== three refresh each day, seeded by the date ===== */
+const QUEST_DEFS = [
+  { id:'coins15',  type:'coins',       goal:15, reward:40, emoji:'🪙', text:'Collect 15 coins in levels' },
+  { id:'coins30',  type:'coins',       goal:30, reward:75, emoji:'💰', text:'Collect 30 coins in levels' },
+  { id:'finish2',  type:'finish',      goal:2,  reward:50, emoji:'🏁', text:'Finish 2 levels' },
+  { id:'cp8',      type:'checkpoints', goal:8,  reward:40, emoji:'⛳', text:'Reach 8 checkpoints' },
+  { id:'deathless',type:'deathless',   goal:1,  reward:60, emoji:'😇', text:'Finish a level with no deaths' },
+  { id:'tower6',   type:'towerFloor',  goal:6,  reward:55, emoji:'🏗️', text:'Reach floor 6 in the Tower' },
+  { id:'power3',   type:'powerup',     goal:3,  reward:45, emoji:'⚡', text:'Grab 3 power-ups' },
+  { id:'boss1',    type:'boss',        goal:1,  reward:80, emoji:'👹', text:'Beat a Tower boss' },
+];
+const questById = id => QUEST_DEFS.find(q=>q.id===id);
+
+function ensureQuests(){
+  const day = (typeof dailyKey==='function') ? dailyKey() : 'x';
+  if(!SAVE.quests || SAVE.quests.day!==day){
+    const seed = (typeof dailySeed==='function') ? dailySeed() : 1;
+    const rnd = mulberry32((seed*3 + 5)|0);
+    const pool = QUEST_DEFS.slice();
+    for(let i=pool.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=pool[i];pool[i]=pool[j];pool[j]=t; }
+    SAVE.quests = { day, list: pool.slice(0,3).map(q=>({id:q.id, prog:0, done:false, claimed:false})) };
+    persist();
+  }
+  return SAVE.quests;
+}
+/* record progress toward any active quest of this type */
+function questEvent(type, amount){
+  ensureQuests();
+  let changed=false;
+  for(const q of SAVE.quests.list){
+    const def=questById(q.id); if(!def || def.type!==type || q.done) continue;
+    if(type==='towerFloor') q.prog=Math.max(q.prog, amount||0);
+    else q.prog += (amount||1);
+    if(q.prog>=def.goal){ q.prog=def.goal; q.done=true;
+      if(typeof toast==='function') toast('✅ Quest done: '+def.text+'!');
+      if(typeof SFX==='object' && SFX.rare) SFX.rare();
+    }
+    changed=true;
+  }
+  if(changed) persist();
+}
+function claimQuest(id){
+  ensureQuests();
+  const q=SAVE.quests.list.find(x=>x.id===id), def=questById(id);
+  if(!q || !def || !q.done || q.claimed) return false;
+  q.claimed=true; addCoins(def.reward); unlockAchievement('questmaster'); persist();
+  return def.reward;
+}
+function questsClaimable(){ ensureQuests(); return SAVE.quests.list.some(q=>q.done && !q.claimed); }
 
 const DAY_MS = 24*60*60*1000;
 
