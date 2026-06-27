@@ -75,6 +75,8 @@ const ACHIEVEMENTS = [
   { id:'rich',   name:'Rich!',         desc:'Save up 500 coins',            emoji:'🪙' },
   { id:'tower',  name:'Sky High',      desc:'Reach floor 10 in the Tower',  emoji:'🏗️' },
   { id:'daily',  name:'Daily Climber', desc:'Beat a Daily Challenge',       emoji:'🗓️' },
+  { id:'shiny',  name:'Golden Touch',  desc:'Forge a shiny pet',            emoji:'🌟' },
+  { id:'maxpet', name:'Best Friend',   desc:'Level a pet to 10',            emoji:'💖' },
 ];
 
 const DAY_MS = 24*60*60*1000;
@@ -107,6 +109,8 @@ function defaultSave(){
     lvlCoinsCollected:0,    // total floating coins collected in levels
     towerBest:0,           // highest floor reached in endless Tower mode
     daily:{key:'',best:0,done:false},  // daily challenge progress for the current day
+    petXp:{},              // creatureId -> experience points (drives pet level)
+    shinies:{},            // creatureId -> count of shiny (golden) copies owned
   };
 }
 

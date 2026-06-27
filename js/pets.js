@@ -51,6 +51,10 @@ const CREATURES = [
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['speed2','platform'],     sell:700 },
   { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['platform','glideStrong'],sell:700 },
   { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['speed2','glideStrong'],  sell:700 },
+  { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['platform','speed2'],     sell:700 },
+  { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['glideStrong','speed1'],  sell:700 },
+  { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['glide','platform'],      sell:700 },
+  { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['speed2','glide'],        sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
@@ -108,14 +112,98 @@ function equipPet(id){
   return true;
 }
 
-/* aggregate the equipped pet's ability effects (used by the game engine) */
+/* ---- pet leveling ----
+   Pets earn XP while equipped (checkpoints + finishing levels). Higher level =
+   a slightly stronger ability. Capped at level 10. No jump/height effects, so
+   levelling can never let you skip blocks. */
+const PET_MAX_LEVEL = 10;
+function xpForLevel(lvl){ return Math.round(6 * lvl * (lvl+1) / 2); }  // cumulative XP to reach lvl
+function petLevel(id){
+  const xp = SAVE.petXp ? (SAVE.petXp[id]||0) : 0;
+  let lvl = 1;
+  while(lvl < PET_MAX_LEVEL && xp >= xpForLevel(lvl)) lvl++;
+  return lvl;
+}
+function petXpInfo(id){
+  const xp = SAVE.petXp ? (SAVE.petXp[id]||0) : 0;
+  const lvl = petLevel(id);
+  if(lvl>=PET_MAX_LEVEL) return { lvl, xp, into:1, need:1, max:true };
+  const prev = lvl>1 ? xpForLevel(lvl-1) : 0;
+  const next = xpForLevel(lvl);
+  return { lvl, xp, into: xp-prev, need: next-prev, max:false };
+}
+function addPetXp(id, amount){
+  if(!id || !creatureById(id)) return null;
+  if(!SAVE.petXp) SAVE.petXp={};
+  const before = petLevel(id);
+  SAVE.petXp[id] = (SAVE.petXp[id]||0) + amount;
+  const after = petLevel(id);
+  persist();
+  if(after>=PET_MAX_LEVEL && before<PET_MAX_LEVEL && typeof unlockAchievement==='function') unlockAchievement('maxpet');
+  return { leveledUp: after>before, level: after };
+}
+
+/* ---- shiny (golden) pets ---- */
+function isShiny(id){ return !!(SAVE.shinies && SAVE.shinies[id]>0); }
+/* fuse 3 copies of one pet into a single shiny version of it */
+function makeShiny(id){
+  const c=creatureById(id); if(!c) return {error:'?'};
+  if((SAVE.pets[id]||0) < 3) return {error:'Need 3 copies'};
+  SAVE.pets[id]-=3; if(SAVE.pets[id]<=0) delete SAVE.pets[id];
+  if(!SAVE.shinies) SAVE.shinies={};
+  SAVE.shinies[id]=(SAVE.shinies[id]||0)+1;
+  if(SAVE.equippedPet===id && !ownsPet(id)) SAVE.equippedPet=id;  // keep equipped (shiny counts)
+  persist();
+  if(typeof unlockAchievement==='function') unlockAchievement('shiny');
+  return { creature:c };
+}
+
+/* ---- rarity fusion: 3 pets of one rarity -> 1 random pet of the next rarity ---- */
+function rarityCopies(rarity){
+  let n=0; for(const c of creaturesOfRarity(rarity)) n += (SAVE.pets[c.id]||0); return n;
+}
+function nextRarity(rarity){
+  const i=RARITIES.indexOf(rarity); return (i>=0 && i<RARITIES.length-1) ? RARITIES[i+1] : null;
+}
+function fuseRarity(rarity){
+  const nr=nextRarity(rarity);
+  if(!nr) return {error:'Secret pets can\'t fuse higher'};
+  if(rarityCopies(rarity) < 3) return {error:'Need 3 '+RARITY_INFO[rarity].label+' pets'};
+  // consume 3 copies, taking from the pets you own the MOST of first (spares uniques)
+  let toRemove=3;
+  const owned=creaturesOfRarity(rarity).filter(c=>(SAVE.pets[c.id]||0)>0)
+              .sort((a,b)=>(SAVE.pets[b.id]||0)-(SAVE.pets[a.id]||0));
+  for(const c of owned){
+    while(toRemove>0 && (SAVE.pets[c.id]||0)>0){ SAVE.pets[c.id]--; toRemove--; if(SAVE.pets[c.id]<=0){ delete SAVE.pets[c.id]; break; } }
+    if(toRemove<=0) break;
+  }
+  if(SAVE.equippedPet && !ownsPet(SAVE.equippedPet) && !isShiny(SAVE.equippedPet)) SAVE.equippedPet=null;
+  // roll a random pet of the next rarity
+  const pool=creaturesOfRarity(nr);
+  const creature=pool[Math.floor(Math.random()*pool.length)];
+  const had=SAVE.pets[creature.id]||0;
+  SAVE.pets[creature.id]=had+1;
+  if(!SAVE.equippedPet) SAVE.equippedPet=creature.id;
+  persist();
+  return { creature, isNew: had===0, count: SAVE.pets[creature.id] };
+}
+
+/* aggregate the equipped pet's ability effects (used by the game engine).
+   Effects scale a little with the pet's level, and shinies get a small bonus. */
 function equippedAbilities(){
-  const c = SAVE.equippedPet ? creatureById(SAVE.equippedPet) : null;
+  const id = SAVE.equippedPet;
+  const c = id ? creatureById(id) : null;
   const set = new Set(c ? c.abilities : []);
+  const lvl = id ? petLevel(id) : 1;
+  const shiny = id ? isShiny(id) : false;
+  const lvlBoost = (lvl-1)*0.015 + (shiny?0.06:0);   // up to +0.195 at lvl10 shiny
+  const glideBoost = (lvl-1)*0.01 + (shiny?0.04:0);  // glide a touch stronger
+  const baseMove = set.has('speed2')?1.4 : set.has('speed1')?1.2 : 1;
+  const baseFall = set.has('glideStrong')?0.55 : set.has('glide')?0.75 : 1;
   return {
-    moveMul: set.has('speed2')?1.4 : set.has('speed1')?1.2 : 1,
+    moveMul: baseMove>1 ? baseMove+lvlBoost : 1,
     jumpMul: set.has('highJump2')?1.2 : set.has('highJump1')?1.1 : 1,
-    fallMul: set.has('glideStrong')?0.55 : set.has('glide')?0.75 : 1,
+    fallMul: baseFall<1 ? Math.max(0.45, baseFall-glideBoost) : 1,
     maxJumps: set.has('doubleJump')?2 : 1,
     canPlatform: set.has('platform'),
   };

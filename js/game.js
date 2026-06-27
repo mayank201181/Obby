@@ -459,6 +459,7 @@ function onStand(p, pl, now){
     Game.hitCheckpoints.add(pl.cpIndex);
     p.cp=pl.cpIndex; p.respawnX=pl.x+pl.w/2-p.w/2; p.respawnY=pl.y-p.h;
     Game.coinsThisRun+=5; addCoins(5); SFX.checkpoint();
+    gainPetXp(1);
     if(Game.onCheckpoint)Game.onCheckpoint(pl.cpIndex);
     if(Game.multiplayer) mpSendCheckpoint(pl.cpIndex);
     if(Game.tower){
@@ -531,8 +532,19 @@ function reconcilePads(){
   }
 }
 
+/* award XP to the equipped pet (helps it level up); toast on level-up */
+function gainPetXp(amount){
+  if(!SAVE.equippedPet || typeof addPetXp!=='function') return;
+  const r=addPetXp(SAVE.equippedPet, amount);
+  if(r && r.leveledUp){
+    const c=creatureById(SAVE.equippedPet);
+    if(c && typeof toast==='function') toast('⭐ '+c.name+' reached level '+r.level+'!');
+  }
+}
+
 function levelFinished(){
   Game.finished=true;
+  gainPetXp(4);
   let earned=30; addCoins(30); SFX.win();   // bonus for finishing a level
   if(Game.multiplayer) mpSendFinish();
   const timeMs = Math.max(0, Math.round(Game.t - Game.runStartT));
@@ -638,7 +650,7 @@ function render(){
   ctx.save();
   if(blink) ctx.globalAlpha=0.4;
   drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
-                petSkin:SAVE.petSkin, ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
+                petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
   ctx.restore();
   drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
 

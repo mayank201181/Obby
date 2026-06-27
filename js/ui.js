@@ -39,7 +39,7 @@ function startPreview(canvasId){
   cancelAnimationFrame(previewRaf);
   const loop=t=>{
     ctx.clearRect(0,0,size,size);
-    drawCharacter(ctx,size/2,size/2+6,72,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:1,t,petSkin:SAVE.petSkin});
+    drawCharacter(ctx,size/2,size/2+6,72,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:1,t,petSkin:SAVE.petSkin,shiny:SAVE.petSkin&&isShiny(SAVE.petSkin)});
     previewRaf=requestAnimationFrame(loop);
   };
   previewRaf=requestAnimationFrame(loop);
@@ -538,6 +538,7 @@ function renderPets(){
   const body=document.getElementById('petsBody');
   if(petsTab==='chests') renderChestsTab(body);
   else if(petsTab==='collection') renderCollectionTab(body);
+  else if(petsTab==='fuse') renderFuseTab(body);
   else renderTradeTab(body);
 }
 function oddsLine(weights){
@@ -601,10 +602,12 @@ function renderCollectionTab(body){
   for(const r of RARITIES){
     html+=`<div class="rar-head" style="color:${RARITY_INFO[r].color}">${RARITY_INFO[r].label}</div><div class="pet-grid">`;
     for(const c of creaturesOfRarity(r)){
-      const owns=ownsPet(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
-      html+=`<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''}" style="--rc:${RARITY_INFO[r].color}" onclick="${owns?`showPetActions('${c.id}')`:''}">
-        <div class="pet-emoji">${owns?c.emoji:'❓'}</div>
+      const owns=ownsPet(c.id)||isShiny(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
+      const shiny=isShiny(c.id); const lvl=owns?petLevel(c.id):1;
+      html+=`<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''} ${shiny?'shiny':''}" style="--rc:${RARITY_INFO[r].color}" onclick="${owns?`showPetActions('${c.id}')`:''}">
+        <div class="pet-emoji">${owns?c.emoji:'❓'}${shiny?'<span class="shiny-star">🌟</span>':''}</div>
         <div class="pet-name">${owns?c.name:'???'}</div>
+        ${owns?`<span class="lvl-badge">L${lvl}</span>`:''}
         ${owns&&n>1?`<span class="count-badge">x${n}</span>`:''}
         ${eqd?`<span class="eq-badge">✓</span>`:''}</div>`;
     }
@@ -614,17 +617,69 @@ function renderCollectionTab(body){
 }
 function showPetActions(id){
   const c=creatureById(id); const n=petCount(id);
+  const shiny=isShiny(id); const xi=petXpInfo(id);
+  const pct=xi.max?100:Math.round(xi.into/xi.need*100);
   const body=document.getElementById('petModalBody');
   body.innerHTML=`
-    <div class="pet-big" style="--rc:${RARITY_INFO[c.rarity].color}">${c.emoji}</div>
-    <h2 style="margin:4px 0">${c.name} ${rarityBadge(c.rarity)}</h2>
-    <p class="muted" style="font-size:13px">✨ ${abilityText(c)}</p>
-    <p class="hint">You own ${n}${n>1?' · duplicates sell for 🪙'+c.sell+' each':''}</p>
+    <div class="pet-big ${shiny?'shiny-big':''}" style="--rc:${RARITY_INFO[c.rarity].color}">${c.emoji}${shiny?' 🌟':''}</div>
+    <h2 style="margin:4px 0">${shiny?'Shiny ':''}${c.name} ${rarityBadge(c.rarity)}</h2>
+    <p class="muted" style="font-size:13px">✨ ${abilityText(c)}${shiny?' · <b style="color:#e0a01a">golden bonus!</b>':''}</p>
+    <div class="lvl-row"><span>Lv ${xi.lvl}${xi.max?' (MAX)':''}</span>
+      <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div></div>
+    <p class="hint">You own ${n}${shiny?' + 1 shiny ✨':''}${n>1?' · duplicates sell for 🪙'+c.sell+' each':''}</p>
     <button class="btn pink" onclick="doEquip('${c.id}')">${SAVE.equippedPet===c.id?'✓ Power equipped (tap to remove)':'Use power'}</button>
     <button class="btn blue" onclick="doWearPet('${c.id}')">${SAVE.petSkin===c.id?'✓ Worn as skin (tap to remove)':'👕 Wear as skin'}</button>
-    ${n>1?`<button class="btn gold" onclick="doSell('${c.id}')">Sell duplicate (🪙${c.sell})</button>`:''}
+    ${n>=3?`<button class="btn gold" onclick="doMakeShiny('${c.id}')">🌟 Make Shiny (uses 3)</button>`:''}
+    ${n>1?`<button class="btn ghost" onclick="doSell('${c.id}')">Sell duplicate (🪙${c.sell})</button>`:''}
     <button class="btn ghost" onclick="closeModal('petModal')">Close</button>`;
   openModal('petModal');
+}
+function doMakeShiny(id){
+  const r=makeShiny(id); if(r.error){ toast(r.error); return; }
+  SFX.rare(); const c=creatureById(id);
+  toast('🌟 Forged a shiny '+c.name+'!');
+  renderPets(); showPetActions(id);
+}
+
+/* ---------------- Fuse tab ---------------- */
+function renderFuseTab(body){
+  // shiny upgrades: any pet you own 3+ copies of
+  const shinyable = CREATURES.filter(c=>petCount(c.id)>=3);
+  let shinyHtml = shinyable.length
+    ? shinyable.map(c=>`<div class="chest-row">
+        <div class="chest-ico">${c.emoji}</div>
+        <div class="chest-info"><b>${c.name}</b>
+          <div class="muted" style="font-size:11px">You own ${petCount(c.id)} · turn 3 into a golden shiny</div></div>
+        <button class="btn gold small" onclick="doMakeShiny('${c.id}')">🌟 Forge</button>
+      </div>`).join('')
+    : `<p class="hint">Collect 3 copies of any pet to forge a 🌟 shiny version (golden glow + a power boost).</p>`;
+
+  // rarity merges: 3 of a rarity -> 1 random of the next rarity up
+  let mergeHtml='';
+  for(const r of RARITIES){
+    const nr=nextRarity(r); if(!nr) continue;
+    const have=rarityCopies(r);
+    const can=have>=3;
+    mergeHtml+=`<div class="chest-row">
+      <div class="chest-ico" style="color:${RARITY_INFO[r].color}">🧬</div>
+      <div class="chest-info"><b>${RARITY_INFO[r].label} → ${RARITY_INFO[nr].label}</b>
+        <div class="muted" style="font-size:11px">Fuse 3 ${RARITY_INFO[r].label} pets → 1 random ${RARITY_INFO[nr].label} (you have ${have})</div></div>
+      <button class="btn pink small" ${can?'':'disabled'} onclick="doFuseRarity('${r}')">Fuse 3</button>
+    </div>`;
+  }
+
+  body.innerHTML = `<div class="rar-head">🌟 Forge a Shiny</div>${shinyHtml}
+    <div class="rar-head" style="margin-top:14px">🧬 Rarity Fusion</div>
+    <p class="hint" style="margin-top:0">Combine 3 pets of one rarity into a random pet of the next rarity up!</p>
+    ${mergeHtml}`;
+}
+function doFuseRarity(r){
+  const res=fuseRarity(r); if(res.error){ toast(res.error); return; }
+  const rare=['legendary','mythical','secret'].includes(res.creature.rarity);
+  rare?SFX.rare():SFX.chest();
+  if(res.creature.rarity==='secret') unlockAchievement('secret');
+  checkPetAchievements();
+  renderPets(); showPetReveal(res.creature, res.count);
 }
 function doWearPet(id){
   SFX.click();

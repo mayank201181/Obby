@@ -56,6 +56,16 @@ function drawCharacter(ctx, cx, cy, size, opts){
       ctx.beginPath();ctx.ellipse(0,h*0.55,w*0.42,h*0.12,0,0,Math.PI*2);ctx.fill();
       ctx.globalAlpha=1;
       if(opts.ring){ ctx.fillStyle=opts.ring; ctx.beginPath();ctx.arc(0,0,w*0.62,0,Math.PI*2);ctx.fill(); }
+      // shiny (golden) pets get a glowing aura + sparkles
+      if(opts.shiny){
+        const gg=ctx.createRadialGradient(0,0,w*0.2, 0,0,w*0.75);
+        gg.addColorStop(0,'rgba(255,224,120,.85)'); gg.addColorStop(1,'rgba(255,200,60,0)');
+        ctx.fillStyle=gg; ctx.beginPath();ctx.arc(0,0,w*0.75,0,Math.PI*2);ctx.fill();
+        ctx.font=`${Math.round(size*0.34)}px serif`;
+        const tw=(t||0)/250;
+        ctx.fillText('✨', Math.cos(tw)*w*0.5, -h*0.35+Math.sin(tw)*4);
+        ctx.fillText('✨', Math.cos(tw+2)*w*0.5, h*0.2+Math.sin(tw+2)*4);
+      }
       ctx.font=`${Math.round(size*1.2*(1+sq*0.15))}px serif`;
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(c.emoji, 0, h*0.06);
