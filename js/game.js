@@ -429,7 +429,7 @@ function reconcilePads(){
 
 function levelFinished(){
   Game.finished=true;
-  let earned=10; addCoins(10);   // bonus for finishing a level
+  let earned=30; addCoins(30);   // bonus for finishing a level
   if(Game.multiplayer) mpSendFinish();
   const isFinal = Game.level>=TOTAL_LEVELS;
   if(Game.level+1 > SAVE.bestLevel){ SAVE.bestLevel=Math.min(TOTAL_LEVELS,Game.level+ (isFinal?0:1)); persist(); }
