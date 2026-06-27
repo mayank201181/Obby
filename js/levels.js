@@ -56,7 +56,8 @@ function generateLevel(level, seed, mode){
   // Two gate kinds alternate so the teamwork stays varied.
   if(mode==='coop'){
     const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
-    const cBottomY=3600, levW=84, stepW=124;
+    // harder on later levels: narrower steps & lift platforms
+    const cBottomY=3600, levW=84, stepW=Math.round(124 - diff*28);
     platforms.push({id:id++, x:WORLD_W/2-140, y:cBottomY, w:280, h:40, type:'big'});
     const cStart={x:WORLD_W/2, y:cBottomY-40};
     let land={x:WORLD_W/2, y:cBottomY};   // current landing top, we build upward
@@ -114,7 +115,7 @@ function generateLevel(level, seed, mode){
     // It only rises with two players aboard; one alone can't reach the top.
     function liftGate(entry, g, rise){
       const ex=entry.x, ey=entry.y;
-      const liftW=rint(160,196), baseY=ey-52, topY=baseY-rise;
+      const liftW=rint(148, Math.round(196-diff*36)), baseY=ey-52, topY=baseY-rise;
       platforms.push({id:id++, x:clamp(ex-liftW/2,40,WORLD_W-40-liftW), y:baseY, w:liftW, h:26,
                       type:'lift', grp:g, baseY, topY, dy:0});
       const npW=190, npY=topY-46, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
@@ -151,10 +152,12 @@ function generateLevel(level, seed, mode){
 
     // Randomised teamwork puzzles — never the same one twice in a row, and each
     // varies its size/shape so no two sections feel identical.
+    // later levels = taller climbs and taller lifts (more to coordinate)
+    const sd=Math.round(diff*2);
     const makers = {
-      leapfrog:  (e,g)=> leapfrogGate(e, g, rint(2,4)),
-      bothstand: (e,g)=> bothStandGate(e, g, rint(2,4)),
-      lift:      (e,g)=> liftGate(e, g, rint(175,250)),
+      leapfrog:  (e,g)=> leapfrogGate(e, g, rint(2, 3+sd)),
+      bothstand: (e,g)=> bothStandGate(e, g, rint(2, 3+sd)),
+      lift:      (e,g)=> liftGate(e, g, rint(175,220) + Math.round(diff*120)),
       laser:     (e,g)=> laserGate(e, g),
     };
     const names=['leapfrog','bothstand','lift','laser'];
@@ -198,17 +201,17 @@ function generateLevel(level, seed, mode){
       let type='normal';
       const roll=rnd();
       if(band>0){
-        const dThresh = 0.18 + diff*0.22;          // disappearing
-        const cThresh = dThresh + 0.10 + diff*0.05; // conveyors
-        const mThresh = cThresh + 0.10 + diff*0.06; // moving blocks
+        const dThresh = 0.16 + diff*0.32;          // disappearing (L1 16% -> L5 48%)
+        const cThresh = dThresh + 0.10 + diff*0.07; // conveyors
+        const mThresh = cThresh + 0.10 + diff*0.08; // moving blocks
         if(roll < dThresh) type='disappear';
         else if(roll < cThresh) type='conveyor';
         else if(roll < mThresh) type='mover';
       }
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
-      // disappearing blocks crumble after 2s (a bit faster on later levels)
-      if(type==='disappear') p.crumbleMs = Math.round(2000 - diff*500);
+      // disappearing blocks crumble faster on later levels (L1 2.2s -> L5 1.1s)
+      if(type==='disappear') p.crumbleMs = Math.round(2200 - diff*1100);
       // moving blocks slide left<->right around their placed (mid) position.
       if(type==='mover'){
         const room = Math.min(nx-30-w/2, (WORLD_W-30-w/2)-nx);
