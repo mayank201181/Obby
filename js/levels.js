@@ -237,10 +237,9 @@ function generateLevel(level, seed, mode){
       if(band>0 && type!=='disappear' && rnd()<0.28){
         platforms.push({id:id++, type:'coin', x:nx-10, y:y-40, w:20, h:20});
       }
-      // rare power-up pickups (magnet / shield / dash)
+      // rare power-up pickups
       if(band>0 && type!=='disappear' && rnd()<0.06){
-        const pw=['magnet','shield','dash'][Math.floor(rnd()*3)];
-        platforms.push({id:id++, type:'powerup', pw, x:nx-14, y:y-46, w:28, h:28});
+        platforms.push({id:id++, type:'powerup', pw:POWERUP_KINDS[Math.floor(rnd()*POWERUP_KINDS.length)], x:nx-14, y:y-46, w:28, h:28});
       }
     }
     y = bandTop;
@@ -336,7 +335,7 @@ function towerFloor(world){
     if(type!=='disappear' && rnd()<0.26)
       world.platforms.push({id:world._id++, type:'coin', x:nx-10, y:y-40, w:20, h:20});
     if(type!=='disappear' && rnd()<0.05)
-      world.platforms.push({id:world._id++, type:'powerup', pw:['magnet','shield','dash'][Math.floor(rnd()*3)], x:nx-14, y:y-46, w:28, h:28});
+      world.platforms.push({id:world._id++, type:'powerup', pw:POWERUP_KINDS[Math.floor(rnd()*POWERUP_KINDS.length)], x:nx-14, y:y-46, w:28, h:28});
   }
   // floor checkpoint (boss floors get a wide safe arena ledge)
   y -= rint(74,96);
@@ -346,7 +345,11 @@ function towerFloor(world){
   if(isBoss) cp.boss=true;
   world.platforms.push(cp);
   world.checkpoints.push({index:floorNo, x:cx+cw/2, y});
-  if(isBoss) world.bosses.push({floorNo, topY:y, bottomY:arenaBottom, defeated:false, lastThrow:0});
+  if(isBoss){
+    const patterns=['rain','aimed','spread','sweep'];     // cycles every 4 bosses
+    const pattern=patterns[((floorNo/5)-1) % patterns.length];
+    world.bosses.push({floorNo, topY:y, bottomY:arenaBottom, defeated:false, lastThrow:0, pattern, sweepX:60});
+  }
   world._prevX = cx+cw/2;
   world._y = y;
   world._topY = y;

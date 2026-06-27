@@ -80,6 +80,7 @@ const ACHIEVEMENTS = [
   { id:'racewin',name:'Champion',      desc:'Win a race',                   emoji:'🥇' },
   { id:'boss',   name:'Boss Slayer',   desc:'Beat a Tower boss',            emoji:'👹' },
   { id:'questmaster',name:'Go-Getter', desc:'Complete a daily quest',       emoji:'✅' },
+  { id:'streak', name:'On Fire',       desc:'Hit a 7-day quest streak',     emoji:'🔥' },
 ];
 
 /* ===== Daily Quests ===== three refresh each day, seeded by the date ===== */
@@ -123,16 +124,36 @@ function questEvent(type, amount){
   }
   if(changed) persist();
 }
+/* local-midnight day index, so consecutive days differ by exactly 1 */
+function dayNum(){ const d=new Date(); return Math.floor(new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()/DAY_MS); }
+
 function claimQuest(id){
   ensureQuests();
   const q=SAVE.quests.list.find(x=>x.id===id), def=questById(id);
   if(!q || !def || !q.done || q.claimed) return false;
   q.claimed=true; addCoins(def.reward); unlockAchievement('questmaster'); persist();
-  return def.reward;
+  const bonus = maybeAwardStreak();
+  return { reward:def.reward, streakBonus:bonus, streak:SAVE.questStreak };
+}
+/* when all 3 quests are claimed for the day, grant a once-per-day streak bonus */
+function maybeAwardStreak(){
+  if(!SAVE.quests || !SAVE.quests.list.every(q=>q.claimed)) return 0;
+  const today=dayNum();
+  if(SAVE.questStreakDay===today) return 0;                 // already rewarded today
+  SAVE.questStreak = (SAVE.questStreakDay===today-1) ? (SAVE.questStreak||0)+1 : 1;
+  SAVE.questStreakDay = today;
+  if(SAVE.questStreak>=7) unlockAchievement('streak');
+  const bonus = 25*Math.min(SAVE.questStreak,7);
+  SAVE.coins += bonus; persist();
+  if(typeof toast==='function') toast('🔥 '+SAVE.questStreak+'-day quest streak! +🪙'+bonus);
+  return bonus;
 }
 function questsClaimable(){ ensureQuests(); return SAVE.quests.list.some(q=>q.done && !q.claimed); }
 
 const DAY_MS = 24*60*60*1000;
+
+// power-up pickup kinds that can spawn in levels
+const POWERUP_KINDS = ['magnet','shield','dash','slow','x2','ghost'];
 
 function defaultSave(){
   return {
@@ -166,6 +187,8 @@ function defaultSave(){
     shinies:{},            // creatureId -> count of shiny (golden) copies owned
     raceWins:0,            // multiplayer race wins
     raceLosses:0,          // multiplayer race losses
+    questStreak:0,         // consecutive days completing all 3 quests
+    questStreakDay:0,      // day index a streak bonus was last awarded
   };
 }
 

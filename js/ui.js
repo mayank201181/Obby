@@ -595,7 +595,10 @@ function openQuests(){ showScreen('questsScreen'); renderQuests(); }
 function renderQuests(){
   updateCoinDisplays();
   const q=ensureQuests();
-  document.getElementById('questsBody').innerHTML = q.list.map(item=>{
+  const allDone=q.list.every(x=>x.claimed);
+  const streak=SAVE.questStreak||0;
+  const streakLine = `<p class="hint" style="margin-top:0">🔥 Streak: <b>${streak} day${streak===1?'':'s'}</b> · finish all 3 in a day for a bonus (up to +🪙175)${allDone?' · <b style="color:#46c98c">all done today! 🎉</b>':''}</p>`;
+  document.getElementById('questsBody').innerHTML = streakLine + q.list.map(item=>{
     const def=questById(item.id); if(!def) return '';
     const pct=Math.min(100, Math.round(item.prog/def.goal*100));
     const btn = item.claimed
@@ -616,7 +619,7 @@ function renderQuests(){
 }
 function doClaimQuest(id){
   const r=claimQuest(id);
-  if(r){ SFX.chest(); toast('🪙 +'+r+' claimed!'); renderQuests(); refreshQuestButton(); }
+  if(r){ SFX.chest(); if(!r.streakBonus) toast('🪙 +'+r.reward+' claimed!'); renderQuests(); refreshQuestButton(); }
 }
 function refreshQuestButton(){
   const b=document.getElementById('questBtn'); if(!b) return;

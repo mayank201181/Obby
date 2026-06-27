@@ -24,7 +24,7 @@ const Game = {
   myEmote:null, myEmoteAt:0,    // quick-emoji bubble over the local player
   spectating:false, spectateId:null,  // watch a friend after finishing
   racePlace:0,                  // your finishing place in a race (1 = first)
-  power:{magnetUntil:0, dashUntil:0, shield:false},  // active power-up effects
+  power:{magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0},  // active power-up effects
   bossShots:[], activeBoss:null,// Tower boss projectiles + current boss
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
@@ -129,7 +129,7 @@ function loadLevel(level){
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
-  Game.power={magnetUntil:0, dashUntil:0, shield:false};
+  Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
   applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
@@ -287,23 +287,36 @@ function updateBoss(){
   }
   if(Game.freezeHazards) return;          // tests: no projectiles
   const b=Game.activeBoss;
+  const W=Game.world.width, topY=b?b.topY-70:0;
   if(b){
     if(!b.lastThrow) b.lastThrow=Game.t;
-    const every = b.floorNo>=15 ? 760 : 980;
+    const pat=b.pattern||'rain';
+    const every = pat==='spread'?1500 : pat==='sweep'?260 : (b.floorNo>=15?760:980);
     if(Game.t-b.lastThrow > every){
       b.lastThrow=Game.t;
-      const n = b.floorNo>=15 ? 2 : 1;
-      for(let k=0;k<n;k++){
-        const x = 70 + Math.random()*(Game.world.width-140);
-        Game.bossShots.push({x, y:b.topY-70, vy:3, r:13});
+      if(pat==='rain'){
+        const n=b.floorNo>=20?2:1;
+        for(let k=0;k<n;k++) Game.bossShots.push({x:70+Math.random()*(W-140), y:topY, vy:3, r:13});
+      } else if(pat==='aimed'){
+        // lob a block straight at the player's current column
+        Game.bossShots.push({x:Math.max(40,Math.min(W-40, p.x+p.w/2)), y:topY, vy:4.5, r:13});
+      } else if(pat==='spread'){
+        // a wide volley across the arena all at once
+        for(let k=0;k<3;k++) Game.bossShots.push({x:90+k*(W-180)/2, y:topY, vy:3.4, r:13});
+      } else if(pat==='sweep'){
+        // a marching wall of blocks that sweeps side to side with a gap to slip through
+        b.sweepX=(b.sweepX||60)+Math.sin(Game.t/600)*40+34;
+        if(b.sweepX>W-60){ b.sweepX=60; }
+        Game.bossShots.push({x:b.sweepX, y:topY, vy:3, r:13});
       }
     }
   }
+  const hs=hazardSpeed();
   for(let i=Game.bossShots.length-1;i>=0;i--){
     const s=Game.bossShots[i];
-    s.vy=Math.min(13, s.vy+0.42); s.y+=s.vy;
+    s.vy=Math.min(13, s.vy+0.42); s.y+=s.vy*hs;
     if(s.y > p.y+900){ Game.bossShots.splice(i,1); continue; }
-    if(p.invuln<=0 && p.x < s.x+s.r && p.x+p.w > s.x-s.r && p.y < s.y+s.r && p.y+p.h > s.y-s.r){
+    if(isHittable(p) && p.x < s.x+s.r && p.x+p.w > s.x-s.r && p.y < s.y+s.r && p.y+p.h > s.y-s.r){
       Game.bossShots.splice(i,1);
       if(absorbWithShield()){ p.invuln=600; continue; }
       respawn(); p.invuln=1100; SFX.hit();
@@ -415,10 +428,11 @@ function collectCoins(p){
         if(dx*dx+dy*dy < 150*150) grab=true;     // magnet radius
       }
       if(grab){
-        c.taken=true; Game.runCoins++; addCoins(1); SFX.coin();
-        SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+1; persist();
+        const gain = Game.t<Game.power.x2Until ? 2 : 1;     // ⭐ double-coins power-up
+        c.taken=true; Game.runCoins+=gain; addCoins(gain); SFX.coin();
+        SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+gain; persist();
         if(SAVE.lvlCoinsCollected>=50) unlockAchievement('coins50');
-        if(typeof questEvent==='function') questEvent('coins',1);
+        if(typeof questEvent==='function') questEvent('coins',gain);
       }
     } else if(c.type==='powerup'){
       if(p.x < c.x+c.w && p.x+p.w > c.x && p.y < c.y+c.h && p.y+p.h > c.y){
@@ -428,15 +442,21 @@ function collectCoins(p){
   }
 }
 const POWERUP_INFO = {
-  magnet:{emoji:'🧲', name:'Coin Magnet', ms:8000},
-  shield:{emoji:'🛡️', name:'Shield',      ms:0},
-  dash:  {emoji:'👟', name:'Speed Dash',  ms:6000},
+  magnet:{emoji:'🧲', name:'Coin Magnet'},
+  shield:{emoji:'🛡️', name:'Shield'},
+  dash:  {emoji:'👟', name:'Speed Dash'},
+  slow:  {emoji:'⏳', name:'Slow-mo'},
+  x2:    {emoji:'⭐', name:'Double Coins'},
+  ghost: {emoji:'👻', name:'Ghost'},
 };
 function applyPowerup(kind){
   if(SFX.rare) SFX.rare();
   if(kind==='magnet'){ Game.power.magnetUntil=Game.t+8000; toast('🧲 Coin magnet!'); }
   else if(kind==='dash'){ Game.power.dashUntil=Game.t+6000; toast('👟 Speed dash!'); }
   else if(kind==='shield'){ Game.power.shield=true; toast('🛡️ Shield up!'); }
+  else if(kind==='slow'){ Game.power.slowUntil=Game.t+6000; toast('⏳ Slow-mo!'); }
+  else if(kind==='x2'){ Game.power.x2Until=Game.t+9000; toast('⭐ Double coins!'); }
+  else if(kind==='ghost'){ Game.power.ghostUntil=Game.t+4500; toast('👻 Ghost — can\'t be hit!'); }
   if(typeof questEvent==='function') questEvent('powerup',1);
 }
 /* shield blocks one hit; returns true if a hit was absorbed */
@@ -444,6 +464,10 @@ function absorbWithShield(){
   if(Game.power.shield){ Game.power.shield=false; if(typeof toast==='function') toast('🛡️ Blocked!'); SFX.hit(); return true; }
   return false;
 }
+/* can the player currently be hit by a hazard? (invuln frames or 👻 ghost) */
+function isHittable(p){ return p.invuln<=0 && Game.t>=Game.power.ghostUntil; }
+/* hazard motion multiplier while ⏳ slow-mo is active */
+function hazardSpeed(){ return Game.t<Game.power.slowUntil ? 0.45 : 1; }
 
 /* slide moving blocks horizontally around their base position */
 function updateMovers(){
@@ -503,11 +527,12 @@ function updateHazards(dt){
       Game.bullets.push({ x:g.sx + dir*16, y:g.sy, vx:dir*7.0, r:9 });
     }
   }
+  const hs=hazardSpeed();
   for(let i=Game.bullets.length-1; i>=0; i--){
     const bl=Game.bullets[i];
-    bl.x += bl.vx;
+    bl.x += bl.vx*hs;
     if(bl.x < -40 || bl.x > W+40){ Game.bullets.splice(i,1); continue; }
-    if(p.invuln<=0 &&
+    if(isHittable(p) &&
        bl.x+bl.r > psx && bl.x-bl.r < psx+pw &&
        bl.y+bl.r > psy && bl.y-bl.r < psy+ph){
       Game.bullets.length=0;            // clear so you aren't instantly re-hit
@@ -545,7 +570,7 @@ function laserLive(pl){
 /* deadly laser beams: touching a live beam sends you to your checkpoint */
 function updateLasers(){
   if(Game.freezeHazards || !Game.world) return;
-  const p=Game.player; if(!p || p.invuln>0) return;
+  const p=Game.player; if(!p || !isHittable(p)) return;
   for(const pl of Game.world.platforms){
     if(pl.type!=='laser' || !laserLive(pl)) continue;
     if(p.x < pl.x+pl.w && p.x+p.w > pl.x && p.y < pl.y+pl.h && p.y+p.h > pl.y){
@@ -844,9 +869,11 @@ function render(){
   // local player (worn pet / team colour; blink while invulnerable after a hit)
   if(!Game.spectating){
     const mySkin = Game.myColor || SAVE.skin;
+    const ghosting = Game.t < Game.power.ghostUntil;
     const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
     ctx.save();
-    if(blink) ctx.globalAlpha=0.4;
+    if(ghosting) ctx.globalAlpha=0.45;
+    else if(blink) ctx.globalAlpha=0.4;
     drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
                   petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
     ctx.restore();
@@ -946,9 +973,10 @@ function drawBoss(ctx,b){
   ctx.beginPath(); ctx.moveTo(cx-30,cy-18); ctx.lineTo(cx-8,cy-9); ctx.moveTo(cx+30,cy-18); ctx.lineTo(cx+8,cy-9); ctx.stroke();
   // mouth
   ctx.beginPath(); ctx.arc(cx,cy+22,12,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
-  // label
+  // label (with this boss's attack style)
+  const pn={rain:'Block Rain',aimed:'Sniper',spread:'Volley',sweep:'Sweeper'}[b.pattern]||'';
   ctx.fillStyle='#fff'; ctx.font='bold 13px Nunito'; ctx.textAlign='center';
-  ctx.fillText('BOSS · Floor '+b.floorNo, cx, cy-R-22);
+  ctx.fillText('BOSS · Floor '+b.floorNo+(pn?' · '+pn:''), cx, cy-R-22);
   ctx.restore();
 }
 function drawBossShot(ctx,s){
@@ -1155,6 +1183,9 @@ function updateHudLive(){
     if(Game.power.shield) bits.push('🛡️');
     if(Game.t<Game.power.magnetUntil) bits.push('🧲'+Math.ceil((Game.power.magnetUntil-Game.t)/1000));
     if(Game.t<Game.power.dashUntil) bits.push('👟'+Math.ceil((Game.power.dashUntil-Game.t)/1000));
+    if(Game.t<Game.power.slowUntil) bits.push('⏳'+Math.ceil((Game.power.slowUntil-Game.t)/1000));
+    if(Game.t<Game.power.x2Until) bits.push('⭐'+Math.ceil((Game.power.x2Until-Game.t)/1000));
+    if(Game.t<Game.power.ghostUntil) bits.push('👻'+Math.ceil((Game.power.ghostUntil-Game.t)/1000));
     if(bits.length){ hp.style.display='block'; hp.textContent=bits.join(' '); }
     else hp.style.display='none';
   }
