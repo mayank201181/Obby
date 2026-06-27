@@ -183,7 +183,7 @@ function triggerAbility(){
 
 function update(dt){
   const p=Game.player; if(!p) return;
-  const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.6;
+  const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.0;
 
   updateMovers();                       // slide moving blocks before collision
   updateLifts();                        // raise co-op lifts (carries riders)

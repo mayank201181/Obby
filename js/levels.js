@@ -73,12 +73,12 @@ function generateLevel(level, seed, mode){
       // bottom button (you hold this for your partner)
       const haC=clamp(ex-150,70,WORLD_W-70);
       platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
-      // staircase of held bridges
-      const sx=[ex+20, ex-20, ex+30, ex-30];
+      // staircase of held bridges (randomised zig-zag shape)
+      const lean=rnd()<0.5?1:-1, sp=rint(16,44);
       let y=ey;
       for(let i=0;i<nSteps;i++){
-        y -= (i===0?95:92);
-        const x=clamp(sx[i%4]-stepW/2,40,WORLD_W-40-stepW);
+        y -= rint(88,100);
+        const x=clamp(ex + lean*((i%2)?sp:-sp) - stepW/2, 40, WORLD_W-40-stepW);
         platforms.push({id:id++, x, y, w:stepW, h:24, type:'bridge', grp:g, gate:'hold'});
       }
       const npW=190, npY=y-58, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
@@ -94,13 +94,14 @@ function generateLevel(level, seed, mode){
     // appears for ~12s and you both climb up together (no holding, no turns).
     function bothStandGate(entry, g, nSteps){
       const ex=entry.x, ey=entry.y;
-      const aC=clamp(ex-96,60,WORLD_W-60), bC=clamp(ex+96,60,WORLD_W-60);
+      const spc=rint(82,112);
+      const aC=clamp(ex-spc,60,WORLD_W-60), bC=clamp(ex+spc,60,WORLD_W-60);
       platforms.push({id:id++, x:aC-levW/2, y:ey-46, w:levW, h:24, type:'pad', pad:'A', grp:g, stand:true});
       platforms.push({id:id++, x:bC-levW/2, y:ey-46, w:levW, h:24, type:'pad', pad:'B', grp:g, stand:true});
-      const sx=[ex+20, ex-20, ex+30]; let y=ey;
+      const lean=rnd()<0.5?1:-1, sp=rint(16,42); let y=ey;
       for(let i=0;i<nSteps;i++){
-        y -= (i===0?98:92);
-        const x=clamp(sx[i%3]-stepW/2,40,WORLD_W-40-stepW);
+        y -= rint(90,100);
+        const x=clamp(ex + lean*((i%2)?sp:-sp) - stepW/2, 40, WORLD_W-40-stepW);
         platforms.push({id:id++, x, y, w:stepW, h:24, type:'bridge', grp:g, gate:'timed'});
       }
       const npW=190, npY=y-58, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
@@ -111,9 +112,9 @@ function generateLevel(level, seed, mode){
 
     // CO-OP LIFT — you BOTH stand on the lift platform and it carries you up.
     // It only rises with two players aboard; one alone can't reach the top.
-    function liftGate(entry, g){
+    function liftGate(entry, g, rise){
       const ex=entry.x, ey=entry.y;
-      const liftW=178, baseY=ey-52, topY=ey-252;
+      const liftW=rint(160,196), baseY=ey-52, topY=baseY-rise;
       platforms.push({id:id++, x:clamp(ex-liftW/2,40,WORLD_W-40-liftW), y:baseY, w:liftW, h:26,
                       type:'lift', grp:g, baseY, topY, dy:0});
       const npW=190, npY=topY-46, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
@@ -122,12 +123,20 @@ function generateLevel(level, seed, mode){
       return {x:npX+npW/2, y:npY};
     }
 
-    // cycle the three teamwork puzzles so every section feels different
+    // Randomised teamwork puzzles — never the same one twice in a row, and each
+    // varies its size/shape so no two sections feel identical.
+    const makers = {
+      leapfrog:  (e,g)=> leapfrogGate(e, g, rint(2,4)),
+      bothstand: (e,g)=> bothStandGate(e, g, rint(2,4)),
+      lift:      (e,g)=> liftGate(e, g, rint(175,250)),
+    };
+    const names=['leapfrog','bothstand','lift'];
+    let prevType=null;
     for(let g=0; g<CHECKPOINTS; g++){
-      const t=g%3;
-      land = t===0 ? leapfrogGate(land, g, 2)
-           : t===1 ? bothStandGate(land, g, 3)
-           :         liftGate(land, g);
+      const pool=names.filter(n=>n!==prevType);
+      const pick=pool[Math.floor(rnd()*pool.length)];
+      prevType=pick;
+      land = makers[pick](land, g);
     }
     const fw=240, fY=land.y-100;   // finish a short hop above the last checkpoint
     platforms.push({id:id++, x:WORLD_W/2-fw/2, y:fY, w:fw, h:34, type:'finish'});
@@ -144,8 +153,8 @@ function generateLevel(level, seed, mode){
   for(let band=0; band<=CHECKPOINTS; band++){
     const bandTop = bottomY - (band+1)*BAND;     // y of this band's checkpoint
     // place stepping platforms upward with guaranteed-clearable gaps
-    while(y - 104 > bandTop){
-      y -= rint(72, 104);                         // vertical gap: clears one block, never two
+    while(y - 100 > bandTop){
+      y -= rint(70, 100);                         // vertical gap: clears one block, never two
 
       // size first, then a reachable horizontal offset for that size
       const w = pickSize();

@@ -14,13 +14,11 @@ const RARITY_INFO = {
   secret:    { label:'Secret',     color:'#2bd4c0' },
 };
 
-// ability ids -> how they help. Effects are aggregated when a pet is equipped.
+// ability ids -> how they help. (No height-boost abilities, so pets help you
+// move/float but never let you skip blocks.)
 const ABILITY_INFO = {
   speed1:     'Move a bit faster',
   speed2:     'Move much faster',
-  highJump1:  'Jump a little higher',
-  highJump2:  'Jump much higher',
-  doubleJump: 'Jump again in mid-air',
   glide:      'Fall slower (float)',
   glideStrong:'Float gently down',
   platform:   'Place a platform (tap the ✨ button!)',
@@ -29,30 +27,30 @@ const ABILITY_INFO = {
 // the creature roster
 const CREATURES = [
   // basic — sell 30
-  { id:'mouse',   name:'Mouse',     emoji:'🐭', rarity:'basic', abilities:['speed1'],    sell:30 },
-  { id:'frog',    name:'Frog',      emoji:'🐸', rarity:'basic', abilities:['highJump1'], sell:30 },
-  { id:'hamster', name:'Hamster',   emoji:'🐹', rarity:'basic', abilities:['speed1'],    sell:30 },
-  { id:'chick',   name:'Chick',     emoji:'🐤', rarity:'basic', abilities:[],            sell:30 },
+  { id:'mouse',   name:'Mouse',     emoji:'🐭', rarity:'basic', abilities:['speed1'], sell:30 },
+  { id:'frog',    name:'Frog',      emoji:'🐸', rarity:'basic', abilities:['glide'],  sell:30 },
+  { id:'hamster', name:'Hamster',   emoji:'🐹', rarity:'basic', abilities:['speed1'], sell:30 },
+  { id:'chick',   name:'Chick',     emoji:'🐤', rarity:'basic', abilities:[],         sell:30 },
   // rare — sell 70
-  { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['doubleJump'], sell:70 },
-  { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'],     sell:70 },
-  { id:'cat',     name:'Cat',       emoji:'🐱', rarity:'rare', abilities:['highJump1'],  sell:70 },
+  { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['speed1'], sell:70 },
+  { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'], sell:70 },
+  { id:'cat',     name:'Cat',       emoji:'🐱', rarity:'rare', abilities:['glide'],  sell:70 },
   // super rare — sell 120
-  { id:'wolf',    name:'Wolf',      emoji:'🐺', rarity:'superRare', abilities:['speed2'],     sell:120 },
-  { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],      sell:120 },
-  { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['doubleJump'], sell:120 },
+  { id:'wolf',    name:'Wolf',      emoji:'🐺', rarity:'superRare', abilities:['speed2'], sell:120 },
+  { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
+  { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['speed2'], sell:120 },
   // legendary — sell 200
-  { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['doubleJump','speed1'], sell:200 },
-  { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'],            sell:200 },
-  { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['highJump2'],           sell:200 },
+  { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
+  { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
+  { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['glideStrong'], sell:200 },
   // mythical — sell 320
-  { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['glide','doubleJump'], sell:320 },
-  { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['glideStrong'],        sell:320 },
-  { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'],  sell:320 },
+  { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['glideStrong'],     sell:320 },
+  { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['glideStrong'],     sell:320 },
+  { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'], sell:320 },
   // secret — sell 700 (the rarest!)
-  { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['speed2','doubleJump'],          sell:700 },
-  { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['platform','glide'],             sell:700 },
-  { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['doubleJump','highJump1','speed1'], sell:700 },
+  { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['speed2','platform'],     sell:700 },
+  { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['platform','glideStrong'],sell:700 },
+  { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['speed2','glideStrong'],  sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
