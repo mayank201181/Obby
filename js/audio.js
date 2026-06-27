@@ -29,8 +29,13 @@ const SFX = {
   rare(){ this.seq([659,784,988,1319,1568],'triangle',0.2); },
   click(){ this.tone(520,0.04,'square',0.08); },
 
-  // ---- gentle looping background music ----
-  musicTimer:null, musicStep:0,
+  // ---- looping background music; a different track per mode ----
+  musicTimer:null, musicStep:0, musicMode:null,
+  TRACKS:{
+    lobby:{ mel:[523,587,659,587,523,494,523,659, 587,523,494,440,494,523,587,659], bass:[131,131,165,165,147,147,131,131], step:340, vol:0.045 },
+    game: { mel:[523,587,659,784,880,784,659,587, 523,659,784,1047,880,784,659,523], bass:[131,131,165,165,196,196,165,165], step:300, vol:0.05 },
+    tower:{ mel:[659,784,880,988,1047,988,880,784, 659,880,1047,1175,1047,880,784,659], bass:[165,165,196,196,220,220,196,196], step:235, vol:0.05 },
+  },
   note(freq, dur, vol){
     if(!this.ctx) return;
     const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
@@ -39,19 +44,21 @@ const SFX = {
     g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
     o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+dur+0.05);
   },
-  startMusic(){
-    if(this.musicTimer || SAVE.musicOn===false || !this.ctx) return;
-    // a soft pentatonic arpeggio loop
-    const mel=[523,587,659,784,880,784,659,587, 523,659,784,1047,880,784,659,523];
-    const bass=[131,131,165,165,196,196,165,165];
+  startMusic(mode){
+    mode = mode || this.musicMode || 'lobby';
+    if(SAVE.musicOn===false || !this.ctx) return;
+    if(this.musicTimer && this.musicMode===mode) return;   // already on this track
+    this.stopMusic();
+    this.musicMode=mode;
+    const tr=this.TRACKS[mode]||this.TRACKS.lobby;
     this.musicStep=0;
     this.musicTimer=setInterval(()=>{
       if(SAVE.musicOn===false){ this.stopMusic(); return; }
       const s=this.musicStep;
-      this.note(mel[s%mel.length], 0.32, 0.05);
-      if(s%2===0) this.note(bass[(s/2)%bass.length], 0.5, 0.045);
+      this.note(tr.mel[s%tr.mel.length], tr.step/1000*1.05, tr.vol);
+      if(s%2===0) this.note(tr.bass[(s/2)%tr.bass.length], tr.step/1000*1.7, tr.vol*0.9);
       this.musicStep++;
-    }, 300);
+    }, tr.step);
   },
-  stopMusic(){ if(this.musicTimer){ clearInterval(this.musicTimer); this.musicTimer=null; } },
+  stopMusic(){ if(this.musicTimer){ clearInterval(this.musicTimer); this.musicTimer=null; } this.musicMode=null; },
 };

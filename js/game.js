@@ -26,6 +26,8 @@ const Game = {
   racePlace:0,                  // your finishing place in a race (1 = first)
   power:{magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0},  // active power-up effects
   bossShots:[], activeBoss:null,// Tower boss projectiles + current boss
+  trap:{},                      // trap-door id -> {since, openUntil}
+  theme:null, weather:null, weatherParticles:[],  // per-level look & weather
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
@@ -106,7 +108,7 @@ function startGame(opts){
   }
   gameResize();
   showScreen('gameScreen');
-  document.getElementById('gameScreen').style.background = SAVE.bg;
+  applyTheme();                       // themed backdrop + weather (overrides plain bg)
   // multiplayer-only chrome: quick emojis (all modes) + boost button (co-op)
   const eb=document.getElementById('emoteBar'); if(eb) eb.style.display = Game.multiplayer ? 'flex':'none';
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
@@ -131,6 +133,8 @@ function loadLevel(level){
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
+  Game.trap={};
+  applyTheme();                     // per-level backdrop + weather
   applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
   Game.guns = makeTurrets(level);
@@ -208,6 +212,7 @@ function update(dt){
 
   updateMovers();                       // slide moving blocks before collision
   updateLifts();                        // raise co-op lifts (carries riders)
+  updateTrapdoors();                    // flip trap-doors after you've stood on them
   if(Game.placedPlatforms.length) Game.placedPlatforms = Game.placedPlatforms.filter(pp=>pp.until>Game.t);
   if(p.invuln>0) p.invuln-=dt*1000;
 
@@ -251,6 +256,7 @@ function update(dt){
   // cannons + bullets + laser beams
   updateHazards(dt);
   updateLasers();
+  updateSoloHazards();                  // pendulums / spikes / laser gates (Hard)
   collectCoins(p);
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
 
@@ -508,6 +514,113 @@ function updateLifts(){
   if(p && p.onLift && p.onLift.type==='lift') p.y += (p.onLift.dy||0);
 }
 
+/* Trap-doors: once you stand on one it flips open ~0.85s later for ~1.4s,
+   then recloses so it can be used again. */
+function updateTrapdoors(){
+  if(Game.freezeHazards || !Game.world) return;
+  const now=Game.t;
+  for(const k in Game.trap){
+    const t=Game.trap[k];
+    if(t.since!=null && !t.openUntil && now-t.since > 850){ t.openUntil=now+1400; t.since=null; }
+    else if(t.openUntil && now > t.openUntil){ delete Game.trap[k]; }
+  }
+}
+
+/* Solo "dodge" hazards (Hard only): swinging pendulums, popping spikes and
+   toggling laser gates. Frozen during automated tests and inert in Easy. */
+function updateSoloHazards(){
+  if(Game.freezeHazards || !Game.world || !Game.world.hazards) return;
+  if(Game.difficulty!=='hard') return;
+  const p=Game.player; if(!isHittable(p)) return;
+  for(const h of Game.world.hazards){
+    let hit=false, label='💫 Bonked!';
+    if(h.kind==='pendulum'){
+      const ang=h.amp*Math.sin(Game.t*h.omega+h.phase);
+      const bx=h.px+Math.sin(ang)*h.len, by=h.py+Math.cos(ang)*h.len;
+      const cx=Math.max(p.x,Math.min(bx,p.x+p.w)), cy=Math.max(p.y,Math.min(by,p.y+p.h));
+      hit=(bx-cx)*(bx-cx)+(by-cy)*(by-cy) < h.r*h.r;
+    } else if(h.kind==='spike'){
+      if(Math.sin(Game.t*h.omega+h.phase)>0){ hit=rectsOverlap(p.x,p.y,p.w,p.h, h.x,h.y-h.h,h.w,h.h+4); label='🔺 Ouch! Spikes!'; }
+    } else if(h.kind==='lasergate'){
+      if(Math.sin(Game.t*h.omega+h.phase)>0.1){ hit=rectsOverlap(p.x,p.y,p.w,p.h, h.x,h.y,h.w,h.h); label='⚡ Zapped!'; }
+    }
+    if(hit){
+      if(absorbWithShield()){ p.invuln=600; break; }
+      respawn(); p.invuln=1100; SFX.hit();
+      if(typeof toast==='function') toast(label);
+      break;
+    }
+  }
+}
+
+/* ---- per-level themes / weather ---- */
+function levelTheme(){
+  if(Game.tower) return {css:'linear-gradient(180deg,#1a1340,#3b2a7a 55%,#5a4a9a)', weather:'stars', glow:'rgba(180,160,255,.22)'};
+  const T={
+    1:{css:'linear-gradient(180deg,#cfeaff,#bcd9ff)',         weather:null,     glow:'rgba(123,224,176,.25)'},
+    2:{css:'linear-gradient(180deg,#d9f6dc,#bdebc6)',         weather:'petals', glow:'rgba(255,180,210,.25)'},
+    3:{css:'linear-gradient(180deg,#fff0c2,#ffd9a0)',         weather:null,     glow:'rgba(255,200,120,.3)'},
+    4:{css:'linear-gradient(180deg,#eaf5ff,#cfe6ff)',         weather:'snow',   glow:'rgba(255,255,255,.4)'},
+    5:{css:'linear-gradient(180deg,#ffd0b0,#ff9e7a 55%,#b86a8a)', weather:'embers', glow:'rgba(255,150,90,.3)'},
+  };
+  return T[Game.level]||T[1];
+}
+function applyTheme(){
+  const th=levelTheme(); Game.theme=th;
+  const gs=document.getElementById('gameScreen'); if(gs) gs.style.background=th.css;
+  initWeather(th.weather);
+}
+function initWeather(kind){
+  Game.weather=kind; Game.weatherParticles=[];
+  if(!kind) return;
+  const W=Game.W||420, H=Game.H||820, n = kind==='stars'?44:34;
+  for(let i=0;i<n;i++) Game.weatherParticles.push({x:Math.random()*W, y:Math.random()*H, t:Math.random()*6.283, sp:0.3+Math.random()*1.0, sz:6+Math.random()*10});
+}
+function drawWeather(ctx){
+  if(!Game.weather || !Game.weatherParticles.length) return;
+  const W=Game.W, H=Game.H;
+  ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const pt of Game.weatherParticles){
+    if(Game.weather==='snow'){ pt.y+=pt.sp; pt.x+=Math.sin(Game.t/600+pt.t)*0.4; if(pt.y>H+8){pt.y=-8;pt.x=Math.random()*W;}
+      ctx.fillStyle='rgba(255,255,255,.9)'; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.sz*0.28,0,6.283); ctx.fill();
+    } else if(Game.weather==='petals'){ pt.y+=pt.sp; pt.x+=Math.sin(Game.t/500+pt.t)*0.9; if(pt.y>H+8){pt.y=-8;pt.x=Math.random()*W;}
+      ctx.font=`${Math.round(pt.sz)}px serif`; ctx.fillText('🌸',pt.x,pt.y);
+    } else if(Game.weather==='embers'){ pt.y-=pt.sp*0.7; pt.x+=Math.sin(Game.t/400+pt.t)*0.5; if(pt.y<-8){pt.y=H+8;pt.x=Math.random()*W;}
+      ctx.fillStyle='rgba(255,170,90,.7)'; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.sz*0.18,0,6.283); ctx.fill();
+    } else if(Game.weather==='stars'){ const tw=Math.sin(Game.t/400+pt.t)*0.5+0.5;
+      ctx.globalAlpha=0.25+tw*0.7; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.sz*0.16,0,6.283); ctx.fill(); ctx.globalAlpha=1;
+    }
+  }
+  ctx.restore();
+}
+function drawSoloHazards(ctx){
+  if(Game.difficulty!=='hard' || !Game.world.hazards) return;
+  for(const h of Game.world.hazards){
+    if(h.kind==='pendulum'){
+      const ang=h.amp*Math.sin(Game.t*h.omega+h.phase);
+      const bx=h.px+Math.sin(ang)*h.len, by=h.py+Math.cos(ang)*h.len;
+      ctx.strokeStyle='#9a8aa8'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(h.px,h.py); ctx.lineTo(bx,by); ctx.stroke();
+      ctx.fillStyle='#7a6a86'; ctx.beginPath(); ctx.arc(h.px,h.py,5,0,6.283); ctx.fill();
+      ctx.strokeStyle='#7a3a5e'; ctx.lineWidth=3;
+      for(let i=0;i<8;i++){ const a=i/8*6.283; ctx.beginPath(); ctx.moveTo(bx+Math.cos(a)*h.r,by+Math.sin(a)*h.r); ctx.lineTo(bx+Math.cos(a)*(h.r+5),by+Math.sin(a)*(h.r+5)); ctx.stroke(); }
+      ctx.fillStyle='#c25b8a'; ctx.beginPath(); ctx.arc(bx,by,h.r,0,6.283); ctx.fill();
+    } else if(h.kind==='spike'){
+      const up=Math.sin(Game.t*h.omega+h.phase)>0, ext=up?1:0.16;
+      ctx.fillStyle='#8a6b78'; ctx.fillRect(h.x,h.y,h.w,4);
+      ctx.fillStyle=up?'#c94f6d':'#caa9b4';
+      const n=Math.max(2,Math.floor(h.w/14));
+      for(let i=0;i<n;i++){ const sx=h.x+i*(h.w/n), sw=h.w/n;
+        ctx.beginPath(); ctx.moveTo(sx,h.y); ctx.lineTo(sx+sw/2,h.y-h.h*ext); ctx.lineTo(sx+sw,h.y); ctx.closePath(); ctx.fill(); }
+    } else if(h.kind==='lasergate'){
+      const on=Math.sin(Game.t*h.omega+h.phase)>0.1;
+      ctx.fillStyle='#6b5b78'; ctx.fillRect(h.x-8,h.y-6,8,h.h+12); ctx.fillRect(h.x+h.w,h.y-6,8,h.h+12);
+      if(on){ ctx.globalAlpha=Math.sin(Game.t/60)*0.25+0.75; ctx.fillStyle='#ff5a5a'; roundRect(ctx,h.x,h.y,h.w,h.h,4); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.fillRect(h.x,h.y+h.h/2-1,h.w,2); ctx.globalAlpha=1;
+      } else { ctx.globalAlpha=0.25; ctx.fillStyle='#b8c4d6'; ctx.fillRect(h.x,h.y+h.h/2-1,h.w,2); ctx.globalAlpha=1; }
+    }
+  }
+}
+
 /* Screen-anchored turrets: they slide up/down the left & right edges of the
    screen and fire bullets across your view every 2s. Everything here is in
    SCREEN coordinates so the cannons are always visible (the world is wider
@@ -554,6 +667,10 @@ function solidNow(pl){
   if(pl.type==='bridge'){
     const until=MP.bridges? MP.bridges[pl.grp] : 0;
     return !!until && until > nowMs();
+  }
+  if(pl.type==='trapdoor'){
+    const t=Game.trap[pl.id];
+    return !(t && t.openUntil && Game.t < t.openUntil);  // solid unless flipped open
   }
   if(pl.type==='placed'){ return pl.until > Game.t; }  // pet-placed platform
   if(pl.type==='laser'){ return false; }               // beams aren't solid (they hurt)
@@ -634,6 +751,11 @@ function onStand(p, pl, now){
   if(pl.type==='conveyor'){
     p.x += pl.dir*2.2;
     p.facing=pl.dir;
+  }
+  // trap-door: standing arms it; updateTrapdoors flips it ~0.85s later
+  if(pl.type==='trapdoor'){
+    const t=Game.trap[pl.id]||(Game.trap[pl.id]={});
+    if(!t.openUntil && t.since==null) t.since=now;
   }
   // ice: mark slippery (movement friction handled in update)
   if(pl.type==='ice'){ p.onIce=true; }
@@ -838,6 +960,8 @@ function render(){
     for(const b of Game.world.bosses){ if(!b.defeated) drawBoss(ctx,b); }
     for(const s of Game.bossShots) drawBossShot(ctx,s);
   }
+  // solo dodge hazards (pendulums / spikes / laser gates)
+  drawSoloHazards(ctx);
 
   // pet-placed platforms (fading sparkle footholds)
   for(const pp of Game.placedPlatforms){
@@ -883,7 +1007,8 @@ function render(){
 
   ctx.restore();
 
-  // hazards drawn in SCREEN space (turrets ride the screen edges)
+  // weather + hazards drawn in SCREEN space
+  drawWeather(ctx);
   drawHazardsScreen(ctx);
   updateHudLive();
 }
@@ -920,10 +1045,9 @@ function drawHazardsScreen(ctx){
 }
 
 function drawWorldBackdrop(ctx){
-  // soft vertical gradient hills depending on height climbed
   const w=Game.world.width;
-  // goal banner glow at the top
-  ctx.fillStyle='rgba(123,224,176,.25)';
+  // goal banner glow at the top (themed colour)
+  ctx.fillStyle=(Game.theme && Game.theme.glow) || 'rgba(123,224,176,.25)';
   ctx.fillRect(-200, Game.world.finishY-200, w+400, 200);
 }
 
@@ -1040,6 +1164,13 @@ function drawPlatform(ctx,pl){
     }
     case 'conveyor': fill='#9cd8ff'; edge='#5aa8ee'; break;
     case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
+    case 'trapdoor':{
+      const t=Game.trap[pl.id];
+      if(t && t.openUntil && Game.t < t.openUntil){ ctx.globalAlpha=0.22; }   // flipped open
+      else if(t && t.since!=null){ ctx.globalAlpha=Math.sin(Game.t/45)*0.4+0.6; } // arming → blink
+      fill='#f7d8b0'; edge='#d89b63';
+      break;
+    }
     case 'bouncy': fill='#b6f5c8'; edge='#3fcf86'; break;
     case 'ice': fill='#dff4ff'; edge='#9fd8f5'; break;
     case 'wind': fill='#eef4ff'; edge='#c2d4ee'; break;
@@ -1107,6 +1238,12 @@ function drawPlatform(ctx,pl){
   if(pl.type==='mover'){
     ctx.fillStyle='rgba(120,80,20,.7)';ctx.font='bold 15px Nunito';ctx.textAlign='center';
     ctx.fillText('↔', pl.x+pl.w/2, pl.y+pl.h/2+1);
+  }
+  if(pl.type==='trapdoor'){
+    ctx.strokeStyle='rgba(140,100,60,.6)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(pl.x+pl.w/2, pl.y+2); ctx.lineTo(pl.x+pl.w/2, pl.y+pl.h-2); ctx.stroke();
+    ctx.fillStyle='rgba(120,80,40,.6)'; ctx.font='bold 11px Nunito'; ctx.textAlign='center';
+    ctx.fillText('⚠', pl.x+pl.w/2, pl.y-7);
   }
   if(pl.type==='bouncy'){
     // springy bob + arrows so it reads as a trampoline

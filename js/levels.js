@@ -25,6 +25,7 @@ function generateLevel(level, seed, mode){
 
   const platforms=[];
   const checkpoints=[];
+  const hazards=[];                 // pendulums / spikes / laser gates (Hard only)
   let id=0;
   const totalHeight = BAND*(CHECKPOINTS+1);
   const finishY = 60;                         // top
@@ -201,18 +202,20 @@ function generateLevel(level, seed, mode){
       let type='normal';
       const roll=rnd();
       if(band>0){
-        const dThresh = 0.14 + diff*0.26;          // disappearing (L1 14% -> L5 40%)
+        const dThresh = 0.12 + diff*0.26;          // disappearing
         const cThresh = dThresh + 0.09 + diff*0.05; // conveyors
         const mThresh = cThresh + 0.09 + diff*0.06; // moving blocks
-        const bThresh = mThresh + 0.08;             // bouncy (trampoline)
-        const iThresh = bThresh + 0.07;             // ice (slippery)
-        const wThresh = iThresh + 0.06;             // wind (gusty push)
+        const bThresh = mThresh + 0.07;             // bouncy (trampoline)
+        const iThresh = bThresh + 0.06;             // ice (slippery)
+        const wThresh = iThresh + 0.05;             // wind (gusty push)
+        const tThresh = wThresh + 0.06;             // trap-door (flips after you stand)
         if(roll < dThresh) type='disappear';
         else if(roll < cThresh) type='conveyor';
         else if(roll < mThresh) type='mover';
         else if(roll < bThresh) type='bouncy';
         else if(roll < iThresh) type='ice';
         else if(roll < wThresh) type='wind';
+        else if(roll < tThresh) type='trapdoor';
       }
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
@@ -241,6 +244,17 @@ function generateLevel(level, seed, mode){
       if(band>0 && type!=='disappear' && rnd()<0.06){
         platforms.push({id:id++, type:'powerup', pw:POWERUP_KINDS[Math.floor(rnd()*POWERUP_KINDS.length)], x:nx-14, y:y-46, w:28, h:28});
       }
+      // dodge hazards near the path — deadly only in Hard, frozen in tests
+      if(band>0){
+        const hr=rnd();
+        if(hr<0.07){
+          hazards.push({kind:'pendulum', px:nx, py:y-165, len:rint(96,150), amp:0.85, phase:rnd()*6.283, r:15, omega:(2*Math.PI)/rint(1700,2600)});
+        } else if(hr<0.115){
+          hazards.push({kind:'spike', x:nx-38, y:y-30, w:76, h:18, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1500,2300)});
+        } else if(hr<0.155){
+          hazards.push({kind:'lasergate', x:Math.max(40,nx-90), y:y-72, w:Math.min(180,WORLD_W-80), h:12, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1500,2400)});
+        }
+      }
     }
     y = bandTop;
 
@@ -261,7 +275,7 @@ function generateLevel(level, seed, mode){
   return {
     level, seed, mode,
     width:WORLD_W, height:totalHeight,
-    platforms, checkpoints, start,
+    platforms, checkpoints, start, hazards,
     finishY,
   };
 }

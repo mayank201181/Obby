@@ -71,6 +71,7 @@ function initLobby(){
   refreshChestButton();
   refreshDailyButton();
   refreshQuestButton();
+  startMusicIfOn('lobby');
 }
 function applyLobbyBg(){
   document.getElementById('lobbyScreen').style.background =
@@ -287,7 +288,7 @@ function startSoloLevel(level){
   Game.onExit=()=>{ showLevelMap(); };
   startGame({level, seed:Math.floor(Math.random()*1e6), mode:'solo',
              multiplayer:false, difficulty:soloDiff});
-  startMusicIfOn();
+  startMusicIfOn('game');
 }
 
 /* ---------------- Endless Tower ---------------- */
@@ -299,7 +300,7 @@ function startTower(){
   // Tower has no shooting cannons — the endless ramp + crumbly/ice/wind blocks
   // are the challenge.
   startGame({mode:'tower', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
-  startMusicIfOn();
+  startMusicIfOn('tower');
 }
 
 /* ---------------- Daily Challenge ---------------- */
@@ -313,7 +314,7 @@ function startDaily(){
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
   // same level for everyone today; a fixed mid difficulty with cannons on
   startGame({level:3, seed:dailySeed(), mode:'solo', multiplayer:false, difficulty:'hard', daily:true});
-  startMusicIfOn();
+  startMusicIfOn('game');
 }
 function refreshDailyButton(){
   const b=document.getElementById('dailyBtn'); if(!b) return;
@@ -389,6 +390,7 @@ function wireRoomCallbacks(){
     Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
     startGame({level:config.level, seed:config.seed, mode:config.mode,
                multiplayer:true, difficulty:config.difficulty||'hard'});
+    startMusicIfOn('game');
   };
 }
 function selectRoomDiff(d){
@@ -851,10 +853,11 @@ function toggleSound(){
 function refreshMusicBtn(){
   const b=document.getElementById('musicBtn'); if(b) b.style.opacity = SAVE.musicOn!==false ? '1' : '0.45';
 }
-function startMusicIfOn(){ if(SAVE.musicOn!==false){ SFX.resume(); SFX.startMusic(); } }
+let lastMusicMode='lobby';
+function startMusicIfOn(mode){ if(mode) lastMusicMode=mode; if(SAVE.musicOn!==false){ SFX.resume(); SFX.startMusic(lastMusicMode); } }
 function toggleMusic(){
   SAVE.musicOn = !(SAVE.musicOn!==false); persist(); refreshMusicBtn();
-  if(SAVE.musicOn){ SFX.resume(); SFX.startMusic(); } else { SFX.stopMusic(); }
+  if(SAVE.musicOn){ SFX.resume(); SFX.startMusic(lastMusicMode); } else { SFX.stopMusic(); }
 }
 
 /* ---------------- Achievements ---------------- */
