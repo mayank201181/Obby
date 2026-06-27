@@ -160,6 +160,7 @@ input.text:focus{border-color:var(--purple-2);}
 }
 .jbtn:active{transform:scale(.94);}
 .jbtn.left{right:152px;bottom:24px;width:92px;height:92px;font-size:38px;background:radial-gradient(circle at 40% 35%,#ffd9f0,#ff9bce);}
+.jbtn.ability{right:158px;bottom:62px;width:90px;height:90px;font-size:26px;background:radial-gradient(circle at 40% 35%,#fff0c2,#ffce4d);color:#7a5512;text-shadow:none;}
 
 /* toast / popups */
 .toast{
@@ -193,3 +194,21 @@ input.text:focus{border-color:var(--purple-2);}
 .bgpick .swatch{width:34px;height:34px;border-radius:10px;}
 .muted{color:var(--ink-soft);font-size:13px;}
 .win-emoji{font-size:70px;animation:floaty 2s ease-in-out infinite;}
+
+/* ===== Pets & Chests ===== */
+.chest-row{display:flex;align-items:center;gap:12px;background:#faf5ff;border-radius:16px;padding:12px;margin:8px 0;box-shadow:0 3px 8px rgba(150,120,190,.15);}
+.chest-ico{font-size:40px;}
+.chest-info{flex:1;text-align:left;}
+.rar-head{font-weight:800;text-align:left;margin:12px 0 4px;font-size:15px;letter-spacing:.5px;}
+.pet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.pet-cell{position:relative;background:#fff;border-radius:14px;border:3px solid var(--rc);padding:8px 4px;text-align:center;cursor:pointer;transition:transform .1s;min-height:78px;display:flex;flex-direction:column;justify-content:center;}
+.pet-cell:active{transform:scale(.94);}
+.pet-cell.locked{border-color:#e7defa;background:#f4eefe;cursor:default;opacity:.7;}
+.pet-cell.equipped{box-shadow:0 0 0 3px #ffd36b;}
+.pet-emoji{font-size:30px;line-height:1;}
+.pet-name{font-size:11px;font-weight:800;color:var(--ink);margin-top:2px;}
+.count-badge{position:absolute;top:-6px;right:-6px;background:var(--purple-2);color:#fff;border-radius:20px;font-size:11px;font-weight:800;padding:1px 7px;box-shadow:0 2px 4px rgba(0,0,0,.15);}
+.eq-badge{position:absolute;top:-6px;left:-6px;background:var(--gold);color:#7a5512;border-radius:50%;width:20px;height:20px;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;}
+.pet-big{font-size:78px;line-height:1;filter:drop-shadow(0 6px 0 var(--rc));animation:floaty 2.2s ease-in-out infinite;margin:8px 0;}
+.rarity-badge{display:inline-block;color:#fff;border-radius:20px;padding:2px 12px;font-size:13px;font-weight:800;vertical-align:middle;}
+select.text{appearance:none;background:#fff;}

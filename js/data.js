@@ -60,6 +60,9 @@ function defaultSave(){
     chestLastClaim:0,      // timestamp ms
     chestStreak:0,         // how many daily claims in a row
     bestLevel:1,
+    pets:{},               // creatureId -> count owned
+    equippedPet:null,      // creatureId currently equipped (its ability helps in-game)
+    claimedTrades:[],      // trade codes already redeemed on this device
   };
 }
 

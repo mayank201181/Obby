@@ -29,11 +29,29 @@
     <div class="preview-wrap"><canvas id="lobbyPreview"></canvas></div>
     <input class="text" id="nameInput" maxlength="12" placeholder="Type your name…"/>
     <button class="btn pink" onclick="openPlay()">▶ Play</button>
+    <button class="btn blue" onclick="openPets()">🐾 Pets &amp; Chests</button>
     <div class="row">
       <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
       <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
         <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
     </div>
+  </div>
+</section>
+
+<!-- ============ PETS / CHESTS ============ -->
+<section class="screen" id="petsScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🐾 Pets &amp; Chests</h2>
+    <div class="tabs" id="petsTabs">
+      <div class="tab active" data-ptab="chests" onclick="setPetsTab('chests')">Chests 📦</div>
+      <div class="tab" data-ptab="collection" onclick="setPetsTab('collection')">Pets 🐰</div>
+      <div class="tab" data-ptab="trade" onclick="setPetsTab('trade')">Trade 🔁</div>
+    </div>
+    <div class="scroll" id="petsBody"></div>
   </div>
 </section>
 
@@ -138,6 +156,7 @@
         <button class="arrow-btn" id="leftBtn" aria-label="Move left">◀</button>
         <button class="arrow-btn" id="rightBtn" aria-label="Move right">▶</button>
       </div>
+      <button class="jbtn ability" id="abilityBtn" style="display:none">✨<br><span style="font-size:10px">PLATFORM</span></button>
       <button class="jbtn" id="jumpBtn">⬆<br><span style="font-size:13px">JUMP</span></button>
     </div>
   </div>
@@ -154,9 +173,13 @@
 <div class="modal-back" id="winModal">
   <div class="card" id="winBody"></div>
 </div>
+<div class="modal-back" id="petModal">
+  <div class="card" id="petModalBody"></div>
+</div>
 
 <script src="js/peerjs.min.js"></script>
 <script src="js/data.js"></script>
+<script src="js/pets.js"></script>
 <script src="js/character.js"></script>
 <script src="js/levels.js"></script>
 <script src="js/multiplayer.js"></script>

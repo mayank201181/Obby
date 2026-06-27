@@ -380,6 +380,134 @@ function backToLobby(){
   showScreen('lobbyScreen'); initLobby();
 }
 
+/* ---------------- Pets & Chests ---------------- */
+let petsTab='chests';
+function openPets(){ showScreen('petsScreen'); petsTab='chests'; renderPets(); }
+function setPetsTab(t){ petsTab=t; renderPets(); }
+function renderPets(){
+  updateCoinDisplays();
+  document.querySelectorAll('#petsTabs .tab').forEach(el=>el.classList.toggle('active', el.dataset.ptab===petsTab));
+  const body=document.getElementById('petsBody');
+  if(petsTab==='chests') renderChestsTab(body);
+  else if(petsTab==='collection') renderCollectionTab(body);
+  else renderTradeTab(body);
+}
+function oddsLine(weights){
+  const parts=[];
+  for(const r of RARITIES){ const w=weights[r]||0; if(w>0) parts.push(`${RARITY_INFO[r].label} ${w}%`); }
+  return parts.join(' · ');
+}
+function renderChestsTab(body){
+  body.innerHTML = Object.keys(CHESTS).map(id=>{
+    const c=CHESTS[id]; const can=SAVE.coins>=c.cost;
+    return `<div class="chest-row">
+      <div class="chest-ico">${c.emoji}</div>
+      <div class="chest-info"><b>${c.label}</b>
+        <div class="muted" style="font-size:11px;line-height:1.35">${oddsLine(c.weights)}</div></div>
+      <button class="btn gold small" ${can?'':'disabled'} onclick="doOpenChest('${id}')">🪙${c.cost}</button>
+    </div>`;
+  }).join('') + `<p class="hint">Better chests = better odds for rare pets. Sell duplicates in the Pets tab. Equip a pet to use its power in the obby!</p>`;
+}
+function doOpenChest(id){
+  const res=openPetChest(id);
+  if(res.error){ toast(res.error); return; }
+  updateCoinDisplays(); renderPets();
+  showPetReveal(res.creature, res.count);
+}
+function rarityBadge(r){ const i=RARITY_INFO[r]; return `<span class="rarity-badge" style="background:${i.color}">${i.label}</span>`; }
+function abilityText(c){ return c.abilities.length? c.abilities.map(a=>ABILITY_INFO[a]).join(' + ') : 'No special power'; }
+
+function showPetReveal(c, count){
+  const dup = count>1;
+  const body=document.getElementById('petModalBody');
+  body.innerHTML = `
+    <div class="muted">${dup?'You got a duplicate!':'✨ You got a NEW pet! ✨'}</div>
+    <div class="pet-big" style="--rc:${RARITY_INFO[c.rarity].color}">${c.emoji}</div>
+    <h2 style="margin:4px 0">${c.name} ${rarityBadge(c.rarity)}</h2>
+    <p class="muted" style="font-size:13px">✨ ${abilityText(c)}</p>
+    ${dup?`<p class="hint">You now own ${count}. Sell a duplicate for 🪙${c.sell}.</p>`:''}
+    <button class="btn pink" onclick="doEquip('${c.id}')">${SAVE.equippedPet===c.id?'✓ Equipped':'Equip'}</button>
+    ${dup?`<button class="btn gold" onclick="doSell('${c.id}')">Sell duplicate (🪙${c.sell})</button>`:''}
+    <button class="btn ghost" onclick="closeModal('petModal')">Close</button>`;
+  openModal('petModal');
+}
+function doEquip(id){
+  equipPet(id); renderPets(); const c=creatureById(id);
+  toast(SAVE.equippedPet===id?('Equipped '+c.name+' '+c.emoji):'Unequipped');
+  if(document.getElementById('petModal').classList.contains('active')) showPetActions(id);
+}
+function doSell(id){
+  const r=sellDuplicate(id); if(r.error){toast(r.error);return;}
+  updateCoinDisplays(); renderPets(); const c=creatureById(id);
+  toast('Sold '+c.name+' for 🪙'+r.coins);
+  if(document.getElementById('petModal').classList.contains('active')) showPetActions(id);
+}
+function renderCollectionTab(body){
+  const total=CREATURES.length, owned=CREATURES.filter(c=>ownsPet(c.id)).length;
+  const eq=SAVE.equippedPet?creatureById(SAVE.equippedPet):null;
+  let html=`<p class="hint">Collected ${owned}/${total} · Equipped: ${eq?eq.emoji+' '+eq.name:'none'}</p>`;
+  for(const r of RARITIES){
+    html+=`<div class="rar-head" style="color:${RARITY_INFO[r].color}">${RARITY_INFO[r].label}</div><div class="pet-grid">`;
+    for(const c of creaturesOfRarity(r)){
+      const owns=ownsPet(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
+      html+=`<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''}" style="--rc:${RARITY_INFO[r].color}" onclick="${owns?`showPetActions('${c.id}')`:''}">
+        <div class="pet-emoji">${owns?c.emoji:'❓'}</div>
+        <div class="pet-name">${owns?c.name:'???'}</div>
+        ${owns&&n>1?`<span class="count-badge">x${n}</span>`:''}
+        ${eqd?`<span class="eq-badge">✓</span>`:''}</div>`;
+    }
+    html+=`</div>`;
+  }
+  body.innerHTML=html;
+}
+function showPetActions(id){
+  const c=creatureById(id); const n=petCount(id);
+  const body=document.getElementById('petModalBody');
+  body.innerHTML=`
+    <div class="pet-big" style="--rc:${RARITY_INFO[c.rarity].color}">${c.emoji}</div>
+    <h2 style="margin:4px 0">${c.name} ${rarityBadge(c.rarity)}</h2>
+    <p class="muted" style="font-size:13px">✨ ${abilityText(c)}</p>
+    <p class="hint">You own ${n}${n>1?' · duplicates sell for 🪙'+c.sell+' each':''}</p>
+    <button class="btn pink" onclick="doEquip('${c.id}')">${SAVE.equippedPet===c.id?'✓ Equipped (tap to remove)':'Equip'}</button>
+    ${n>1?`<button class="btn gold" onclick="doSell('${c.id}')">Sell duplicate (🪙${c.sell})</button>`:''}
+    <button class="btn ghost" onclick="closeModal('petModal')">Close</button>`;
+  openModal('petModal');
+}
+function renderTradeTab(body){
+  const ownedList=CREATURES.filter(c=>ownsPet(c.id));
+  const opts=ownedList.map(c=>`<option value="${c.id}">${c.emoji} ${c.name} (x${petCount(c.id)})</option>`).join('');
+  body.innerHTML=`
+    <h3 style="margin:6px 0">Send a pet 🎁</h3>
+    <p class="hint" style="margin-top:0">Pick a pet &amp; your friend's username to make a code to share.</p>
+    <input class="text" id="tradeTo" maxlength="12" placeholder="Friend's username"/>
+    <select class="text" id="tradePet">${opts||'<option value="">No pets yet</option>'}</select>
+    <button class="btn pink" onclick="doMakeTrade()" ${ownedList.length?'':'disabled'}>Make trade code</button>
+    <div id="tradeCodeOut"></div>
+    <hr style="border:none;border-top:2px dashed #efe7fb;margin:14px 0">
+    <h3 style="margin:6px 0">Receive a pet 🔁</h3>
+    <input class="text" id="tradeCodeIn" placeholder="Paste trade code"/>
+    <button class="btn gold" onclick="doRedeemTrade()">Redeem</button>`;
+}
+function doMakeTrade(){
+  const to=(document.getElementById('tradeTo').value||'').trim();
+  const pet=document.getElementById('tradePet').value;
+  if(!pet){ toast('Pick a pet'); return; }
+  const c=creatureById(pet);
+  const r=makeTradeCode(pet, to);
+  if(r.error){ toast(r.error); return; }
+  document.getElementById('tradeCodeOut').innerHTML=
+    `<div class="code-box" style="font-size:13px;letter-spacing:1px;word-break:break-all">${r.code}</div>
+     <p class="hint">Share this with ${escapeHtml(to||'your friend')} — they paste it in “Receive”. You gave away ${c.emoji} ${c.name}.</p>`;
+  updateCoinDisplays();
+}
+function doRedeemTrade(){
+  const code=document.getElementById('tradeCodeIn').value;
+  const r=redeemTradeCode(code);
+  if(r.error){ toast(r.error); return; }
+  renderPets();
+  showPetReveal(r.creature, petCount(r.creature.id));
+}
+
 /* ---------------- Boot ---------------- */
 function boot(){
   gameInit();

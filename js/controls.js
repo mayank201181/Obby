@@ -27,6 +27,14 @@ function setupTouchControls(){
   jumpBtn.addEventListener('touchstart', doJump, {passive:false});
   jumpBtn.addEventListener('mousedown',  doJump);
 
+  // pet ability button (placing platforms)
+  const abilityBtn=document.getElementById('abilityBtn');
+  if(abilityBtn){
+    const doAbility=e=>{ e.preventDefault(); if(typeof triggerAbility==='function') triggerAbility(); };
+    abilityBtn.addEventListener('touchstart', doAbility, {passive:false});
+    abilityBtn.addEventListener('mousedown',  doAbility);
+  }
+
   // if the page loses focus mid-press, release everything
   window.addEventListener('blur', ()=>{ Game.input.btnL=false; Game.input.btnR=false;
     leftBtn.classList.remove('active'); rightBtn.classList.remove('active'); });

@@ -20,7 +20,20 @@ const Game = {
   freezeHazards:false,          // used by automated reachability tests
   difficulty:'hard',            // 'easy' = no shooting cannons, 'hard' = cannons
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
+  // equipped-pet ability effects:
+  petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
+  placedPlatforms:[],           // platforms spawned by the 'platform' pet ability
+  platformCdUntil:0,            // ability cooldown
 };
+
+function applyEquippedPet(){
+  const a = (typeof equippedAbilities==='function') ? equippedAbilities()
+          : {moveMul:1,jumpMul:1,fallMul:1,maxJumps:1,canPlatform:false};
+  Game.petMoveMul=a.moveMul; Game.petJumpMul=a.jumpMul; Game.petFallMul=a.fallMul;
+  Game.petMaxJumps=a.maxJumps; Game.petCanPlatform=a.canPlatform;
+  const btn=document.getElementById('abilityBtn');
+  if(btn) btn.style.display = a.canPlatform ? 'flex' : 'none';
+}
 
 // Team colours: in Team mode you are PINK (host) or BLUE (joiner). A coloured
 // platform is only solid for the matching player — the other falls through it.
@@ -96,8 +109,10 @@ function loadLevel(level){
   const st=Game.world.start;
   Game.player={
     x:st.x, y:st.y-22, vx:0, vy:0, w:34, h:34, facing:1,
-    onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0,
+    onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
+  Game.placedPlatforms=[]; Game.platformCdUntil=0;
+  applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
   Game.guns = makeTurrets(level);
   Game.bullets=[];
@@ -151,26 +166,50 @@ function readInput(){
   return Math.max(-1,Math.min(1,dir));
 }
 
+/* pet 'platform' ability: drop a temporary foothold (button next to JUMP) */
+function triggerAbility(){
+  if(!Game.running || !Game.petCanPlatform) return;
+  if(Game.t < Game.platformCdUntil) return;        // on cooldown
+  const p=Game.player, w=100, h=18;
+  Game.placedPlatforms.push({
+    type:'placed', w, h,
+    x: p.x + p.w/2 - w/2 + p.facing*16,
+    y: p.y + p.h + 6,
+    until: Game.t + 4500,
+  });
+  Game.platformCdUntil = Game.t + 2600;
+  if(typeof toast==='function') toast('✨ Platform!');
+}
+
 function update(dt){
   const p=Game.player; if(!p) return;
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.6;
 
   updateMovers();                       // slide moving blocks before collision
+  if(Game.placedPlatforms.length) Game.placedPlatforms = Game.placedPlatforms.filter(pp=>pp.until>Game.t);
   if(p.invuln>0) p.invuln-=dt*1000;
 
+  if(p.onGround) p.jumps=0;              // reset jump count when grounded
+
   const dir=Math.max(-1,Math.min(1,readInput()));
-  // horizontal
-  const target=dir*MOVE;
+  // horizontal (pet speed boost)
+  const move = MOVE*Game.petMoveMul;
+  const target=dir*move;
   p.vx += (target-p.vx)*0.35;
   if(Math.abs(dir)<0.05){ p.vx*=FRICT; if(Math.abs(p.vx)<0.05)p.vx=0; }
   if(dir>0.05)p.facing=1; if(dir<-0.05)p.facing=-1;
 
-  // jump
-  if(Game.input.jump && p.onGround){ p.vy=JUMP; p.onGround=false; p.squash=-1; }
+  // jump (pet: higher jump + double jump)
+  if(Game.input.jump){
+    const jv = JUMP*Game.petJumpMul;
+    if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; }
+    else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; }
+  }
   Game.input.jump=false;
 
-  // gravity
-  p.vy+=GRAV; if(p.vy>MAXFALL)p.vy=MAXFALL;
+  // gravity (pet glide = slower fall)
+  const g = (p.vy>0) ? GRAV*Game.petFallMul : GRAV;
+  p.vy+=g; if(p.vy>MAXFALL)p.vy=MAXFALL;
 
   // integrate + collide
   p.onGround=false;
@@ -207,7 +246,8 @@ function update(dt){
 }
 
 function moveAndCollide(p){
-  const plats=Game.world.platforms;
+  // world platforms + any active pet-placed platforms
+  const plats = Game.placedPlatforms.length ? Game.world.platforms.concat(Game.placedPlatforms) : Game.world.platforms;
   const now=Game.t;
 
   // ---- horizontal: free movement (one-way platforms don't block sideways) ----
@@ -317,6 +357,7 @@ function solidNow(pl){
     const until=MP.bridges? MP.bridges[pl.grp] : 0;
     return !!until && until > nowMs();
   }
+  if(pl.type==='placed'){ return pl.until > Game.t; }  // pet-placed platform
   return true;
 }
 
@@ -418,6 +459,17 @@ function render(){
 
   const plats=Game.world.platforms;
   for(const pl of plats) drawPlatform(ctx,pl);
+
+  // pet-placed platforms (fading sparkle footholds)
+  for(const pp of Game.placedPlatforms){
+    const left=pp.until-Game.t;
+    ctx.globalAlpha = left<1200 ? Math.max(0.3,left/1200) : 1;
+    ctx.fillStyle='#ffe9a8';
+    roundRect(ctx,pp.x,pp.y,pp.w,pp.h,8); ctx.fill();
+    ctx.fillStyle='#ffcf4d'; roundRect(ctx,pp.x,pp.y+pp.h-5,pp.w,5,8); ctx.fill();
+    ctx.globalAlpha=1; ctx.font='13px serif'; ctx.textAlign='center';
+    ctx.fillText('✨', pp.x+pp.w/2, pp.y-2);
+  }
 
   // remote players (in Team mode they show their team colour)
   if(Game.multiplayer){
