@@ -19,6 +19,8 @@ const Game = {
   guns:[], bullets:[],          // side cannons + their projectiles
   freezeHazards:false,          // used by automated reachability tests
   difficulty:'hard',            // 'easy' = no shooting cannons, 'hard' = cannons
+  tower:false,                  // endless Tower mode
+  daily:false,                  // daily challenge run
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
@@ -82,6 +84,8 @@ function startGame(opts){
   Game.mode=opts.mode||'solo';
   Game.multiplayer=!!opts.multiplayer;
   Game.difficulty=opts.difficulty||'hard';
+  Game.tower = opts.mode==='tower';
+  Game.daily = !!opts.daily;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
   if(Game.mode==='coop' && Game.multiplayer){
     Game.myColorName = MP.isHost ? 'pink' : 'blue';
@@ -103,7 +107,7 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world=generateLevel(level, Game.seed, Game.mode);
+  Game.world = Game.tower ? generateTower(Game.seed) : generateLevel(level, Game.seed, Game.mode);
   Game.disappear={};
   Game.hitCheckpoints=new Set();
   Game.coinsThisRun=0;
@@ -197,12 +201,14 @@ function update(dt){
   if(p.onGround) p.jumps=0;              // reset jump count when grounded
 
   const dir=Math.max(-1,Math.min(1,readInput()));
-  // horizontal (pet speed boost)
+  // horizontal (pet speed boost) — ice makes you slip (low grip, slow stop)
   const move = MOVE*Game.petMoveMul;
   const target=dir*move;
-  p.vx += (target-p.vx)*0.35;
-  if(Math.abs(dir)<0.05){ p.vx*=FRICT; if(Math.abs(p.vx)<0.05)p.vx=0; }
+  const grip = p.onIce ? 0.09 : 0.35;
+  p.vx += (target-p.vx)*grip;
+  if(Math.abs(dir)<0.05){ p.vx*=(p.onIce?0.985:FRICT); if(Math.abs(p.vx)<0.05)p.vx=0; }
   if(dir>0.05)p.facing=1; if(dir<-0.05)p.facing=-1;
+  p.onIce=false;                          // re-set by onStand if still on ice
 
   // jump (pet: higher jump + double jump)
   if(Game.input.jump){
@@ -232,6 +238,7 @@ function update(dt){
   updateHazards(dt);
   updateLasers();
   collectCoins(p);
+  if(Game.tower) maybeExtendTower();     // grow the endless tower as you climb
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
@@ -291,11 +298,18 @@ function moveAndCollide(p){
     }
   }
   if(standingOn){
-    p.y = bestTop - p.h; p.vy = 0;
-    if(!p.onGround && p.squash > -0.4) p.squash = 0.9;
-    p.onGround = true;
-    // ride moving blocks: carry the player along with the platform
-    if(standingOn.type==='mover'){ p.x += standingOn.dx||0; }
+    p.y = bestTop - p.h;
+    if(standingOn.type==='bouncy'){
+      // trampoline: launch up automatically (a touch higher than a normal jump)
+      p.vy = -15.2; p.onGround = false; p.jumps = 0; p.squash = -1.1;
+      if(!standingOn._bt || Game.t-standingOn._bt>140){ standingOn._bt=Game.t; SFX.jump(); }
+    } else {
+      p.vy = 0;
+      if(!p.onGround && p.squash > -0.4) p.squash = 0.9;
+      p.onGround = true;
+      // ride moving blocks: carry the player along with the platform
+      if(standingOn.type==='mover'){ p.x += standingOn.dx||0; }
+    }
   }
   p.onLift = (standingOn && standingOn.type==='lift') ? standingOn : null;
 
@@ -447,7 +461,14 @@ function onStand(p, pl, now){
     Game.coinsThisRun+=5; addCoins(5); SFX.checkpoint();
     if(Game.onCheckpoint)Game.onCheckpoint(pl.cpIndex);
     if(Game.multiplayer) mpSendCheckpoint(pl.cpIndex);
-    toast('Checkpoint '+pl.cpIndex+'/'+CHECKPOINTS+'  +5 🪙');
+    if(Game.tower){
+      // tower floor reached — track your best height
+      if(pl.cpIndex > (SAVE.towerBest||0)){ SAVE.towerBest=pl.cpIndex; persist(); }
+      if(pl.cpIndex>=10) unlockAchievement('tower');
+      toast('🏗️ Floor '+pl.cpIndex+'!  +5 🪙');
+    } else {
+      toast('Checkpoint '+pl.cpIndex+'/'+CHECKPOINTS+'  +5 🪙');
+    }
     updateHud();
   } else if(pl.type==='checkpoint'){
     p.respawnX=pl.x+pl.w/2-p.w/2; p.respawnY=pl.y-p.h;
@@ -466,6 +487,13 @@ function onStand(p, pl, now){
   if(pl.type==='conveyor'){
     p.x += pl.dir*2.2;
     p.facing=pl.dir;
+  }
+  // ice: mark slippery (movement friction handled in update)
+  if(pl.type==='ice'){ p.onIce=true; }
+  // wind: a gusty sideways push while you stand in it
+  if(pl.type==='wind'){
+    const gust = pl.dir * (0.9 + Math.sin(now/200 + pl.x)*0.5);   // ~0.4..1.4 px
+    p.x += gust;
   }
   // finish
   if(pl.type==='finish' && !Game.finished){
@@ -507,13 +535,28 @@ function levelFinished(){
   Game.finished=true;
   let earned=30; addCoins(30); SFX.win();   // bonus for finishing a level
   if(Game.multiplayer) mpSendFinish();
+  const timeMs = Math.max(0, Math.round(Game.t - Game.runStartT));
+  const stars = Game.deaths<=1 ? 3 : Game.deaths<=5 ? 2 : 1;
+  let newRecord=false;
+
+  // ----- Daily Challenge: one bonus per day + a daily best time -----
+  if(Game.daily){
+    const k = dailyKey();
+    if(!SAVE.daily || SAVE.daily.key!==k) SAVE.daily={key:k, best:0, done:false};
+    if(!SAVE.daily.done){ SAVE.daily.done=true; earned+=50; addCoins(50); unlockAchievement('daily'); }
+    if(!SAVE.daily.best || timeMs<SAVE.daily.best){ SAVE.daily.best=timeMs; newRecord=true; }
+    if(Game.difficulty==='hard') unlockAchievement('hard');
+    if(Game.deaths===0) unlockAchievement('flawless');
+    persist();
+    if(Game.onLevelComplete) Game.onLevelComplete(Game.level, earned, true,
+                              {timeMs, stars, newRecord, deaths:Game.deaths, coins:Game.runCoins, daily:true});
+    return;
+  }
+
   const isFinal = Game.level>=TOTAL_LEVELS;
   if(Game.level+1 > SAVE.bestLevel){ SAVE.bestLevel=Math.min(TOTAL_LEVELS,Game.level+ (isFinal?0:1)); persist(); }
 
   // timer, stars (by deaths), best time, achievements (solo only)
-  const timeMs = Math.max(0, Math.round(Game.t - Game.runStartT));
-  const stars = Game.deaths<=1 ? 3 : Game.deaths<=5 ? 2 : 1;
-  let newRecord=false;
   if(!Game.multiplayer){
     const lv=Game.level;
     const prev=SAVE.bestTimes[lv];
@@ -705,6 +748,9 @@ function drawPlatform(ctx,pl){
     }
     case 'conveyor': fill='#9cd8ff'; edge='#5aa8ee'; break;
     case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
+    case 'bouncy': fill='#b6f5c8'; edge='#3fcf86'; break;
+    case 'ice': fill='#dff4ff'; edge='#9fd8f5'; break;
+    case 'wind': fill='#eef4ff'; edge='#c2d4ee'; break;
     case 'lift': fill='#cfe3ff'; edge='#6f9bdd'; break;
     case 'laser':{
       const live=laserLive(pl);
@@ -770,6 +816,24 @@ function drawPlatform(ctx,pl){
     ctx.fillStyle='rgba(120,80,20,.7)';ctx.font='bold 15px Nunito';ctx.textAlign='center';
     ctx.fillText('↔', pl.x+pl.w/2, pl.y+pl.h/2+1);
   }
+  if(pl.type==='bouncy'){
+    // springy bob + arrows so it reads as a trampoline
+    const bob=Math.abs(Math.sin(Game.t/180))*3;
+    ctx.fillStyle='rgba(30,150,90,.8)';ctx.font='bold 15px Nunito';ctx.textAlign='center';
+    ctx.fillText('⤴', pl.x+pl.w/2, pl.y+pl.h/2+1-bob);
+  }
+  if(pl.type==='ice'){
+    ctx.fillStyle='rgba(255,255,255,.85)';
+    roundRect(ctx,pl.x+3,pl.y+2,pl.w-6,4,3);ctx.fill();   // glossy shine
+    ctx.fillStyle='rgba(90,160,210,.8)';ctx.font='13px Nunito';ctx.textAlign='center';
+    ctx.fillText('❄', pl.x+pl.w/2, pl.y+pl.h/2+2);
+  }
+  if(pl.type==='wind'){
+    ctx.fillStyle='rgba(110,140,190,.7)';ctx.font='bold 14px Nunito';ctx.textAlign='center';
+    const arrow=pl.dir>0?'›››':'‹‹‹';
+    const shift=((Game.t/50)*pl.dir)%20;
+    ctx.fillText(arrow, pl.x+pl.w/2+(pl.dir>0?shift:-shift), pl.y+pl.h/2+1);
+  }
   if(pl.type==='lift'){
     ctx.fillStyle='#4d6fa8';ctx.font='bold 13px Nunito';ctx.textAlign='center';
     ctx.fillText('⬆ BOTH STAND ⬆', pl.x+pl.w/2, pl.y+pl.h/2+1);
@@ -807,12 +871,18 @@ function roundRect(ctx,x,y,w,h,r){
 
 /* ---------- HUD ---------- */
 function updateHud(){
-  document.getElementById('hudLevel').textContent='Level '+Game.level+'/'+TOTAL_LEVELS;
+  const el=document.getElementById('hudLevel');
+  el.textContent = Game.tower ? '🏗️ Tower'
+                 : Game.daily ? '🗓️ Daily'
+                 : 'Level '+Game.level+'/'+TOTAL_LEVELS;
 }
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
-  document.getElementById('hudCp').textContent='⛳ '+done+'/'+CHECKPOINTS;
-  const heightLeft=Math.max(0, Math.round((Game.player.y-Game.world.finishY)/10));
+  if(Game.tower){
+    document.getElementById('hudCp').textContent='🏗️ Floor '+done+(SAVE.towerBest?(' · best '+SAVE.towerBest):'');
+  } else {
+    document.getElementById('hudCp').textContent='⛳ '+done+'/'+CHECKPOINTS;
+  }
   document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
 }
 

@@ -73,6 +73,8 @@ const ACHIEVEMENTS = [
   { id:'pets10', name:'Zookeeper',     desc:'Own 10 different pets',         emoji:'🦁' },
   { id:'secret', name:'Secret Finder', desc:'Get a Secret pet',             emoji:'✨' },
   { id:'rich',   name:'Rich!',         desc:'Save up 500 coins',            emoji:'🪙' },
+  { id:'tower',  name:'Sky High',      desc:'Reach floor 10 in the Tower',  emoji:'🏗️' },
+  { id:'daily',  name:'Daily Climber', desc:'Beat a Daily Challenge',       emoji:'🗓️' },
 ];
 
 const DAY_MS = 24*60*60*1000;
@@ -103,6 +105,8 @@ function defaultSave(){
     starsByLevel:{},       // level -> best stars (1-3)
     achievements:[],       // unlocked achievement ids
     lvlCoinsCollected:0,    // total floating coins collected in levels
+    towerBest:0,           // highest floor reached in endless Tower mode
+    daily:{key:'',best:0,done:false},  // daily challenge progress for the current day
   };
 }
 

@@ -68,6 +68,7 @@ function initLobby(){
   updateCoinDisplays();
   startPreview('lobbyPreview');
   refreshChestButton();
+  refreshDailyButton();
 }
 function applyLobbyBg(){
   document.getElementById('lobbyScreen').style.background =
@@ -287,6 +288,39 @@ function startSoloLevel(level){
   startMusicIfOn();
 }
 
+/* ---------------- Endless Tower ---------------- */
+function startTower(){
+  SFX.click();
+  Game.multiplayer=false; Game.daily=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  // Tower has no shooting cannons — the endless ramp + crumbly/ice/wind blocks
+  // are the challenge.
+  startGame({mode:'tower', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn();
+}
+
+/* ---------------- Daily Challenge ---------------- */
+function dailyKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
+function dailySeed(){ const d=new Date(); return (d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate()); }
+function startDaily(){
+  SFX.click();
+  closeModal('winModal');
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  // same level for everyone today; a fixed mid difficulty with cannons on
+  startGame({level:3, seed:dailySeed(), mode:'solo', multiplayer:false, difficulty:'hard', daily:true});
+  startMusicIfOn();
+}
+function refreshDailyButton(){
+  const b=document.getElementById('dailyBtn'); if(!b) return;
+  const done = SAVE.daily && SAVE.daily.key===dailyKey() && SAVE.daily.done;
+  b.innerHTML = done
+    ? '🗓️ Daily Challenge <span class="badge">✓ done</span>'
+    : '🗓️ Daily Challenge <span class="badge" style="background:var(--pink-2)">+50 🪙</span>';
+}
+
 let pendingRoomMode='coop';
 let pendingRoomDiff='hard';
 
@@ -453,13 +487,16 @@ function onLevelComplete(level, earned, isFinal, res){
   const timeRow = !Game.multiplayer ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-    : (isFinal
-        ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-        : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`);
+    : (res.daily
+        ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        : (isFinal
+            ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+            : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`));
+  const heading = res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
-    <div class="win-emoji">${isFinal?'🏆🌈':'🎉'}</div>
-    <h2>${isFinal?'YOU DID IT!':'Level '+level+' complete!'}</h2>
-    ${isFinal?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    <div class="win-emoji">${res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <h2>${heading}</h2>
+    ${isFinal&&!res.daily?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     <p class="timer-big">+🪙${earned}</p>${waitMsg}
     ${nav}`;

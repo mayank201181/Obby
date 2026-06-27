@@ -201,15 +201,22 @@ function generateLevel(level, seed, mode){
       let type='normal';
       const roll=rnd();
       if(band>0){
-        const dThresh = 0.16 + diff*0.32;          // disappearing (L1 16% -> L5 48%)
-        const cThresh = dThresh + 0.10 + diff*0.07; // conveyors
-        const mThresh = cThresh + 0.10 + diff*0.08; // moving blocks
+        const dThresh = 0.14 + diff*0.26;          // disappearing (L1 14% -> L5 40%)
+        const cThresh = dThresh + 0.09 + diff*0.05; // conveyors
+        const mThresh = cThresh + 0.09 + diff*0.06; // moving blocks
+        const bThresh = mThresh + 0.08;             // bouncy (trampoline)
+        const iThresh = bThresh + 0.07;             // ice (slippery)
+        const wThresh = iThresh + 0.06;             // wind (gusty push)
         if(roll < dThresh) type='disappear';
         else if(roll < cThresh) type='conveyor';
         else if(roll < mThresh) type='mover';
+        else if(roll < bThresh) type='bouncy';
+        else if(roll < iThresh) type='ice';
+        else if(roll < wThresh) type='wind';
       }
       const p={id:id++, x:nx-w/2, y, w, h:26, type};
       if(type==='conveyor') p.dir = rnd()<0.5?-1:1;
+      if(type==='wind') p.dir = rnd()<0.5?-1:1;
       // disappearing blocks crumble faster on later levels (L1 2.2s -> L5 1.1s)
       if(type==='disappear') p.crumbleMs = Math.round(2200 - diff*1100);
       // moving blocks slide left<->right around their placed (mid) position.
@@ -253,4 +260,90 @@ function generateLevel(level, seed, mode){
     platforms, checkpoints, start,
     finishY,
   };
+}
+
+/* ===== ENDLESS TOWER =====
+   An infinitely tall climb. Floors are generated on the fly as you climb and
+   get harder the higher you go. There is no finish — you just see how high you
+   can get. Each floor ends in a checkpoint, and the floor number is your score. */
+function generateTower(seed){
+  const bottomY = 4000;
+  const platforms = [];
+  const checkpoints = [];
+  platforms.push({id:0, x:WORLD_W/2-130, y:bottomY, w:260, h:40, type:'big'});
+  const world = {
+    level:1, seed, mode:'tower', tower:true,
+    width:WORLD_W, height:bottomY,
+    platforms, checkpoints,
+    start:{x:WORLD_W/2, y:bottomY-40},
+    finishY:-1e9,                 // never reached -> no finish banner
+    _id:1, _prevX:WORLD_W/2, _y:bottomY, _floor:0, _topY:bottomY,
+  };
+  for(let i=0;i<4;i++) towerFloor(world);   // a few floors ready to climb
+  return world;
+}
+
+/* build the next floor of the tower (≈5-7 steps then a checkpoint) */
+function towerFloor(world){
+  const f = world._floor;
+  const rnd = mulberry32((world.seed*1000 + f*131 + 17)|0);
+  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+  const diff = Math.min(1, f/14);            // difficulty ramps over the first 14 floors
+  const SIZES  = [60, 86, 120, 160, 210];
+  const SIZE_W = [2+diff*5, 4+diff*3, 5, Math.max(0.5,3-diff*1.8), Math.max(0.4,2-diff*1.3)];
+  const SUM = SIZE_W.reduce((a,b)=>a+b,0);
+  const pickSize=()=>{ let r=rnd()*SUM; for(let i=0;i<SIZES.length;i++){ r-=SIZE_W[i]; if(r<=0) return SIZES[i]; } return 120; };
+  const maxOffFor=w=>(w>=200?188:w>=150?172:w>=110?152:w>=80?122:98)+diff*20;
+
+  let prevX = world._prevX, y = world._y;
+  const steps = rint(5,7);
+  for(let i=0;i<steps;i++){
+    y -= rint(70,100);
+    const w = pickSize();
+    const off = rint(52, Math.round(maxOffFor(w)));
+    let dir = rnd()<0.5?-1:1;
+    let nx = prevX + dir*off;
+    if(nx<60 || nx>WORLD_W-60) nx = prevX - dir*off;
+    nx = Math.max(60+w/2, Math.min(WORLD_W-60-w/2, nx));
+    prevX = nx;
+    let type='normal';
+    const roll=rnd();
+    const dT=0.12+diff*0.24, cT=dT+0.08+diff*0.05, mT=cT+0.08+diff*0.06,
+          bT=mT+0.08, iT=bT+0.07, wT=iT+0.06;
+    if(roll<dT) type='disappear';
+    else if(roll<cT) type='conveyor';
+    else if(roll<mT) type='mover';
+    else if(roll<bT) type='bouncy';
+    else if(roll<iT) type='ice';
+    else if(roll<wT) type='wind';
+    const p={id:world._id++, x:nx-w/2, y, w, h:26, type};
+    if(type==='conveyor'||type==='wind') p.dir = rnd()<0.5?-1:1;
+    if(type==='disappear') p.crumbleMs = Math.round(2200 - diff*1100);
+    if(type==='mover'){
+      const room=Math.min(nx-30-w/2,(WORLD_W-30-w/2)-nx);
+      const amp=Math.min(rint(70,108),room);
+      if(amp<45){ p.type='normal'; }
+      else{ p.base=p.x; p.amp=amp; p.omega=(2*Math.PI)/rint(820,1300); p.phase=rnd()*Math.PI*2; p.dx=0; }
+    }
+    world.platforms.push(p);
+    if(type!=='disappear' && rnd()<0.26)
+      world.platforms.push({id:world._id++, type:'coin', x:nx-10, y:y-40, w:20, h:20});
+  }
+  // floor checkpoint
+  y -= rint(74,96);
+  const cw=180, cx=Math.max(60,Math.min(WORLD_W-60-cw, prevX-cw/2));
+  const floorNo = f+1;
+  world.platforms.push({id:world._id++, x:cx, y, w:cw, h:30, type:'checkpoint', cpIndex:floorNo});
+  world.checkpoints.push({index:floorNo, x:cx+cw/2, y});
+  world._prevX = cx+cw/2;
+  world._y = y;
+  world._topY = y;
+  world._floor++;
+}
+
+/* called each frame in tower mode: keep a couple of floors generated ahead */
+function maybeExtendTower(){
+  const w=Game.world;
+  if(!w || !w.tower) return;
+  if(Game.player.y - w._topY < 1700) towerFloor(w);
 }
