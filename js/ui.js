@@ -39,7 +39,7 @@ function startPreview(canvasId){
   cancelAnimationFrame(previewRaf);
   const loop=t=>{
     ctx.clearRect(0,0,size,size);
-    drawCharacter(ctx,size/2,size/2+6,72,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:1,t});
+    drawCharacter(ctx,size/2,size/2+6,72,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:1,t,petSkin:SAVE.petSkin});
     previewRaf=requestAnimationFrame(loop);
   };
   previewRaf=requestAnimationFrame(loop);
@@ -92,7 +92,22 @@ function renderCustomize(){
   grid.innerHTML='';
   if(customTab==='skins') renderSkins(grid);
   else if(customTab==='accessories') renderAccessories(grid);
+  else if(customTab==='trails') renderTrails(grid);
   else renderFaces(grid);
+}
+
+function renderTrails(grid){
+  TRAILS.forEach(t=>{
+    const owned=SAVE.ownedTrails.includes(t.id);
+    const sw=document.createElement('div');
+    sw.className='swatch'+(SAVE.trail===t.id?' selected':'')+(!owned?' locked':'');
+    if(t.color==='rainbow') sw.classList.add('rainbow');
+    else if(t.color) sw.style.background=t.color;
+    else { sw.style.background='#fff'; sw.textContent='🚫'; }
+    if(!owned){ const p=document.createElement('span');p.className='price';p.textContent='🪙'+t.price;sw.appendChild(p); }
+    sw.onclick=()=>buyOrEquip('trail',t,owned);
+    grid.appendChild(sw);
+  });
 }
 
 function renderSkins(grid){
@@ -141,10 +156,12 @@ function renderFaces(grid){
 }
 
 function buyOrEquip(kind,item,owned){
+  SFX.click();
   if(owned){
-    if(kind==='skin')SAVE.skin=item.id;
+    if(kind==='skin'){ SAVE.skin=item.id; SAVE.petSkin=null; } // a normal skin clears a worn pet
     if(kind==='accessory')SAVE.accessory=item.id;
     if(kind==='face')SAVE.face=item.id;
+    if(kind==='trail')SAVE.trail=item.id;
     persist();renderCustomize();
     return;
   }
@@ -152,9 +169,10 @@ function buyOrEquip(kind,item,owned){
   if(item.price>0 && SAVE.coins<item.price){ toast('Not enough coins 🪙'); return; }
   // purchase
   if(item.price>0) SAVE.coins-=item.price;
-  if(kind==='skin'){ SAVE.ownedSkins.push(item.id); SAVE.skin=item.id; }
+  if(kind==='skin'){ SAVE.ownedSkins.push(item.id); SAVE.skin=item.id; SAVE.petSkin=null; }
   if(kind==='accessory'){ SAVE.ownedAccessories.push(item.id); SAVE.accessory=item.id; }
   if(kind==='face'){ SAVE.ownedFaces.push(item.id); SAVE.face=item.id; }
+  if(kind==='trail'){ SAVE.ownedTrails.push(item.id); SAVE.trail=item.id; }
   persist(); renderCustomize();
   toast(item.price>0?('Unlocked! −🪙'+item.price):'Equipped!');
 }
@@ -460,6 +478,8 @@ function renderChestsTab(body){
 function doOpenChest(id){
   const res=openPetChest(id);
   if(res.error){ toast(res.error); return; }
+  const rare = ['legendary','mythical','secret'].includes(res.creature.rarity);
+  rare ? SFX.rare() : SFX.chest();
   updateCoinDisplays(); renderPets();
   showPetReveal(res.creature, res.count);
 }
@@ -517,10 +537,18 @@ function showPetActions(id){
     <h2 style="margin:4px 0">${c.name} ${rarityBadge(c.rarity)}</h2>
     <p class="muted" style="font-size:13px">✨ ${abilityText(c)}</p>
     <p class="hint">You own ${n}${n>1?' · duplicates sell for 🪙'+c.sell+' each':''}</p>
-    <button class="btn pink" onclick="doEquip('${c.id}')">${SAVE.equippedPet===c.id?'✓ Equipped (tap to remove)':'Equip'}</button>
+    <button class="btn pink" onclick="doEquip('${c.id}')">${SAVE.equippedPet===c.id?'✓ Power equipped (tap to remove)':'Use power'}</button>
+    <button class="btn blue" onclick="doWearPet('${c.id}')">${SAVE.petSkin===c.id?'✓ Worn as skin (tap to remove)':'👕 Wear as skin'}</button>
     ${n>1?`<button class="btn gold" onclick="doSell('${c.id}')">Sell duplicate (🪙${c.sell})</button>`:''}
     <button class="btn ghost" onclick="closeModal('petModal')">Close</button>`;
   openModal('petModal');
+}
+function doWearPet(id){
+  SFX.click();
+  SAVE.petSkin = (SAVE.petSkin===id) ? null : id;
+  persist(); const c=creatureById(id);
+  toast(SAVE.petSkin===id ? ('Now wearing '+c.name+' '+c.emoji) : 'Back to your blob');
+  showPetActions(id);
 }
 function renderTradeTab(body){
   const ownedList=CREATURES.filter(c=>ownsPet(c.id));
@@ -557,13 +585,27 @@ function doRedeemTrade(){
   showPetReveal(r.creature, petCount(r.creature.id));
 }
 
+/* ---------------- Sound ---------------- */
+function refreshSoundBtn(){
+  const b=document.getElementById('soundBtn'); if(b) b.textContent = SAVE.soundOn!==false ? '🔊' : '🔇';
+}
+function toggleSound(){
+  SAVE.soundOn = !(SAVE.soundOn!==false); persist();
+  refreshSoundBtn(); if(SAVE.soundOn){ SFX.resume(); SFX.coin(); }
+}
+
 /* ---------------- Boot ---------------- */
 function boot(){
   gameInit();
+  SFX.init();
+  // browsers need a user gesture to start audio
+  const wake=()=>{ SFX.init(); SFX.resume(); window.removeEventListener('pointerdown',wake); window.removeEventListener('touchstart',wake); };
+  window.addEventListener('pointerdown',wake); window.addEventListener('touchstart',wake);
   Game.onLevelComplete=onLevelComplete;
   Game.onCheckpoint=(i)=>{};
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
   initLobby();
+  refreshSoundBtn();
   showScreen('lobbyScreen');
   // build floating decor
   const decor=document.getElementById('bgDecor');

@@ -47,6 +47,24 @@ function drawCharacter(ctx, cx, cy, size, opts){
   const w = size*(1+sq*0.18);
   const h = size*(1-sq*0.18);
 
+  // worn-pet skin: draw as the creature emoji instead of the blob
+  if(opts.petSkin && typeof creatureById==='function'){
+    const c = creatureById(opts.petSkin);
+    if(c){
+      ctx.save(); ctx.translate(cx,cy);
+      ctx.globalAlpha=0.18; ctx.fillStyle='#000';
+      ctx.beginPath();ctx.ellipse(0,h*0.55,w*0.42,h*0.12,0,0,Math.PI*2);ctx.fill();
+      ctx.globalAlpha=1;
+      if(opts.ring){ ctx.fillStyle=opts.ring; ctx.beginPath();ctx.arc(0,0,w*0.62,0,Math.PI*2);ctx.fill(); }
+      ctx.font=`${Math.round(size*1.2*(1+sq*0.15))}px serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(c.emoji, 0, h*0.06);
+      drawAccessory(ctx, w, h, acc, size);
+      ctx.restore();
+      return;
+    }
+  }
+
   ctx.save();
   ctx.translate(cx,cy);
 

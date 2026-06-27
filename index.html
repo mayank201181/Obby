@@ -16,7 +16,10 @@
 <!-- ============ LOBBY ============ -->
 <section class="screen active" id="lobbyScreen">
   <div class="topbar">
-    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+      <button class="btn ghost small" id="soundBtn" style="width:auto;padding:8px 12px" onclick="toggleSound()">🔊</button>
+    </div>
     <div style="text-align:right">
       <div class="muted" style="margin-bottom:4px">🎨 Background</div>
       <div class="bgpick" id="bgPicker"></div>
@@ -67,9 +70,10 @@
     <div class="tabs" id="customTabs">
       <div class="tab active" data-tab="skins" onclick="setTab('skins')">Skins 🎨</div>
       <div class="tab" data-tab="accessories" onclick="setTab('accessories')">Items 🎀</div>
+      <div class="tab" data-tab="trails" onclick="setTab('trails')">Trails ✨</div>
       <div class="tab" data-tab="faces" onclick="setTab('faces')">Faces 😊</div>
     </div>
-    <p class="hint">Skins cost 🪙50 · Items 🪙100 · ✨ rare ones come from the Daily Chest</p>
+    <p class="hint">Skins 🪙50 · Items 🪙100 · Trails 🪙60 (Rainbow 🪙150) · ✨ rare = Daily Chest · Wear pets as skins in the Pets tab!</p>
     <div class="grid scroll" id="customGrid"></div>
   </div>
 </section>
@@ -183,6 +187,7 @@
 
 <script src="js/peerjs.min.js"></script>
 <script src="js/data.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/pets.js"></script>
 <script src="js/character.js"></script>
 <script src="js/levels.js"></script>

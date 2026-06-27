@@ -44,6 +44,18 @@ const FACES = [
 
 const BG_COLORS = ['#bcd9ff','#ffd1ec','#d9c6ff','#c9f7d8','#fff0c2','#ffd6c2','#1d1840'];
 
+// Trails follow the player. Rainbow costs 150, the rest 60.
+const TRAILS = [
+  { id:'none',    name:'None',    color:null,      price:0 },
+  { id:'pink',    name:'Pink',    color:'#ff84c8', price:60 },
+  { id:'blue',    name:'Blue',    color:'#74a8ff', price:60 },
+  { id:'mint',    name:'Mint',    color:'#7be0b0', price:60 },
+  { id:'gold',    name:'Gold',    color:'#ffd36b', price:60 },
+  { id:'purple',  name:'Purple',  color:'#b79bff', price:60 },
+  { id:'rainbow', name:'Rainbow', color:'rainbow', price:150 },
+];
+const trailById = id => TRAILS.find(t=>t.id===id) || TRAILS[0];
+
 const DAY_MS = 24*60*60*1000;
 
 function defaultSave(){
@@ -63,6 +75,10 @@ function defaultSave(){
     pets:{},               // creatureId -> count owned
     equippedPet:null,      // creatureId currently equipped (its ability helps in-game)
     claimedTrades:[],      // trade codes already redeemed on this device
+    petSkin:null,          // creatureId worn AS your character look
+    trail:'none',          // equipped trail id
+    ownedTrails:['none'],  // unlocked trails
+    soundOn:true,          // sound effects on/off
   };
 }
 

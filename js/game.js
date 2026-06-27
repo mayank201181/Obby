@@ -24,6 +24,7 @@ const Game = {
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
   placedPlatforms:[],           // platforms spawned by the 'platform' pet ability
   platformCdUntil:0,            // ability cooldown
+  trailPoints:[],               // recent positions for the cosmetic trail
 };
 
 function applyEquippedPet(){
@@ -111,7 +112,7 @@ function loadLevel(level){
     x:st.x, y:st.y-22, vx:0, vy:0, w:34, h:34, facing:1,
     onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
-  Game.placedPlatforms=[]; Game.platformCdUntil=0;
+  Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
   applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
   Game.guns = makeTurrets(level);
@@ -203,8 +204,8 @@ function update(dt){
   // jump (pet: higher jump + double jump)
   if(Game.input.jump){
     const jv = JUMP*Game.petJumpMul;
-    if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; }
-    else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; }
+    if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; SFX.jump(); }
+    else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; SFX.jump(); }
   }
   Game.input.jump=false;
 
@@ -213,8 +214,10 @@ function update(dt){
   p.vy+=g; if(p.vy>MAXFALL)p.vy=MAXFALL;
 
   // integrate + collide
+  const wasGround=p.onGround;
   p.onGround=false;
   moveAndCollide(p);
+  if(p.onGround && !wasGround) SFX.land();
 
   // squash easing
   p.squash += (0 - p.squash)*0.18;
@@ -241,7 +244,7 @@ function update(dt){
     if(Game.netTimer>0.055){
       Game.netTimer=0;
       mpSendPos({x:Math.round(p.x),y:Math.round(p.y),facing:p.facing,
-                 skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,
+                 skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
                  name:SAVE.name,cp:p.cp,finished:Game.finished});
     }
   }
@@ -369,7 +372,7 @@ function updateHazards(dt){
        bl.x+bl.r > psx && bl.x-bl.r < psx+pw &&
        bl.y+bl.r > psy && bl.y-bl.r < psy+ph){
       Game.bullets.length=0;            // clear so you aren't instantly re-hit
-      respawn(); p.invuln=1300;
+      respawn(); p.invuln=1300; SFX.hit();
       toast('💥 Hit! Back to checkpoint');
       break;
     }
@@ -404,7 +407,7 @@ function updateLasers(){
   for(const pl of Game.world.platforms){
     if(pl.type!=='laser' || !laserLive(pl)) continue;
     if(p.x < pl.x+pl.w && p.x+p.w > pl.x && p.y < pl.y+pl.h && p.y+p.h > pl.y){
-      respawn(); p.invuln=1100;
+      respawn(); p.invuln=1100; SFX.hit();
       if(typeof toast==='function') toast('⚡ Zapped! Back to checkpoint');
       break;
     }
@@ -424,7 +427,7 @@ function onStand(p, pl, now){
   if((pl.type==='checkpoint') && !Game.hitCheckpoints.has(pl.cpIndex)){
     Game.hitCheckpoints.add(pl.cpIndex);
     p.cp=pl.cpIndex; p.respawnX=pl.x+pl.w/2-p.w/2; p.respawnY=pl.y-p.h;
-    Game.coinsThisRun+=5; addCoins(5);
+    Game.coinsThisRun+=5; addCoins(5); SFX.checkpoint();
     if(Game.onCheckpoint)Game.onCheckpoint(pl.cpIndex);
     if(Game.multiplayer) mpSendCheckpoint(pl.cpIndex);
     toast('Checkpoint '+pl.cpIndex+'/'+CHECKPOINTS+'  +5 🪙');
@@ -485,7 +488,7 @@ function reconcilePads(){
 
 function levelFinished(){
   Game.finished=true;
-  let earned=30; addCoins(30);   // bonus for finishing a level
+  let earned=30; addCoins(30); SFX.win();   // bonus for finishing a level
   if(Game.multiplayer) mpSendFinish();
   const isFinal = Game.level>=TOTAL_LEVELS;
   if(Game.level+1 > SAVE.bestLevel){ SAVE.bestLevel=Math.min(TOTAL_LEVELS,Game.level+ (isFinal?0:1)); persist(); }
@@ -532,18 +535,23 @@ function render(){
     for(const r of mpRemoteList()){
       if(typeof r.x!=='number') continue;
       const rskin = Game.partnerColor || r.skin;
-      drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t});
+      drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t,
+                    petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
       drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
     }
   }
 
-  // local player (your team colour in coop; blink while invulnerable after a hit)
   const p=Game.player;
+  // cosmetic trail behind the player
+  drawTrail(ctx, p);
+
+  // local player (worn pet / team colour; blink while invulnerable after a hit)
   const mySkin = Game.myColor || SAVE.skin;
   const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
   ctx.save();
   if(blink) ctx.globalAlpha=0.4;
-  drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash});
+  drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
+                petSkin:SAVE.petSkin, ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
   ctx.restore();
   drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
 
@@ -591,6 +599,21 @@ function drawWorldBackdrop(ctx){
   // goal banner glow at the top
   ctx.fillStyle='rgba(123,224,176,.25)';
   ctx.fillRect(-200, Game.world.finishY-200, w+400, 200);
+}
+
+/* cosmetic trail of fading dots behind the player */
+function drawTrail(ctx, p){
+  const tr = trailById(SAVE.trail);
+  if(!tr || !tr.color) { Game.trailPoints.length=0; return; }
+  Game.trailPoints.push({x:p.x+p.w/2, y:p.y+p.h/2});
+  if(Game.trailPoints.length>16) Game.trailPoints.shift();
+  for(let i=0;i<Game.trailPoints.length;i++){
+    const pt=Game.trailPoints[i], a=i/Game.trailPoints.length;
+    ctx.globalAlpha=a*0.5;
+    ctx.fillStyle = tr.color==='rainbow' ? `hsl(${(Game.t/6 + i*22)%360},90%,62%)` : tr.color;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, 3+a*8, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
 }
 
 function drawNameTag(ctx,cx,cy,name){

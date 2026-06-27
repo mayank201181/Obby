@@ -220,7 +220,7 @@ function generateLevel(level, seed, mode){
         else{
           p.base = p.x;                            // left coord at mid-swing
           p.amp = amp;
-          p.omega = (2*Math.PI)/rint(1400,2000);   // rad per ms (fairly fast)
+          p.omega = (2*Math.PI)/rint(820,1300);    // rad per ms (fast slide!)
           p.phase = rnd()*Math.PI*2;
           p.dx = 0;
         }
