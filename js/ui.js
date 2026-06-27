@@ -252,12 +252,39 @@ function doClaimChest(special,streak){
 /* ---------------- Play menu & rooms ---------------- */
 function openPlay(){ showScreen('playScreen'); }
 
-function playSolo(diff){
+let soloDiff='hard';
+function playSolo(diff){ soloDiff = (diff==='easy'?'easy':'hard'); showLevelMap(); }
+
+function showLevelMap(){ showScreen('levelMapScreen'); renderLevelMap(); }
+function renderLevelMap(){
+  updateCoinDisplays();
+  document.getElementById('mapTitle').textContent = (soloDiff==='easy'?'🌸 Easy':'🔥 Hard')+' — pick a level';
+  const body=document.getElementById('levelMapBody');
+  let html='';
+  for(let lv=1; lv<=TOTAL_LEVELS; lv++){
+    const unlocked = lv<=SAVE.bestLevel;
+    const stars = SAVE.starsByLevel[lv]||0;
+    const best = SAVE.bestTimes[lv];
+    const starStr = '★★★'.slice(0,stars)+'☆☆☆'.slice(0,3-stars);
+    html+=`<div class="level-node ${unlocked?'':'locked'}" onclick="${unlocked?`startSoloLevel(${lv})`:''}">
+      <div class="lv-num">${unlocked?lv:'🔒'}</div>
+      <div class="lv-info"><b>Level ${lv}</b>
+        <div class="lv-stars">${unlocked?starStr:'locked'}</div></div>
+      <div class="lv-time">${best!=null?fmtTime(best):''}</div>
+    </div>`;
+  }
+  body.innerHTML=html;
+}
+function fmtTime(ms){ const s=ms/1000; return s<60? s.toFixed(1)+'s' : Math.floor(s/60)+':'+('0'+Math.floor(s%60)).slice(-2); }
+
+function startSoloLevel(level){
+  SFX.click();
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
-  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({level:1, seed:Math.floor(Math.random()*1e6), mode:'solo',
-             multiplayer:false, difficulty:(diff==='easy'?'easy':'hard')});
+  Game.onExit=()=>{ showLevelMap(); };
+  startGame({level, seed:Math.floor(Math.random()*1e6), mode:'solo',
+             multiplayer:false, difficulty:soloDiff});
+  startMusicIfOn();
 }
 
 let pendingRoomMode='coop';
@@ -411,8 +438,9 @@ function profileObj(){
 function escapeHtml(s){return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 /* ---------------- Win / level complete ---------------- */
-function onLevelComplete(level, earned, isFinal){
+function onLevelComplete(level, earned, isFinal, res){
   Game.running=false; cancelAnimationFrame(Game.raf);
+  res = res||{stars:1,timeMs:0,newRecord:false,coins:0};
   const body=document.getElementById('winBody');
   let waitMsg='';
   if(Game.multiplayer){
@@ -420,20 +448,35 @@ function onLevelComplete(level, earned, isFinal){
     const doneCount=others.filter(o=>o.finished).length;
     if(Game.mode==='coop') waitMsg=`<p class="muted">Teammates finished: ${doneCount}/${others.length}</p>`;
   }
-  if(isFinal){
-    body.innerHTML=`<div class="win-emoji">🏆🌈</div>
-      <h2>YOU DID IT!</h2>
-      <p>You climbed all ${TOTAL_LEVELS} levels!</p>
-      <p class="timer-big">+🪙${earned} bonus</p>${waitMsg}
-      <button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`;
-  }else{
-    body.innerHTML=`<div class="win-emoji">🎉</div>
-      <h2>Level ${level} complete!</h2>
-      <p class="timer-big">+🪙${earned}</p>${waitMsg}
-      <button class="btn" onclick="goNextLevel()">Next Level →</button>
-      <button class="btn ghost" onclick="backToLobby()">Lobby</button>`;
-  }
+  const starsRow = !Game.multiplayer ? `<div class="stars-row">${
+    [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
+  const timeRow = !Game.multiplayer ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
+  const nav = Game.multiplayer
+    ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+    : (isFinal
+        ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`);
+  body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
+    <div class="win-emoji">${isFinal?'🏆🌈':'🎉'}</div>
+    <h2>${isFinal?'YOU DID IT!':'Level '+level+' complete!'}</h2>
+    ${isFinal?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${starsRow}${timeRow}
+    <p class="timer-big">+🪙${earned}</p>${waitMsg}
+    ${nav}`;
   openModal('winModal');
+  spawnConfetti(document.getElementById('confettiBox'));
+}
+function spawnConfetti(box){
+  if(!box) return;
+  const cols=['#ff84c8','#74a8ff','#7be0b0','#ffd36b','#b79bff','#ff7a7a'];
+  for(let i=0;i<42;i++){
+    const d=document.createElement('div'); d.className='confetti';
+    d.style.left=Math.random()*100+'%';
+    d.style.background=cols[i%cols.length];
+    d.style.animationDuration=(1.2+Math.random()*1.4)+'s';
+    d.style.animationDelay=(Math.random()*0.5)+'s';
+    box.appendChild(d);
+  }
 }
 function goNextLevel(){
   closeModal('winModal');
@@ -441,6 +484,7 @@ function goNextLevel(){
   nextLevel();
   cancelAnimationFrame(Game.raf); Game.raf=requestAnimationFrame(gameLoop);
 }
+function backToMap(){ closeModal('winModal'); showLevelMap(); }
 function backToLobby(){
   closeModal('winModal');
   if(Game.multiplayer) mpLeave();
@@ -480,6 +524,8 @@ function doOpenChest(id){
   if(res.error){ toast(res.error); return; }
   const rare = ['legendary','mythical','secret'].includes(res.creature.rarity);
   rare ? SFX.rare() : SFX.chest();
+  if(res.creature.rarity==='secret') unlockAchievement('secret');
+  checkPetAchievements();
   updateCoinDisplays(); renderPets();
   showPetReveal(res.creature, res.count);
 }
@@ -585,7 +631,7 @@ function doRedeemTrade(){
   showPetReveal(r.creature, petCount(r.creature.id));
 }
 
-/* ---------------- Sound ---------------- */
+/* ---------------- Sound & music ---------------- */
 function refreshSoundBtn(){
   const b=document.getElementById('soundBtn'); if(b) b.textContent = SAVE.soundOn!==false ? '🔊' : '🔇';
 }
@@ -593,19 +639,42 @@ function toggleSound(){
   SAVE.soundOn = !(SAVE.soundOn!==false); persist();
   refreshSoundBtn(); if(SAVE.soundOn){ SFX.resume(); SFX.coin(); }
 }
+function refreshMusicBtn(){
+  const b=document.getElementById('musicBtn'); if(b) b.style.opacity = SAVE.musicOn!==false ? '1' : '0.45';
+}
+function startMusicIfOn(){ if(SAVE.musicOn!==false){ SFX.resume(); SFX.startMusic(); } }
+function toggleMusic(){
+  SAVE.musicOn = !(SAVE.musicOn!==false); persist(); refreshMusicBtn();
+  if(SAVE.musicOn){ SFX.resume(); SFX.startMusic(); } else { SFX.stopMusic(); }
+}
+
+/* ---------------- Achievements ---------------- */
+function openAchievements(){ showScreen('achievementsScreen'); renderAchievements(); }
+function renderAchievements(){
+  updateCoinDisplays();
+  const got=(SAVE.achievements||[]).length;
+  document.getElementById('achProgress').textContent = `Unlocked ${got}/${ACHIEVEMENTS.length}`;
+  document.getElementById('achBody').innerHTML = ACHIEVEMENTS.map(a=>{
+    const has=(SAVE.achievements||[]).includes(a.id);
+    return `<div class="ach-row ${has?'got':''}">
+      <div class="ach-ico">${has?a.emoji:'🔒'}</div>
+      <div class="ach-info"><b>${a.name}</b><div class="muted" style="font-size:12px">${a.desc}</div></div>
+      ${has?'<span class="badge">✓</span>':''}</div>`;
+  }).join('');
+}
 
 /* ---------------- Boot ---------------- */
 function boot(){
   gameInit();
   SFX.init();
   // browsers need a user gesture to start audio
-  const wake=()=>{ SFX.init(); SFX.resume(); window.removeEventListener('pointerdown',wake); window.removeEventListener('touchstart',wake); };
+  const wake=()=>{ SFX.init(); SFX.resume(); startMusicIfOn(); window.removeEventListener('pointerdown',wake); window.removeEventListener('touchstart',wake); };
   window.addEventListener('pointerdown',wake); window.addEventListener('touchstart',wake);
   Game.onLevelComplete=onLevelComplete;
   Game.onCheckpoint=(i)=>{};
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
   initLobby();
-  refreshSoundBtn();
+  refreshSoundBtn(); refreshMusicBtn();
   showScreen('lobbyScreen');
   // build floating decor
   const decor=document.getElementById('bgDecor');

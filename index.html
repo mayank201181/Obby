@@ -19,6 +19,7 @@
     <div style="display:flex;gap:8px;align-items:center">
       <div class="coins"><span class="c"></span><span data-coins>0</span></div>
       <button class="btn ghost small" id="soundBtn" style="width:auto;padding:8px 12px" onclick="toggleSound()">🔊</button>
+      <button class="btn ghost small" id="musicBtn" style="width:auto;padding:8px 12px" onclick="toggleMusic()">🎵</button>
     </div>
     <div style="text-align:right">
       <div class="muted" style="margin-bottom:4px">🎨 Background</div>
@@ -35,9 +36,10 @@
     <button class="btn blue" onclick="openPets()">🐾 Pets &amp; Chests</button>
     <div class="row">
       <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
-      <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
-        <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
+      <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
     </div>
+    <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
+      <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
   </div>
 </section>
 
@@ -55,6 +57,31 @@
       <div class="tab" data-ptab="trade" onclick="setPetsTab('trade')">Trade 🔁</div>
     </div>
     <div class="scroll" id="petsBody"></div>
+  </div>
+</section>
+
+<!-- ============ LEVEL MAP ============ -->
+<section class="screen" id="levelMapScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2 id="mapTitle">Pick a level</h2>
+    <div id="levelMapBody"></div>
+  </div>
+</section>
+
+<!-- ============ ACHIEVEMENTS ============ -->
+<section class="screen" id="achievementsScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🏆 Badges</h2>
+    <p class="hint" id="achProgress"></p>
+    <div class="scroll" id="achBody"></div>
   </div>
 </section>
 

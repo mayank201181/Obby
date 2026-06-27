@@ -226,6 +226,10 @@ function generateLevel(level, seed, mode){
         }
       }
       platforms.push(p);
+      // sprinkle collectible coins above some platforms
+      if(band>0 && type!=='disappear' && rnd()<0.28){
+        platforms.push({id:id++, type:'coin', x:nx-10, y:y-40, w:20, h:20});
+      }
     }
     y = bandTop;
 

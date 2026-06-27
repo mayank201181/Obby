@@ -28,4 +28,30 @@ const SFX = {
   chest(){ this.seq([392,523,659,880],'triangle',0.18); },
   rare(){ this.seq([659,784,988,1319,1568],'triangle',0.2); },
   click(){ this.tone(520,0.04,'square',0.08); },
+
+  // ---- gentle looping background music ----
+  musicTimer:null, musicStep:0,
+  note(freq, dur, vol){
+    if(!this.ctx) return;
+    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type='triangle'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.04);
+    g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+    o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+dur+0.05);
+  },
+  startMusic(){
+    if(this.musicTimer || SAVE.musicOn===false || !this.ctx) return;
+    // a soft pentatonic arpeggio loop
+    const mel=[523,587,659,784,880,784,659,587, 523,659,784,1047,880,784,659,523];
+    const bass=[131,131,165,165,196,196,165,165];
+    this.musicStep=0;
+    this.musicTimer=setInterval(()=>{
+      if(SAVE.musicOn===false){ this.stopMusic(); return; }
+      const s=this.musicStep;
+      this.note(mel[s%mel.length], 0.32, 0.05);
+      if(s%2===0) this.note(bass[(s/2)%bass.length], 0.5, 0.045);
+      this.musicStep++;
+    }, 300);
+  },
+  stopMusic(){ if(this.musicTimer){ clearInterval(this.musicTimer); this.musicTimer=null; } },
 };

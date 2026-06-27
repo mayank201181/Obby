@@ -25,6 +25,7 @@ const Game = {
   placedPlatforms:[],           // platforms spawned by the 'platform' pet ability
   platformCdUntil:0,            // ability cooldown
   trailPoints:[],               // recent positions for the cosmetic trail
+  deaths:0, runStartT:0, runCoins:0,   // per-run timer / deaths / coins collected
 };
 
 function applyEquippedPet(){
@@ -113,6 +114,7 @@ function loadLevel(level){
     onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
+  Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   applyEquippedPet();               // load equipped-pet ability effects
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
   Game.guns = makeTurrets(level);
@@ -138,6 +140,7 @@ function makeTurrets(level){
 
 function respawn(){
   const p=Game.player;
+  Game.deaths++;
   p.x=p.respawnX; p.y=p.respawnY; p.vx=0; p.vy=0;
   p.invuln=Math.max(p.invuln||0, 900);   // brief safety so turrets can't instakill on respawn
   // reset disappearing blocks so the climb is fair again
@@ -228,6 +231,7 @@ function update(dt){
   // cannons + bullets + laser beams
   updateHazards(dt);
   updateLasers();
+  collectCoins(p);
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
@@ -304,6 +308,18 @@ function moveAndCollide(p){
 
 function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){
   return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by;
+}
+
+/* grab floating coins you touch */
+function collectCoins(p){
+  for(const c of Game.world.platforms){
+    if(c.type!=='coin' || c.taken) continue;
+    if(p.x < c.x+c.w && p.x+p.w > c.x && p.y < c.y+c.h && p.y+p.h > c.y){
+      c.taken=true; Game.runCoins++; addCoins(1); SFX.coin();
+      SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+1; persist();
+      if(SAVE.lvlCoinsCollected>=50) unlockAchievement('coins50');
+    }
+  }
 }
 
 /* slide moving blocks horizontally around their base position */
@@ -392,6 +408,7 @@ function solidNow(pl){
   }
   if(pl.type==='placed'){ return pl.until > Game.t; }  // pet-placed platform
   if(pl.type==='laser'){ return false; }               // beams aren't solid (they hurt)
+  if(pl.type==='coin'){ return false; }                // collectible, not a platform
   return true;
 }
 
@@ -492,7 +509,25 @@ function levelFinished(){
   if(Game.multiplayer) mpSendFinish();
   const isFinal = Game.level>=TOTAL_LEVELS;
   if(Game.level+1 > SAVE.bestLevel){ SAVE.bestLevel=Math.min(TOTAL_LEVELS,Game.level+ (isFinal?0:1)); persist(); }
-  if(Game.onLevelComplete) Game.onLevelComplete(Game.level, earned, isFinal);
+
+  // timer, stars (by deaths), best time, achievements (solo only)
+  const timeMs = Math.max(0, Math.round(Game.t - Game.runStartT));
+  const stars = Game.deaths<=1 ? 3 : Game.deaths<=5 ? 2 : 1;
+  let newRecord=false;
+  if(!Game.multiplayer){
+    const lv=Game.level;
+    const prev=SAVE.bestTimes[lv];
+    if(prev==null || timeMs<prev){ SAVE.bestTimes[lv]=timeMs; newRecord=true; }
+    if((SAVE.starsByLevel[lv]||0) < stars) SAVE.starsByLevel[lv]=stars;
+    persist();
+    unlockAchievement('first');
+    if(Game.deaths===0) unlockAchievement('flawless');
+    if(stars===3) unlockAchievement('star3');
+    if(Game.difficulty==='hard') unlockAchievement('hard');
+    if(isFinal) unlockAchievement('all5');
+  }
+  if(Game.onLevelComplete) Game.onLevelComplete(Game.level, earned, isFinal,
+                            {timeMs, stars, newRecord, deaths:Game.deaths, coins:Game.runCoins});
 }
 
 function nextLevel(){
@@ -518,6 +553,15 @@ function render(){
 
   const plats=Game.world.platforms;
   for(const pl of plats) drawPlatform(ctx,pl);
+
+  // floating collectible coins
+  for(const c of plats){
+    if(c.type!=='coin' || c.taken) continue;
+    const cx=c.x+c.w/2, cy=c.y+c.h/2 + Math.sin(Game.t/200+c.x)*3;
+    const sw=Math.abs(Math.cos(Game.t/180+c.x))*c.w/2 + 2;   // spin
+    ctx.fillStyle='#e8b73c'; ctx.beginPath(); ctx.ellipse(cx,cy,sw+2,c.h/2+2,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ffe08a'; ctx.beginPath(); ctx.ellipse(cx,cy,sw,c.h/2,0,0,Math.PI*2); ctx.fill();
+  }
 
   // pet-placed platforms (fading sparkle footholds)
   for(const pp of Game.placedPlatforms){
@@ -601,17 +645,23 @@ function drawWorldBackdrop(ctx){
   ctx.fillRect(-200, Game.world.finishY-200, w+400, 200);
 }
 
-/* cosmetic trail of fading dots behind the player */
+/* cosmetic trail of fading dots / emojis behind the player */
 function drawTrail(ctx, p){
   const tr = trailById(SAVE.trail);
-  if(!tr || !tr.color) { Game.trailPoints.length=0; return; }
+  if(!tr || (!tr.color && !tr.emoji)) { Game.trailPoints.length=0; return; }
   Game.trailPoints.push({x:p.x+p.w/2, y:p.y+p.h/2});
   if(Game.trailPoints.length>16) Game.trailPoints.shift();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
   for(let i=0;i<Game.trailPoints.length;i++){
     const pt=Game.trailPoints[i], a=i/Game.trailPoints.length;
-    ctx.globalAlpha=a*0.5;
-    ctx.fillStyle = tr.color==='rainbow' ? `hsl(${(Game.t/6 + i*22)%360},90%,62%)` : tr.color;
-    ctx.beginPath(); ctx.arc(pt.x, pt.y, 3+a*8, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha=a*0.6;
+    if(tr.emoji){
+      ctx.font=`${Math.round(8+a*16)}px serif`;
+      ctx.fillText(tr.emoji, pt.x, pt.y);
+    } else {
+      ctx.fillStyle = tr.color==='rainbow' ? `hsl(${(Game.t/6 + i*22)%360},90%,62%)` : tr.color;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 3+a*8, 0, Math.PI*2); ctx.fill();
+    }
   }
   ctx.globalAlpha=1;
 }

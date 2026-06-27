@@ -52,9 +52,28 @@ const TRAILS = [
   { id:'mint',    name:'Mint',    color:'#7be0b0', price:60 },
   { id:'gold',    name:'Gold',    color:'#ffd36b', price:60 },
   { id:'purple',  name:'Purple',  color:'#b79bff', price:60 },
+  { id:'sparkle', name:'Sparkle', emoji:'✨',       price:60 },
+  { id:'star',    name:'Stars',   emoji:'⭐',       price:60 },
+  { id:'heart',   name:'Hearts',  emoji:'💕',       price:60 },
+  { id:'fire',    name:'Fire',    emoji:'🔥',       price:60 },
+  { id:'bubble',  name:'Bubbles', emoji:'🫧',       price:60 },
   { id:'rainbow', name:'Rainbow', color:'rainbow', price:150 },
 ];
 const trailById = id => TRAILS.find(t=>t.id===id) || TRAILS[0];
+
+// Achievements / badges
+const ACHIEVEMENTS = [
+  { id:'first',  name:'First Steps',   desc:'Finish a level',                emoji:'🏁' },
+  { id:'all5',   name:'Mountaineer',   desc:'Finish all 5 levels',           emoji:'🏔️' },
+  { id:'flawless',name:'Flawless',     desc:'Finish a level with no deaths', emoji:'😇' },
+  { id:'hard',   name:'Daredevil',     desc:'Finish a Hard level',           emoji:'🔥' },
+  { id:'star3',  name:'Perfect!',      desc:'Get 3 stars on a level',        emoji:'⭐' },
+  { id:'coins50',name:'Coin Hunter',   desc:'Collect 50 coins in levels',    emoji:'💰' },
+  { id:'pets5',  name:'Collector',     desc:'Own 5 different pets',          emoji:'🐾' },
+  { id:'pets10', name:'Zookeeper',     desc:'Own 10 different pets',         emoji:'🦁' },
+  { id:'secret', name:'Secret Finder', desc:'Get a Secret pet',             emoji:'✨' },
+  { id:'rich',   name:'Rich!',         desc:'Save up 500 coins',            emoji:'🪙' },
+];
 
 const DAY_MS = 24*60*60*1000;
 
@@ -79,7 +98,27 @@ function defaultSave(){
     trail:'none',          // equipped trail id
     ownedTrails:['none'],  // unlocked trails
     soundOn:true,          // sound effects on/off
+    musicOn:true,          // background music on/off
+    bestTimes:{},          // level -> best time (ms)
+    starsByLevel:{},       // level -> best stars (1-3)
+    achievements:[],       // unlocked achievement ids
+    lvlCoinsCollected:0,    // total floating coins collected in levels
   };
+}
+
+function unlockAchievement(id){
+  if(!SAVE.achievements) SAVE.achievements=[];
+  if(SAVE.achievements.includes(id)) return false;
+  const a=ACHIEVEMENTS.find(x=>x.id===id); if(!a) return false;
+  SAVE.achievements.push(id); persist();
+  if(typeof toast==='function') toast('🏆 '+a.emoji+' '+a.name+'!');
+  if(typeof SFX==='object') SFX.rare && SFX.rare();
+  return true;
+}
+function checkPetAchievements(){
+  const n=Object.keys(SAVE.pets||{}).length;
+  if(n>=5) unlockAchievement('pets5');
+  if(n>=10) unlockAchievement('pets10');
 }
 
 let SAVE = loadSave();
@@ -96,7 +135,7 @@ function persist(){
   try{ localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); }catch(e){}
   updateCoinDisplays();
 }
-function addCoins(n){ SAVE.coins += n; persist(); }
+function addCoins(n){ SAVE.coins += n; persist(); if(SAVE.coins>=500) unlockAchievement('rich'); }
 
 function updateCoinDisplays(){
   document.querySelectorAll('[data-coins]').forEach(el=>{ el.textContent = SAVE.coins; });
