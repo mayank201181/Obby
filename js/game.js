@@ -19,7 +19,12 @@ const Game = {
   guns:[], bullets:[],          // side cannons + their projectiles
   freezeHazards:false,          // used by automated reachability tests
   difficulty:'hard',            // 'easy' = no shooting cannons, 'hard' = cannons
+  myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
 };
+
+// Team colours: in Team mode you are PINK (host) or BLUE (joiner). A coloured
+// platform is only solid for the matching player — the other falls through it.
+const TEAM_COLORS = { pink:'#ff84c8', blue:'#74a8ff' };
 
 const SCALE_TARGET_H = 560;     // world-units shown vertically (camera zoom baseline)
 
@@ -57,7 +62,18 @@ function startGame(opts){
   Game.mode=opts.mode||'solo';
   Game.multiplayer=!!opts.multiplayer;
   Game.difficulty=opts.difficulty||'hard';
+  // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
+  if(Game.mode==='coop' && Game.multiplayer){
+    Game.myColorName = MP.isHost ? 'pink' : 'blue';
+    Game.myColor = TEAM_COLORS[Game.myColorName];
+    Game.partnerColor = TEAM_COLORS[Game.myColorName==='pink'?'blue':'pink'];
+  } else {
+    Game.myColorName=null; Game.myColor=null; Game.partnerColor=null;
+  }
   loadLevel(Game.level);
+  if(Game.myColorName){
+    toast('You are '+(Game.myColorName==='pink'?'PINK 🩷':'BLUE 🩵')+' — only stand on your colour!');
+  }
   gameResize();
   showScreen('gameScreen');
   document.getElementById('gameScreen').style.background = SAVE.bg;
@@ -204,7 +220,7 @@ function moveAndCollide(p){
   let standingOn=null, bestTop=Infinity;
   if(p.vy >= 0){                    // only when falling or resting
     for(const pl of plats){
-      if(!solidNow(pl)) continue;
+      if(!solidForMe(pl)) continue;
       // horizontal overlap with the platform?
       if(p.x < pl.x+pl.w && p.x+p.w > pl.x){
         const top = pl.y;
@@ -299,6 +315,14 @@ function solidNow(pl){
   return true;
 }
 
+/* solid for the LOCAL player — adds Team colour gating on top of solidNow.
+   A coloured platform is only solid for the matching-colour player. */
+function solidForMe(pl){
+  if(!solidNow(pl)) return false;
+  if(pl.color && Game.myColorName && pl.color!==Game.myColorName) return false;
+  return true;
+}
+
 function onStand(p, pl, now){
   // checkpoint
   if((pl.type==='checkpoint') && !Game.hitCheckpoints.has(pl.cpIndex)){
@@ -390,21 +414,23 @@ function render(){
   const plats=Game.world.platforms;
   for(const pl of plats) drawPlatform(ctx,pl);
 
-  // remote players
+  // remote players (in Team mode they show their team colour)
   if(Game.multiplayer){
     for(const r of mpRemoteList()){
       if(typeof r.x!=='number') continue;
-      drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:r.skin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t});
+      const rskin = Game.partnerColor || r.skin;
+      drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t});
       drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
     }
   }
 
-  // local player (blink while invulnerable after a hit)
+  // local player (your team colour in coop; blink while invulnerable after a hit)
   const p=Game.player;
+  const mySkin = Game.myColor || SAVE.skin;
   const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
   ctx.save();
   if(blink) ctx.globalAlpha=0.4;
-  drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash});
+  drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash});
   ctx.restore();
   drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
 
@@ -495,8 +521,9 @@ function drawPlatform(ctx,pl){
     case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
     case 'pad':{
       const lit = isPadLit(pl.grp);
-      const lever = pl.pad && pl.pad[0]==='H';
-      if(lever){ fill=lit?'#b6ffd0':'#d9c6ff'; edge=lit?'#46c98c':'#9b6bff'; }
+      if(pl.color==='pink'){ fill=lit?'#ff9ed6':'#ffd0ea'; edge='#ff5fb0'; }
+      else if(pl.color==='blue'){ fill=lit?'#9ec3ff':'#cfe0ff'; edge='#5b8fef'; }
+      else if(pl.pad && pl.pad[0]==='H'){ fill=lit?'#b6ffd0':'#d9c6ff'; edge=lit?'#46c98c':'#9b6bff'; }
       else { fill=lit?'#ffe177':'#ffd6f0'; edge=lit?'#ffb300':'#ff9bce'; }
       break;
     }

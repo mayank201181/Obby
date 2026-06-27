@@ -66,8 +66,8 @@ function generateLevel(level, seed, mode){
     function timedGate(entry,g){
       const ex=entry.x, ey=entry.y;
       const padAC=clamp(ex-150,70,WORLD_W-70), padBC=clamp(ex+150,70,WORLD_W-70);
-      platforms.push({id:id++, x:padAC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'A', grp:g});
-      platforms.push({id:id++, x:padBC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'B', grp:g});
+      platforms.push({id:id++, x:padAC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'A', grp:g, color:'pink'});
+      platforms.push({id:id++, x:padBC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'B', grp:g, color:'blue'});
       const brW=300, brY=ey-112, brX=clamp(ex-brW/2,40,WORLD_W-40-brW);
       platforms.push({id:id++, x:brX, y:brY, w:brW, h:24, type:'bridge', grp:g, gate:'timed'});
       const npW=190, npY=brY-92, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
@@ -85,7 +85,7 @@ function generateLevel(level, seed, mode){
     function holdGate(entry,g){
       const ex=entry.x, ey=entry.y;
       const haC=clamp(ex-150,70,WORLD_W-70);
-      platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
+      platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g, color:'pink'});
       const sy=[ey-95, ey-186, ey-274], sx=[ex-20, ex+40, ex-30];
       for(let i=0;i<3;i++){
         const x=clamp(sx[i]-stepW/2,40,WORLD_W-40-stepW);
@@ -95,7 +95,7 @@ function generateLevel(level, seed, mode){
       platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
       checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
       const hbC=clamp(npX+npW/2+150,70,WORLD_W-70);
-      platforms.push({id:id++, x:hbC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HB', grp:g});
+      platforms.push({id:id++, x:hbC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HB', grp:g, color:'blue'});
       return {x:npX+npW/2, y:npY};
     }
 

@@ -1,6 +1,7 @@
 /* ===== Character renderer: a cute armless/legless blob ===== */
 
 function resolveSkinFill(ctx, skinId, x, y, r, t){
+  if(typeof skinId==='string' && skinId[0]==='#') return skinId;  // raw colour (e.g. Team colour)
   const s = skinById(skinId);
   if(s.color === 'rainbow'){
     const g = ctx.createLinearGradient(x-r, y-r, x+r, y+r);
