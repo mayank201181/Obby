@@ -90,8 +90,44 @@ function generateLevel(level, seed, mode){
       return {x:npX+npW/2, y:npY};
     }
 
+    // BOTH-STAND gate — you BOTH stand on the two pads at once, then a staircase
+    // appears for ~12s and you both climb up together (no holding, no turns).
+    function bothStandGate(entry, g, nSteps){
+      const ex=entry.x, ey=entry.y;
+      const aC=clamp(ex-96,60,WORLD_W-60), bC=clamp(ex+96,60,WORLD_W-60);
+      platforms.push({id:id++, x:aC-levW/2, y:ey-46, w:levW, h:24, type:'pad', pad:'A', grp:g, stand:true});
+      platforms.push({id:id++, x:bC-levW/2, y:ey-46, w:levW, h:24, type:'pad', pad:'B', grp:g, stand:true});
+      const sx=[ex+20, ex-20, ex+30]; let y=ey;
+      for(let i=0;i<nSteps;i++){
+        y -= (i===0?98:92);
+        const x=clamp(sx[i%3]-stepW/2,40,WORLD_W-40-stepW);
+        platforms.push({id:id++, x, y, w:stepW, h:24, type:'bridge', grp:g, gate:'timed'});
+      }
+      const npW=190, npY=y-58, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
+      platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
+      checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      return {x:npX+npW/2, y:npY};
+    }
+
+    // CO-OP LIFT — you BOTH stand on the lift platform and it carries you up.
+    // It only rises with two players aboard; one alone can't reach the top.
+    function liftGate(entry, g){
+      const ex=entry.x, ey=entry.y;
+      const liftW=178, baseY=ey-52, topY=ey-252;
+      platforms.push({id:id++, x:clamp(ex-liftW/2,40,WORLD_W-40-liftW), y:baseY, w:liftW, h:26,
+                      type:'lift', grp:g, baseY, topY, dy:0});
+      const npW=190, npY=topY-46, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
+      platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
+      checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      return {x:npX+npW/2, y:npY};
+    }
+
+    // cycle the three teamwork puzzles so every section feels different
     for(let g=0; g<CHECKPOINTS; g++){
-      land = leapfrogGate(land, g, (g%2===0)?2:3);   // alternate 2/3-step climbs
+      const t=g%3;
+      land = t===0 ? leapfrogGate(land, g, 2)
+           : t===1 ? bothStandGate(land, g, 3)
+           :         liftGate(land, g);
     }
     const fw=240, fY=land.y-100;   // finish a short hop above the last checkpoint
     platforms.push({id:id++, x:WORLD_W/2-fw/2, y:fY, w:fw, h:34, type:'finish'});

@@ -186,6 +186,7 @@ function update(dt){
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.6;
 
   updateMovers();                       // slide moving blocks before collision
+  updateLifts();                        // raise co-op lifts (carries riders)
   if(Game.placedPlatforms.length) Game.placedPlatforms = Game.placedPlatforms.filter(pp=>pp.until>Game.t);
   if(p.invuln>0) p.invuln-=dt*1000;
 
@@ -288,6 +289,7 @@ function moveAndCollide(p){
     // ride moving blocks: carry the player along with the platform
     if(standingOn.type==='mover'){ p.x += standingOn.dx||0; }
   }
+  p.onLift = (standingOn && standingOn.type==='lift') ? standingOn : null;
 
   // handle effects of the platform we're standing on
   Game.curPadKey=null;
@@ -310,6 +312,33 @@ function updateMovers(){
       pl.dx = pl.x - old;
     }
   }
+}
+
+/* Co-op lifts: rise (carrying riders) once both players are aboard. */
+const LIFT_RISE_MS=2200, LIFT_HOLD_MS=4000;
+function updateLifts(){
+  if(Game.freezeHazards || !Game.world) return;
+  for(const pl of Game.world.platforms){
+    if(pl.type!=='lift') continue;
+    const start = MP.lifts ? MP.lifts[pl.grp] : 0;
+    const old=pl.y;
+    if(start){
+      const t=nowMs()-start;
+      if(t < LIFT_RISE_MS){
+        let pr=t/LIFT_RISE_MS;
+        const e = pr<0.5 ? 2*pr*pr : 1-Math.pow(-2*pr+2,2)/2;  // ease in-out
+        pl.y = pl.baseY + (pl.topY-pl.baseY)*e;
+      } else if(t < LIFT_RISE_MS+LIFT_HOLD_MS){
+        pl.y = pl.topY;                 // hold at top so both can step off
+      } else {
+        pl.y = pl.baseY;                // reset so it can be used again
+      }
+    } else pl.y = pl.baseY;
+    pl.dy = pl.y - old;
+  }
+  // carry the local player if they're riding a lift
+  const p=Game.player;
+  if(p && p.onLift && p.onLift.type==='lift') p.y += (p.onLift.dy||0);
 }
 
 /* Screen-anchored turrets: they slide up/down the left & right edges of the
@@ -406,6 +435,12 @@ function onStand(p, pl, now){
     const key=pl.grp+':'+pl.pad;
     Game.curPadKey=key;
     setPadReport(pl.grp, pl.pad, true, key);
+  }
+  // co-op lift: report that we're aboard (both players => it rises)
+  if(pl.type==='lift'){
+    const key=pl.grp+':LIFT';
+    Game.curPadKey=key;
+    setPadReport(pl.grp, 'LIFT', true, key);
   }
 }
 
@@ -576,6 +611,7 @@ function drawPlatform(ctx,pl){
     }
     case 'conveyor': fill='#9cd8ff'; edge='#5aa8ee'; break;
     case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
+    case 'lift': fill='#cfe3ff'; edge='#6f9bdd'; break;
     case 'pad':{
       const lit = isPadLit(pl.grp);
       if(pl.color==='pink'){ fill=lit?'#ff9ed6':'#ffd0ea'; edge='#ff5fb0'; }
@@ -619,12 +655,16 @@ function drawPlatform(ctx,pl){
     ctx.fillStyle='rgba(120,80,20,.7)';ctx.font='bold 15px Nunito';ctx.textAlign='center';
     ctx.fillText('↔', pl.x+pl.w/2, pl.y+pl.h/2+1);
   }
+  if(pl.type==='lift'){
+    ctx.fillStyle='#4d6fa8';ctx.font='bold 13px Nunito';ctx.textAlign='center';
+    ctx.fillText('⬆ BOTH STAND ⬆', pl.x+pl.w/2, pl.y+pl.h/2+1);
+  }
   if(pl.type==='pad'){
     const lever = pl.pad && pl.pad[0]==='H';
     ctx.textAlign='center';
-    ctx.font='bold 13px Nunito';
+    ctx.font='bold 12px Nunito';
     ctx.fillStyle = lever?'#6b3fb0':'#a05';
-    const label = lever ? 'HOLD' : pl.pad;
+    const label = lever ? 'HOLD' : (pl.stand ? 'STAND' : pl.pad);
     ctx.fillText(label, pl.x+pl.w/2, pl.y-8);
   }
 }

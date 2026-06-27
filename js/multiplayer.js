@@ -13,7 +13,8 @@ const MP = {
   remote:{},           // id -> {name,skin,accessory,face,x,y,facing,cp,finished,t}
   roster:{},           // id -> profile (host-maintained, includes self)
   bridges:{},          // grp -> activeUntil (ms epoch) — host authoritative
-  bridgeTimer:{},      // grp -> expiry of the 10s timer from an A+B activation
+  bridgeTimer:{},      // grp -> expiry of the timer from an A+B activation
+  lifts:{},            // grp -> start time (ms) of a co-op lift rise
   padState:{},         // grp -> {station -> Set(ids)}  (host only)
   startConfig:null,    // {level,seed,mode}
   // callbacks (assigned by game/ui):
@@ -158,6 +159,9 @@ function mpOnMessage(conn,msg){
       // host -> peers authoritative bridge activation
       MP.bridges[msg.grp]=msg.until;
       break;
+    case 'lift':
+      MP.lifts[msg.grp]=msg.start;
+      break;
   }
 }
 
@@ -194,7 +198,19 @@ function mpSetPad(playerId,grp,pad,on){
   const s=MP.padState[grp];
   if(!s[pad]) s[pad]=new Set();
   if(on) s[pad].add(playerId); else s[pad].delete(playerId);
-  mpEvalGate(grp);
+  if(pad==='LIFT') mpEvalLift(grp); else mpEvalGate(grp);
+}
+
+/* Co-op lift: rises (one-shot) once TWO different players stand on it. */
+function mpEvalLift(grp){
+  const s=MP.padState[grp]||{};
+  const set=s.LIFT||new Set();
+  const twoAboard = set.size>=2;
+  const active = MP.lifts[grp] && (nowMs()-MP.lifts[grp] < 6600);
+  if(twoAboard && !active){
+    MP.lifts[grp]=nowMs();
+    mpBroadcast({t:'lift', grp, start:MP.lifts[grp]});
+  }
 }
 
 /* Unified gate state (host authoritative). A bridge group can have:
@@ -209,7 +225,7 @@ function mpEvalGate(grp){
   for(const k in s){ if(k[0]==='H' && s[k].size>0) held=true; }
   if(bothAB){
     const t=MP.bridgeTimer[grp];
-    if(!t || t<nowMs()) MP.bridgeTimer[grp]=nowMs()+10000;
+    if(!t || t<nowMs()) MP.bridgeTimer[grp]=nowMs()+12000;   // time to climb together
   }
   const timerActive = MP.bridgeTimer[grp] && MP.bridgeTimer[grp]>nowMs();
   const until = held ? (nowMs()+3600000) : (timerActive ? MP.bridgeTimer[grp] : 0);
@@ -229,7 +245,7 @@ function nowMs(){ return new Date().getTime(); }
 function mpLeave(){
   try{ MP.peer && MP.peer.destroy(); }catch(e){}
   MP.peer=null;MP.conns=[];MP.inRoom=false;MP.isHost=false;MP.roomCode='';
-  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.padState={};MP.startConfig=null;
+  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.lifts={};MP.padState={};MP.startConfig=null;
 }
 
 function mpRemoteList(){ return Object.keys(MP.remote).map(id=>Object.assign({id},MP.remote[id])); }
