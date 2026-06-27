@@ -114,6 +114,7 @@
     <p class="hint" id="roomHint">Share this code with your friend.</p>
     <div class="players-list" id="rosterList"></div>
     <p class="muted">Players: <span id="rosterCount">1</span></p>
+    <button class="btn blue small" id="tradeBtn" style="display:none;width:100%" onclick="startTrade()">🔁 Trade pets with your friend</button>
 
     <div id="hostControls" style="display:none">
       <p class="hint">Pick a mode:</p>
@@ -175,6 +176,9 @@
 </div>
 <div class="modal-back" id="petModal">
   <div class="card" id="petModalBody"></div>
+</div>
+<div class="modal-back" id="tradeModal">
+  <div class="card" id="tradeModalBody"></div>
 </div>
 
 <script src="js/peerjs.min.js"></script>

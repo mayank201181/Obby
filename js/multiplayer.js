@@ -16,6 +16,7 @@ const MP = {
   bridgeTimer:{},      // grp -> expiry of the timer from an A+B activation
   lifts:{},            // grp -> start time (ms) of a co-op lift rise
   padState:{},         // grp -> {station -> Set(ids)}  (host only)
+  trade:null,          // live Adopt-Me-style trade state
   startConfig:null,    // {level,seed,mode}
   // callbacks (assigned by game/ui):
   onStart:null,
@@ -162,7 +163,66 @@ function mpOnMessage(conn,msg){
     case 'lift':
       MP.lifts[msg.grp]=msg.start;
       break;
+    case 'trade':
+      mpTradeOnMessage(msg);
+      break;
   }
+}
+
+/* ---- live two-way trading (both players online) ---- */
+function mpTradeStart(){
+  const others=Object.keys(MP.roster).filter(id=>id!==MP.selfId);
+  if(!others.length) return false;
+  MP.trade={ active:true, partnerName:(MP.roster[others[0]]&&MP.roster[others[0]].name)||'Friend',
+             myOffer:[], theirOffer:[], myAccepted:false, theirAccepted:false, done:false };
+  mpSend({t:'trade', sub:'open', name:(SAVE.name||'Friend')});
+  return true;
+}
+function mpTradeOnMessage(msg){
+  if(msg.sub==='open'){
+    if(!MP.trade || !MP.trade.active || MP.trade.done){
+      MP.trade={ active:true, partnerName:msg.name||'Friend',
+                 myOffer:[], theirOffer:[], myAccepted:false, theirAccepted:false, done:false };
+    }
+    if(typeof onTradeOpen==='function') onTradeOpen();
+  } else if(!MP.trade){ return;
+  } else if(msg.sub==='offer'){
+    MP.trade.theirOffer=msg.offer||[]; MP.trade.myAccepted=false; MP.trade.theirAccepted=false;
+    if(typeof onTradeUpdate==='function') onTradeUpdate();
+  } else if(msg.sub==='accept'){
+    MP.trade.theirAccepted=true; mpTradeTryComplete();
+    if(typeof onTradeUpdate==='function') onTradeUpdate();
+  } else if(msg.sub==='cancel'){
+    MP.trade.active=false;
+    if(typeof onTradeCancel==='function') onTradeCancel();
+  }
+}
+function mpTradeSetOffer(list){
+  if(!MP.trade) return;
+  MP.trade.myOffer=list.slice(); MP.trade.myAccepted=false; MP.trade.theirAccepted=false;
+  mpSend({t:'trade', sub:'offer', offer:MP.trade.myOffer});
+  if(typeof onTradeUpdate==='function') onTradeUpdate();
+}
+function mpTradeAccept(){
+  if(!MP.trade) return;
+  MP.trade.myAccepted=true; mpSend({t:'trade', sub:'accept'}); mpTradeTryComplete();
+  if(typeof onTradeUpdate==='function') onTradeUpdate();
+}
+function mpTradeTryComplete(){
+  const t=MP.trade; if(!t || t.done) return;
+  if(!(t.myAccepted && t.theirAccepted)) return;
+  // make sure we still own everything we offered
+  for(const id of t.myOffer){ if((SAVE.pets[id]||0)<=0) return; }
+  for(const id of t.myOffer){
+    SAVE.pets[id]--; if(SAVE.pets[id]<=0){ delete SAVE.pets[id]; if(SAVE.equippedPet===id) SAVE.equippedPet=null; }
+  }
+  for(const id of t.theirOffer){ SAVE.pets[id]=(SAVE.pets[id]||0)+1; }
+  persist();
+  t.done=true; t.active=false;
+  if(typeof onTradeComplete==='function') onTradeComplete();
+}
+function mpTradeCancel(){
+  if(MP.trade){ mpSend({t:'trade', sub:'cancel'}); MP.trade.active=false; }
 }
 
 function mpRelay(fromConn,msg){
@@ -245,7 +305,7 @@ function nowMs(){ return new Date().getTime(); }
 function mpLeave(){
   try{ MP.peer && MP.peer.destroy(); }catch(e){}
   MP.peer=null;MP.conns=[];MP.inRoom=false;MP.isHost=false;MP.roomCode='';
-  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.lifts={};MP.padState={};MP.startConfig=null;
+  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.lifts={};MP.padState={};MP.startConfig=null;MP.trade=null;
 }
 
 function mpRemoteList(){ return Object.keys(MP.remote).map(id=>Object.assign({id},MP.remote[id])); }

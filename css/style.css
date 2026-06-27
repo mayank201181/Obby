@@ -212,3 +212,10 @@ input.text:focus{border-color:var(--purple-2);}
 .pet-big{font-size:78px;line-height:1;filter:drop-shadow(0 6px 0 var(--rc));animation:floaty 2.2s ease-in-out infinite;margin:8px 0;}
 .rarity-badge{display:inline-block;color:#fff;border-radius:20px;padding:2px 12px;font-size:13px;font-weight:800;vertical-align:middle;}
 select.text{appearance:none;background:#fff;}
+
+/* trade window */
+.trade-cols{display:flex;gap:10px;margin:8px 0;}
+.trade-col{flex:1;background:#faf5ff;border-radius:14px;padding:8px;text-align:center;}
+.trade-offer{min-height:42px;display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;margin-top:4px;}
+.trade-pet{font-size:26px;}
+.trade-col .ok{color:var(--good);font-weight:800;font-size:12px;margin-top:4px;}

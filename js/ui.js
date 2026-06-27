@@ -325,6 +325,55 @@ function refreshRoster(){
     return `<div>🫧 ${escapeHtml(p.name||'Blob')}${you}</div>`;
   }).join('') : '<div class="muted">Waiting for players…</div>';
   document.getElementById('rosterCount').textContent=ids.length;
+  const tb=document.getElementById('tradeBtn'); if(tb) tb.style.display = ids.length>=2 ? 'inline-flex' : 'none';
+}
+
+/* ---------------- Live trading (Adopt-Me style) ---------------- */
+function startTrade(){
+  if(!mpTradeStart()){ toast('Need a friend in the room to trade'); return; }
+  renderTradeModal(); openModal('tradeModal');
+}
+// MP callbacks (global so multiplayer.js can find them)
+function onTradeOpen(){ renderTradeModal(); openModal('tradeModal'); }
+function onTradeUpdate(){ if(MP.trade && MP.trade.active) renderTradeModal(); }
+function onTradeCancel(){ closeModal('tradeModal'); toast('Trade cancelled'); }
+function onTradeComplete(){ closeModal('tradeModal'); updateCoinDisplays(); toast('🎉 Trade complete!'); }
+
+function tradeToggle(petId){
+  const t=MP.trade; if(!t) return;
+  const owned=petCount(petId);
+  const inOffer=t.myOffer.filter(x=>x===petId).length;
+  let next=t.myOffer.slice();
+  if(inOffer < owned){ next.push(petId); }      // add one more copy
+  else { const i=next.indexOf(petId); if(i>=0) next.splice(i,1); }  // remove all -> none
+  mpTradeSetOffer(next);
+}
+function renderTradeModal(){
+  const t=MP.trade; if(!t){ closeModal('tradeModal'); return; }
+  const body=document.getElementById('tradeModalBody');
+  const offerPics = arr => arr.length ? arr.map(id=>{const c=creatureById(id);return `<span class="trade-pet">${c?c.emoji:'?'}</span>`;}).join('') : '<span class="muted">— nothing —</span>';
+  // your pets to add (show owned, highlight how many are in the offer)
+  const ownedList=CREATURES.filter(c=>ownsPet(c.id));
+  const grid = ownedList.map(c=>{
+    const inOffer=t.myOffer.filter(x=>x===c.id).length;
+    return `<div class="pet-cell ${inOffer?'equipped':''}" style="--rc:${RARITY_INFO[c.rarity].color}" onclick="tradeToggle('${c.id}')">
+      <div class="pet-emoji">${c.emoji}</div><div class="pet-name">${c.name}</div>
+      ${inOffer?`<span class="count-badge">${inOffer}↑</span>`:''}</div>`;
+  }).join('') || '<p class="muted">You have no pets to trade.</p>';
+  const status = t.myAccepted && t.theirAccepted ? '✅ Both accepted!' :
+                 t.myAccepted ? '⏳ Waiting for '+escapeHtml(t.partnerName)+'…' :
+                 t.theirAccepted ? '❗ '+escapeHtml(t.partnerName)+' accepted — your turn!' : 'Build your offers, then both Accept.';
+  body.innerHTML=`
+    <h2 style="margin:2px 0">Trade with ${escapeHtml(t.partnerName)}</h2>
+    <div class="trade-cols">
+      <div class="trade-col"><b>You give</b><div class="trade-offer">${offerPics(t.myOffer)}</div>${t.myAccepted?'<div class="ok">✓ you accepted</div>':''}</div>
+      <div class="trade-col"><b>${escapeHtml(t.partnerName)} gives</b><div class="trade-offer">${offerPics(t.theirOffer)}</div>${t.theirAccepted?'<div class="ok">✓ accepted</div>':''}</div>
+    </div>
+    <p class="hint" style="margin:6px 0">${status}</p>
+    <b style="font-size:13px">Your pets — tap to add/remove</b>
+    <div class="pet-grid" style="margin-top:6px;max-height:34vh;overflow:auto">${grid}</div>
+    <button class="btn ${t.myAccepted?'ghost':'pink'}" onclick="mpTradeAccept();renderTradeModal()">${t.myAccepted?'✓ Accepted (waiting)':'Accept trade'}</button>
+    <button class="btn ghost" onclick="mpTradeCancel();closeModal('tradeModal')">Cancel</button>`;
 }
 function hostStart(){
   if(!MP.isHost) return;
