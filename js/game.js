@@ -222,8 +222,9 @@ function update(dt){
   // out of bounds (fell off bottom)
   if(p.y > Game.world.height + 240){ respawn(); }
 
-  // cannons + bullets
+  // cannons + bullets + laser beams
   updateHazards(dt);
+  updateLasers();
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
@@ -387,7 +388,27 @@ function solidNow(pl){
     return !!until && until > nowMs();
   }
   if(pl.type==='placed'){ return pl.until > Game.t; }  // pet-placed platform
+  if(pl.type==='laser'){ return false; }               // beams aren't solid (they hurt)
   return true;
+}
+
+/* a co-op laser beam is LIVE unless its power button (H*) is being held */
+function laserLive(pl){
+  const until = MP.bridges ? MP.bridges[pl.grp] : 0;
+  return !(until && until > nowMs());
+}
+/* deadly laser beams: touching a live beam sends you to your checkpoint */
+function updateLasers(){
+  if(Game.freezeHazards || !Game.world) return;
+  const p=Game.player; if(!p || p.invuln>0) return;
+  for(const pl of Game.world.platforms){
+    if(pl.type!=='laser' || !laserLive(pl)) continue;
+    if(p.x < pl.x+pl.w && p.x+p.w > pl.x && p.y < pl.y+pl.h && p.y+p.h > pl.y){
+      respawn(); p.invuln=1100;
+      if(typeof toast==='function') toast('⚡ Zapped! Back to checkpoint');
+      break;
+    }
+  }
 }
 
 /* solid for the LOCAL player — adds Team colour gating on top of solidNow.
@@ -612,6 +633,25 @@ function drawPlatform(ctx,pl){
     case 'conveyor': fill='#9cd8ff'; edge='#5aa8ee'; break;
     case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
     case 'lift': fill='#cfe3ff'; edge='#6f9bdd'; break;
+    case 'laser':{
+      const live=laserLive(pl);
+      // emitters at both ends
+      ctx.fillStyle='#6b5b78';
+      ctx.fillRect(pl.x-8, pl.y-6, 10, pl.h+12);
+      ctx.fillRect(pl.x+pl.w-2, pl.y-6, 10, pl.h+12);
+      if(live){
+        const a=Math.sin(Game.t/60)*0.25+0.75;
+        ctx.globalAlpha=a;
+        ctx.fillStyle='#ff5a5a';
+        roundRect(ctx,pl.x,pl.y,pl.w,pl.h,5);ctx.fill();
+        ctx.fillStyle='#fff'; ctx.fillRect(pl.x,pl.y+pl.h/2-1.5,pl.w,3);
+        ctx.globalAlpha=1;
+      } else {
+        ctx.globalAlpha=0.25; ctx.fillStyle='#b8c4d6';
+        ctx.fillRect(pl.x,pl.y+pl.h/2-1,pl.w,2); ctx.globalAlpha=1;
+      }
+      return;   // custom-drawn
+    }
     case 'pad':{
       const lit = isPadLit(pl.grp);
       if(pl.color==='pink'){ fill=lit?'#ff9ed6':'#ffd0ea'; edge='#ff5fb0'; }

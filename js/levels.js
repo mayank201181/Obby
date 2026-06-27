@@ -123,14 +123,43 @@ function generateLevel(level, seed, mode){
       return {x:npX+npW/2, y:npY};
     }
 
+    // POWER-DOWN gate — deadly laser beams block the climb. One player holds the
+    // bottom POWER button to switch the beams OFF while the other climbs through,
+    // then the climber holds the TOP button so the first can follow. Touching a
+    // live beam sends you back. You can't hold a button and climb at once, so a
+    // single player can never get past.
+    function laserGate(entry, g){
+      const ex=entry.x, ey=entry.y, lw=170;
+      // the crossing goes to one side; the bottom button is on the OPPOSITE side
+      // (so reaching it never crosses a live beam), the climb jumps up-and-over
+      // the beam to the exit.
+      let dir = (ex < WORLD_W/2) ? 1 : -1;        // cross toward the open side
+      const exC = clamp(ex + dir*160, 80, WORLD_W-80);   // exit, up & to the side
+      const exitY = ey-90;
+      const haC = clamp(ex - dir*150, 70, WORLD_W-70);   // button opposite the crossing
+      platforms.push({id:id++, x:haC-levW/2, y:ey, w:levW, h:24, type:'pad', pad:'HA', grp:g});
+      // deadly beam over the crossing gap (offset toward the exit side)
+      const b1=ex + dir*44, b2=exC + dir*28;
+      const bx=clamp(Math.min(b1,b2),24,WORLD_W-24-Math.abs(b2-b1)), bw=Math.abs(b2-b1);
+      platforms.push({id:id++, x:bx, y:ey-48, w:bw, h:10, type:'laser', grp:g});
+      // exit ledge + top button on the exit side
+      const lx=clamp(exC-lw/2,60,WORLD_W-60-lw);
+      platforms.push({id:id++, x:lx, y:exitY, w:lw, h:30, type:'checkpoint', cpIndex:g+1});
+      checkpoints.push({index:g+1, x:lx+lw/2, y:exitY});
+      const hbC=clamp(lx+lw/2 + dir*145, 70, WORLD_W-70);
+      platforms.push({id:id++, x:hbC-levW/2, y:exitY, w:levW, h:24, type:'pad', pad:'HB', grp:g});
+      return {x:lx+lw/2, y:exitY};
+    }
+
     // Randomised teamwork puzzles — never the same one twice in a row, and each
     // varies its size/shape so no two sections feel identical.
     const makers = {
       leapfrog:  (e,g)=> leapfrogGate(e, g, rint(2,4)),
       bothstand: (e,g)=> bothStandGate(e, g, rint(2,4)),
       lift:      (e,g)=> liftGate(e, g, rint(175,250)),
+      laser:     (e,g)=> laserGate(e, g),
     };
-    const names=['leapfrog','bothstand','lift'];
+    const names=['leapfrog','bothstand','lift','laser'];
     let prevType=null;
     for(let g=0; g<CHECKPOINTS; g++){
       const pool=names.filter(n=>n!==prevType);
