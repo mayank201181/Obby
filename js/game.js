@@ -18,6 +18,7 @@ const Game = {
   padReport:{},                 // grp+pad -> bool (local)
   guns:[], bullets:[],          // side cannons + their projectiles
   freezeHazards:false,          // used by automated reachability tests
+  difficulty:'hard',            // 'easy' = no shooting cannons, 'hard' = cannons
 };
 
 const SCALE_TARGET_H = 560;     // world-units shown vertically (camera zoom baseline)
@@ -55,6 +56,7 @@ function startGame(opts){
   Game.seed=opts.seed|| (Math.floor(Math.random()*1e6));
   Game.mode=opts.mode||'solo';
   Game.multiplayer=!!opts.multiplayer;
+  Game.difficulty=opts.difficulty||'hard';
   loadLevel(Game.level);
   gameResize();
   showScreen('gameScreen');
@@ -84,6 +86,7 @@ function loadLevel(level){
 }
 
 function makeTurrets(level){
+  if(Game.difficulty==='easy') return [];   // Easy mode has no shooting cannons
   const fire=2000;                  // shoot every 2 seconds
   const t=[
     {side:'L', mid:0.42, amp:0.24, omega:(2*Math.PI)/2600, phase:0.0, fireEvery:fire, lastFire:Game.t-600},

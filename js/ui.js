@@ -234,12 +234,16 @@ function doClaimChest(special,streak){
 /* ---------------- Play menu & rooms ---------------- */
 function openPlay(){ showScreen('playScreen'); }
 
-function playSolo(){
+function playSolo(diff){
   Game.multiplayer=false;
-  startGame({level:1, seed:Math.floor(Math.random()*1e6), mode:'solo', multiplayer:false});
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({level:1, seed:Math.floor(Math.random()*1e6), mode:'solo',
+             multiplayer:false, difficulty:(diff==='easy'?'easy':'hard')});
 }
 
 let pendingRoomMode='coop';
+let pendingRoomDiff='hard';
 async function createRoom(){
   const profile=profileObj();
   showScreen('roomScreen');
@@ -247,6 +251,7 @@ async function createRoom(){
   document.getElementById('roomCodeBox').textContent='·····';
   setRoomHostControls(true);
   selectRoomMode(pendingRoomMode);
+  selectRoomDiff(pendingRoomDiff);
   try{
     const code=await mpCreateRoom(profile);
     document.getElementById('roomTitle').textContent='Room created! 🎉';
@@ -297,8 +302,13 @@ function wireRoomCallbacks(){
   MP.onStart=(config)=>{
     Game.onLevelComplete=onLevelComplete;
     Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-    startGame({level:config.level, seed:config.seed, mode:config.mode, multiplayer:true});
+    startGame({level:config.level, seed:config.seed, mode:config.mode,
+               multiplayer:true, difficulty:config.difficulty||'hard'});
   };
+}
+function selectRoomDiff(d){
+  pendingRoomDiff=d;
+  document.querySelectorAll('#diffBtns .btn').forEach(b=>b.classList.toggle('pink',b.dataset.diff===d));
 }
 function refreshRoster(){
   const list=document.getElementById('rosterList');
@@ -317,7 +327,7 @@ function hostStart(){
   const seed=Math.floor(Math.random()*1e6);
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  mpStart({level:1, seed, mode:pendingRoomMode});
+  mpStart({level:1, seed, mode:pendingRoomMode, difficulty:pendingRoomDiff});
 }
 function leaveRoom(){
   mpLeave();

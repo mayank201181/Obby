@@ -64,8 +64,12 @@
   </div>
   <div class="card">
     <h2>How do you want to play?</h2>
-    <button class="btn pink" onclick="playSolo()">🧍 Solo Climb</button>
-    <p class="hint">Just you vs the obby — 5 levels, 10 checkpoints each.</p>
+    <p class="hint" style="margin-top:0">🧍 Solo Climb — 5 levels, 10 checkpoints each. Pick a difficulty:</p>
+    <div class="row">
+      <button class="btn blue" onclick="playSolo('easy')">🌸 Easy<br><span style="font-size:12px;font-weight:700">no guns</span></button>
+      <button class="btn pink" onclick="playSolo('hard')">🔥 Hard<br><span style="font-size:12px;font-weight:700">shooting guns!</span></button>
+    </div>
+    <hr style="border:none;border-top:2px dashed #efe7fb;margin:14px 0">
     <button class="btn blue" onclick="createRoom()">➕ Create Room</button>
     <p class="hint">Get a code &amp; play with a friend (race or team-up).</p>
     <div class="row">
@@ -95,6 +99,12 @@
         <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
       </div>
       <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
+      <p class="hint">Difficulty:</p>
+      <div class="row" id="diffBtns">
+        <button class="btn ghost small" data-diff="easy" onclick="selectRoomDiff('easy')">🌸 Easy</button>
+        <button class="btn ghost small" data-diff="hard" onclick="selectRoomDiff('hard')">🔥 Hard</button>
+      </div>
+      <p class="hint">Easy has no shooting cannons · Hard has them.</p>
       <button class="btn pink" onclick="hostStart()">🚀 Start Game</button>
     </div>
     <div id="guestWait" style="display:none">
