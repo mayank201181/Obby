@@ -129,26 +129,24 @@ function generateLevel(level, seed, mode){
     // live beam sends you back. You can't hold a button and climb at once, so a
     // single player can never get past.
     function laserGate(entry, g){
-      const ex=entry.x, ey=entry.y, lw=170;
-      // the crossing goes to one side; the bottom button is on the OPPOSITE side
-      // (so reaching it never crosses a live beam), the climb jumps up-and-over
-      // the beam to the exit.
-      let dir = (ex < WORLD_W/2) ? 1 : -1;        // cross toward the open side
-      const exC = clamp(ex + dir*160, 80, WORLD_W-80);   // exit, up & to the side
-      const exitY = ey-90;
-      const haC = clamp(ex - dir*150, 70, WORLD_W-70);   // button opposite the crossing
-      platforms.push({id:id++, x:haC-levW/2, y:ey, w:levW, h:24, type:'pad', pad:'HA', grp:g});
-      // deadly beam over the crossing gap (offset toward the exit side)
-      const b1=ex + dir*44, b2=exC + dir*28;
-      const bx=clamp(Math.min(b1,b2),24,WORLD_W-24-Math.abs(b2-b1)), bw=Math.abs(b2-b1);
-      platforms.push({id:id++, x:bx, y:ey-48, w:bw, h:10, type:'laser', grp:g});
-      // exit ledge + top button on the exit side
-      const lx=clamp(exC-lw/2,60,WORLD_W-60-lw);
-      platforms.push({id:id++, x:lx, y:exitY, w:lw, h:30, type:'checkpoint', cpIndex:g+1});
-      checkpoints.push({index:g+1, x:lx+lw/2, y:exitY});
-      const hbC=clamp(lx+lw/2 + dir*145, 70, WORLD_W-70);
-      platforms.push({id:id++, x:hbC-levW/2, y:exitY, w:levW, h:24, type:'pad', pad:'HB', grp:g});
-      return {x:lx+lw/2, y:exitY};
+      const ex=entry.x, ey=entry.y;
+      const wy=ey-80;                                 // walkway height (one hop up)
+      const wWidth=380;
+      const wxL=clamp(ex-40, 40, WORLD_W-40-wWidth);
+      const wxR=wxL+wWidth;
+      // one long walkway you walk across
+      platforms.push({id:id++, x:wxL, y:wy, w:wWidth, h:24, type:'normal'});
+      // a tall LASER WALL blocking the walkway — too high to jump over
+      const wallX=wxL+190;
+      platforms.push({id:id++, x:wallX-6, y:wy-160, w:12, h:160, type:'laser', grp:g, wall:true});
+      // a button on EACH side of the wall (raised pads). Hold one to drop the wall.
+      platforms.push({id:id++, x:wallX-110-levW/2, y:wy-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
+      platforms.push({id:id++, x:wallX+110-levW/2, y:wy-44, w:levW, h:24, type:'pad', pad:'HB', grp:g});
+      // exit checkpoint above the far end of the walkway
+      const npW=180, npY=wy-96, npX=clamp(wxR-npW-8, 60, WORLD_W-60-npW);
+      platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
+      checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      return {x:npX+npW/2, y:npY};
     }
 
     // Randomised teamwork puzzles — never the same one twice in a row, and each

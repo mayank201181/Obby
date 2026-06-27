@@ -635,22 +635,24 @@ function drawPlatform(ctx,pl){
     case 'lift': fill='#cfe3ff'; edge='#6f9bdd'; break;
     case 'laser':{
       const live=laserLive(pl);
-      // emitters at both ends
+      const vertical = pl.wall || pl.h>pl.w;
       ctx.fillStyle='#6b5b78';
-      ctx.fillRect(pl.x-8, pl.y-6, 10, pl.h+12);
-      ctx.fillRect(pl.x+pl.w-2, pl.y-6, 10, pl.h+12);
+      if(vertical){ ctx.fillRect(pl.x-5, pl.y-10, pl.w+10, 12); ctx.fillRect(pl.x-5, pl.y+pl.h-2, pl.w+10, 12); }
+      else { ctx.fillRect(pl.x-8, pl.y-6, 10, pl.h+12); ctx.fillRect(pl.x+pl.w-2, pl.y-6, 10, pl.h+12); }
       if(live){
-        const a=Math.sin(Game.t/60)*0.25+0.75;
-        ctx.globalAlpha=a;
-        ctx.fillStyle='#ff5a5a';
-        roundRect(ctx,pl.x,pl.y,pl.w,pl.h,5);ctx.fill();
-        ctx.fillStyle='#fff'; ctx.fillRect(pl.x,pl.y+pl.h/2-1.5,pl.w,3);
+        ctx.globalAlpha=Math.sin(Game.t/60)*0.25+0.75;
+        ctx.fillStyle='#ff5a5a'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,5);ctx.fill();
+        ctx.fillStyle='#fff';
+        if(vertical) ctx.fillRect(pl.x+pl.w/2-1.5,pl.y,3,pl.h);
+        else ctx.fillRect(pl.x,pl.y+pl.h/2-1.5,pl.w,3);
         ctx.globalAlpha=1;
       } else {
-        ctx.globalAlpha=0.25; ctx.fillStyle='#b8c4d6';
-        ctx.fillRect(pl.x,pl.y+pl.h/2-1,pl.w,2); ctx.globalAlpha=1;
+        ctx.globalAlpha=0.22; ctx.fillStyle='#b8c4d6';
+        if(vertical) ctx.fillRect(pl.x+pl.w/2-1,pl.y,2,pl.h);
+        else ctx.fillRect(pl.x,pl.y+pl.h/2-1,pl.w,2);
+        ctx.globalAlpha=1;
       }
-      return;   // custom-drawn
+      return;
     }
     case 'pad':{
       const lit = isPadLit(pl.grp);
