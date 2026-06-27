@@ -163,6 +163,16 @@ function mpOnMessage(conn,msg){
     case 'lift':
       MP.lifts[msg.grp]=msg.start;
       break;
+    case 'emote': {
+      const r=MP.remote[msg.id]; if(r){ r.emote=msg.e; r.emoteAt=nowMs(); }
+      if(MP.isHost) mpRelay(conn,msg);
+      break;
+    }
+    case 'boost': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(typeof onBoostFrom==='function') onBoostFrom(msg.id);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -248,6 +258,10 @@ function mpStart(config){
 function mpSendPos(d){ mpSend({t:'pos', id:MP.selfId, d}); }
 function mpSendCheckpoint(index){ MP.roster[MP.selfId]&&(MP.roster[MP.selfId].cp=index); mpSend({t:'cp', id:MP.selfId, index}); }
 function mpSendFinish(){ mpSend({t:'finish', id:MP.selfId}); }
+function mpSendEmote(e){ mpSend({t:'emote', id:MP.selfId, e}); }
+function mpSendBoost(){ mpSend({t:'boost', id:MP.selfId}); }
+/* how many remote players have already finished (for race standings) */
+function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 
 /* ---- co-op devices (host authoritative) ----
    Pads 'A'/'B'  -> TIMED bridge: both pressed by two different players => 10s.

@@ -23,6 +23,7 @@ function closeChest(){ clearInterval(chestTimerInt); closeModal('chestModal'); r
 /* quit an active game back to the lobby */
 function quitGame(){
   Game.running=false; cancelAnimationFrame(Game.raf);
+  if(typeof stopSpectate==='function') stopSpectate();
   if(Game.multiplayer) mpLeave();
   showScreen('lobbyScreen'); initLobby();
 }
@@ -480,13 +481,22 @@ function onLevelComplete(level, earned, isFinal, res){
   if(Game.multiplayer){
     const others=mpRemoteList();
     const doneCount=others.filter(o=>o.finished).length;
-    if(Game.mode==='coop') waitMsg=`<p class="muted">Teammates finished: ${doneCount}/${others.length}</p>`;
+    if(Game.mode==='race'){
+      const place=Game.racePlace||1;
+      const medal = place===1?'🥇':place===2?'🥈':place===3?'🥉':'🏁';
+      const ord = place===1?'1st':place===2?'2nd':place===3?'3rd':place+'th';
+      waitMsg=`<p class="timer-big">${medal} ${place===1?'You WON the race!':ord+' place'}</p>
+        <p class="muted">Your record: ${SAVE.raceWins||0} W · ${SAVE.raceLosses||0} L</p>`;
+    } else if(Game.mode==='coop'){
+      waitMsg=`<p class="muted">Teammates finished: ${doneCount}/${others.length}</p>`;
+    }
   }
+  const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
   const starsRow = !Game.multiplayer ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = !Game.multiplayer ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
-    ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+    ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
     : (res.daily
         ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isFinal
@@ -524,8 +534,76 @@ function goNextLevel(){
 function backToMap(){ closeModal('winModal'); showLevelMap(); }
 function backToLobby(){
   closeModal('winModal');
+  if(typeof stopSpectate==='function') stopSpectate();
+  Game.running=false; cancelAnimationFrame(Game.raf);
   if(Game.multiplayer) mpLeave();
   showScreen('lobbyScreen'); initLobby();
+}
+
+/* ---------------- Spectate ---------------- */
+function watchFriends(){ closeModal('winModal'); startSpectate(); }
+function setSpectateChrome(on){
+  const bar=document.getElementById('spectateBar');
+  const controls=document.querySelector('#gameOverlay .controls');
+  const emote=document.getElementById('emoteBar');
+  if(bar) bar.style.display = on?'flex':'none';
+  if(controls) controls.style.visibility = on?'hidden':'visible';
+  if(on && emote) emote.style.display='none';
+}
+/* refresh the spectate banner name each frame via updateHudLive hook */
+function refreshSpectateName(){
+  if(!Game.spectating) return;
+  const r=Game.spectateId?MP.remote[Game.spectateId]:null;
+  const el=document.getElementById('spectateName');
+  if(el) el.textContent='👁 Watching '+((r&&r.name)||'friend');
+}
+
+/* ---------------- Daily rotating shop ---------------- */
+function shopPool(){
+  const items=[];
+  SKINS.forEach(s=>{ if(s.price>0) items.push({kind:'skin', id:s.id, price:s.price, label:s.id, swatch:s.color}); });
+  ACCESSORIES.forEach(a=>{ if(a.price>0) items.push({kind:'acc', id:a.id, price:a.price, label:a.label, emoji:a.emoji}); });
+  TRAILS.forEach(t=>{ if(t.price>0) items.push({kind:'trail', id:t.id, price:t.price, label:t.name, emoji:t.emoji}); });
+  return items;
+}
+function todaysShop(){
+  const pool=shopPool();
+  const rnd=mulberry32((dailySeed()*7 + 13)|0);   // same set all day, new each day
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp; }
+  return pool.slice(0,4).map(it=>Object.assign({}, it, {sale:Math.round(it.price*0.7)}));
+}
+function isOwnedShopItem(it){
+  if(it.kind==='skin') return SAVE.ownedSkins.includes(it.id);
+  if(it.kind==='acc') return SAVE.ownedAccessories.includes(it.id);
+  return SAVE.ownedTrails.includes(it.id);
+}
+function buyShopItem(idx){
+  const it=todaysShop()[idx]; if(!it) return;
+  if(isOwnedShopItem(it)){ toast('Already owned'); return; }
+  if(SAVE.coins<it.sale){ toast('Not enough coins 🪙'); return; }
+  SAVE.coins-=it.sale;
+  if(it.kind==='skin') SAVE.ownedSkins.push(it.id);
+  else if(it.kind==='acc') SAVE.ownedAccessories.push(it.id);
+  else SAVE.ownedTrails.push(it.id);
+  persist(); SFX.chest();
+  toast('Bought '+it.label+'! 🛍️');
+  renderShop();
+}
+function openShop(){ showScreen('shopScreen'); renderShop(); }
+function renderShop(){
+  updateCoinDisplays();
+  document.getElementById('shopBody').innerHTML = todaysShop().map((it,idx)=>{
+    const owned=isOwnedShopItem(it);
+    const icon = it.kind==='skin'
+      ? `<span class="shop-swatch" style="background:${(it.swatch&&it.swatch[0]==='#')?it.swatch:'#ffd36b'}"></span>`
+      : `<span class="chest-ico">${it.emoji||'✨'}</span>`;
+    return `<div class="chest-row">
+      ${icon}
+      <div class="chest-info"><b>${it.label} <span class="muted" style="font-size:11px">(${it.kind})</span></b>
+        <div class="muted" style="font-size:12px"><s>🪙${it.price}</s> → <b style="color:#46c98c">🪙${it.sale}</b> · 30% off</div></div>
+      <button class="btn ${owned?'ghost':'gold'} small" ${owned?'disabled':''} onclick="buyShopItem(${idx})">${owned?'Owned ✓':'Buy'}</button>
+    </div>`;
+  }).join('');
 }
 
 /* ---------------- Pets & Chests ---------------- */

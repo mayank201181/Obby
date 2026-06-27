@@ -21,6 +21,9 @@ const Game = {
   difficulty:'hard',            // 'easy' = no shooting cannons, 'hard' = cannons
   tower:false,                  // endless Tower mode
   daily:false,                  // daily challenge run
+  myEmote:null, myEmoteAt:0,    // quick-emoji bubble over the local player
+  spectating:false, spectateId:null,  // watch a friend after finishing
+  racePlace:0,                  // your finishing place in a race (1 = first)
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
@@ -86,6 +89,7 @@ function startGame(opts){
   Game.difficulty=opts.difficulty||'hard';
   Game.tower = opts.mode==='tower';
   Game.daily = !!opts.daily;
+  Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
   if(Game.mode==='coop' && Game.multiplayer){
     Game.myColorName = MP.isHost ? 'pink' : 'blue';
@@ -101,6 +105,10 @@ function startGame(opts){
   gameResize();
   showScreen('gameScreen');
   document.getElementById('gameScreen').style.background = SAVE.bg;
+  // multiplayer-only chrome: quick emojis (all modes) + boost button (co-op)
+  const eb=document.getElementById('emoteBar'); if(eb) eb.style.display = Game.multiplayer ? 'flex':'none';
+  const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
+  if(typeof setSpectateChrome==='function') setSpectateChrome(false);
   Game.running=true; Game.finished=false; Game.last=performance.now(); Game.acc=0;
   cancelAnimationFrame(Game.raf);
   Game.raf=requestAnimationFrame(gameLoop);
@@ -190,6 +198,7 @@ function triggerAbility(){
 }
 
 function update(dt){
+  if(Game.spectating){ spectateUpdate(); return; }
   const p=Game.player; if(!p) return;
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.0;
 
@@ -259,6 +268,17 @@ function update(dt){
                  name:SAVE.name,cp:p.cp,finished:Game.finished});
     }
   }
+}
+
+/* spectate: smoothly follow the watched friend's blob */
+function spectateUpdate(){
+  const r = Game.spectateId ? MP.remote[Game.spectateId] : null;
+  if(!r || typeof r.x!=='number') return;
+  const camTX=r.x+17, camTY=r.y-40;
+  Game.cam.x += (camTX-Game.cam.x)*0.10;
+  Game.cam.y += (camTY-Game.cam.y)*0.10;
+  const half=(Game.W/gameScale())/2;
+  Game.cam.x=Math.max(half, Math.min(Game.world.width-half, Game.cam.x));
 }
 
 function moveAndCollide(p){
@@ -542,9 +562,65 @@ function gainPetXp(amount){
   }
 }
 
+/* ---- quick emojis: send + show a bubble over the local player ---- */
+function sendEmote(e){
+  Game.myEmote=e; Game.myEmoteAt=Game.t;
+  if(Game.multiplayer && typeof mpSendEmote==='function') mpSendEmote(e);
+  SFX.click();
+}
+
+/* ---- carry/boost: fling a teammate who's standing on your head ---- */
+function sendBoost(){
+  if(typeof mpSendBoost==='function') mpSendBoost();
+  if(typeof toast==='function') toast('🙌 Boost!');
+  SFX.jump();
+}
+/* received a boost from another player — if they're below & under me, hop up */
+function onBoostFrom(senderId){
+  const p=Game.player; if(!p || !Game.running) return;
+  const r=MP.remote[senderId]; if(!r || typeof r.x!=='number') return;
+  const myFeet=p.y+p.h, myCx=p.x+p.w/2;
+  const theirTop=r.y, theirCx=r.x+17;
+  // I'm roughly above them and horizontally close -> they launch me up
+  if(Math.abs(myCx-theirCx) < 60 && myFeet <= theirTop+20 && myFeet >= theirTop-70){
+    p.vy = -15.5; p.onGround=false; p.squash=-1;
+    if(typeof toast==='function') toast('🚀 Lifted up!');
+  }
+}
+
+/* ---- spectate a friend after you finish a multiplayer race ---- */
+function startSpectate(){
+  const others=mpRemoteList().filter(r=>typeof r.x==='number');
+  if(!others.length){ if(typeof backToLobby==='function') backToLobby(); return; }
+  Game.spectating=true;
+  Game.spectateId=others[0].id;
+  Game.running=true; Game.last=performance.now(); Game.acc=0;
+  showScreen('gameScreen');
+  document.getElementById('gameScreen').style.background=SAVE.bg;
+  if(typeof setSpectateChrome==='function') setSpectateChrome(true);
+  cancelAnimationFrame(Game.raf); Game.raf=requestAnimationFrame(gameLoop);
+}
+function spectateNext(){
+  const others=mpRemoteList().filter(r=>typeof r.x==='number');
+  if(!others.length) return;
+  let i=others.findIndex(r=>r.id===Game.spectateId);
+  Game.spectateId=others[(i+1)%others.length].id;
+}
+function stopSpectate(){
+  Game.spectating=false; Game.spectateId=null;
+  if(typeof setSpectateChrome==='function') setSpectateChrome(false);
+}
+
 function levelFinished(){
   Game.finished=true;
   gainPetXp(4);
+  // race standings: your place = (players who already finished) + 1
+  if(Game.multiplayer && Game.mode==='race'){
+    Game.racePlace = (typeof mpFinishedCount==='function' ? mpFinishedCount() : 0) + 1;
+    if(Game.racePlace===1){ SAVE.raceWins=(SAVE.raceWins||0)+1; unlockAchievement('racewin'); }
+    else SAVE.raceLosses=(SAVE.raceLosses||0)+1;
+    persist();
+  }
   let earned=30; addCoins(30); SFX.win();   // bonus for finishing a level
   if(Game.multiplayer) mpSendFinish();
   const timeMs = Math.max(0, Math.round(Game.t - Game.runStartT));
@@ -637,22 +713,26 @@ function render(){
       drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t,
                     petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
       drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
+      if(r.emote && nowMs()-r.emoteAt < 2200) drawEmoteBubble(ctx, r.x+17, r.y-22, r.emote);
     }
   }
 
   const p=Game.player;
   // cosmetic trail behind the player
-  drawTrail(ctx, p);
+  if(!Game.spectating) drawTrail(ctx, p);
 
   // local player (worn pet / team colour; blink while invulnerable after a hit)
-  const mySkin = Game.myColor || SAVE.skin;
-  const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
-  ctx.save();
-  if(blink) ctx.globalAlpha=0.4;
-  drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
-                petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
-  ctx.restore();
-  drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
+  if(!Game.spectating){
+    const mySkin = Game.myColor || SAVE.skin;
+    const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
+    ctx.save();
+    if(blink) ctx.globalAlpha=0.4;
+    drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
+                  petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
+    ctx.restore();
+    drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
+    if(Game.myEmote && Game.t-Game.myEmoteAt < 2200) drawEmoteBubble(ctx, p.x+p.w/2, p.y-22, Game.myEmote);
+  }
 
   ctx.restore();
 
@@ -721,6 +801,18 @@ function drawTrail(ctx, p){
   ctx.globalAlpha=1;
 }
 
+/* a little speech bubble with an emoji over a player */
+function drawEmoteBubble(ctx,cx,cy,emoji){
+  ctx.save();
+  ctx.fillStyle='#fff';
+  ctx.strokeStyle='rgba(120,90,170,.25)'; ctx.lineWidth=1.5;
+  roundRect(ctx,cx-16,cy-30,32,28,10); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-5,cy-3); ctx.lineTo(cx+5,cy-3); ctx.lineTo(cx,cy+5); ctx.closePath();
+  ctx.fillStyle='#fff'; ctx.fill();
+  ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(emoji, cx, cy-15);
+  ctx.restore();
+}
 function drawNameTag(ctx,cx,cy,name){
   ctx.font='bold 13px Nunito, sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
@@ -896,6 +988,7 @@ function updateHudLive(){
     document.getElementById('hudCp').textContent='⛳ '+done+'/'+CHECKPOINTS;
   }
   document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+  if(Game.spectating && typeof refreshSpectateName==='function') refreshSpectateName();
 }
 
 function exitToLobby(){

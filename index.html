@@ -38,6 +38,7 @@
       <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
       <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
     </div>
+    <button class="btn ghost" onclick="openShop()">🛍️ Daily Shop <span class="badge" style="background:var(--gold);color:#7a5512">sale!</span></button>
     <button class="btn ghost" id="dailyBtn" onclick="startDaily()">🗓️ Daily Challenge</button>
     <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
       <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
@@ -84,6 +85,19 @@
     <h2>🏆 Badges</h2>
     <p class="hint" id="achProgress"></p>
     <div class="scroll" id="achBody"></div>
+  </div>
+</section>
+
+<!-- ============ DAILY SHOP ============ -->
+<section class="screen" id="shopScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🛍️ Daily Shop</h2>
+    <p class="hint">A fresh set of items every day — all on sale! Comes back tomorrow.</p>
+    <div class="scroll" id="shopBody"></div>
   </div>
 </section>
 
@@ -186,13 +200,29 @@
       </div>
     </div>
 
+    <div class="emote-bar" id="emoteBar" style="display:none">
+      <button onclick="sendEmote('😀')">😀</button>
+      <button onclick="sendEmote('😂')">😂</button>
+      <button onclick="sendEmote('❤️')">❤️</button>
+      <button onclick="sendEmote('👍')">👍</button>
+      <button onclick="sendEmote('😮')">😮</button>
+      <button onclick="sendEmote('🎉')">🎉</button>
+    </div>
+
     <div class="controls">
       <div class="dpad">
         <button class="arrow-btn" id="leftBtn" aria-label="Move left">◀</button>
         <button class="arrow-btn" id="rightBtn" aria-label="Move right">▶</button>
       </div>
+      <button class="jbtn boost" id="boostBtn" style="display:none" onclick="sendBoost()">🙌<br><span style="font-size:10px">BOOST</span></button>
       <button class="jbtn ability" id="abilityBtn" style="display:none">✨<br><span style="font-size:10px">PLATFORM</span></button>
       <button class="jbtn" id="jumpBtn">⬆<br><span style="font-size:13px">JUMP</span></button>
+    </div>
+
+    <div class="spectate-bar" id="spectateBar" style="display:none">
+      <span id="spectateName">👁 Watching…</span>
+      <button class="btn ghost small" onclick="spectateNext()">Next 👁</button>
+      <button class="btn pink small" onclick="backToLobby()">Lobby</button>
     </div>
   </div>
 </section>

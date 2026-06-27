@@ -77,6 +77,7 @@ const ACHIEVEMENTS = [
   { id:'daily',  name:'Daily Climber', desc:'Beat a Daily Challenge',       emoji:'🗓️' },
   { id:'shiny',  name:'Golden Touch',  desc:'Forge a shiny pet',            emoji:'🌟' },
   { id:'maxpet', name:'Best Friend',   desc:'Level a pet to 10',            emoji:'💖' },
+  { id:'racewin',name:'Champion',      desc:'Win a race',                   emoji:'🥇' },
 ];
 
 const DAY_MS = 24*60*60*1000;
@@ -111,6 +112,8 @@ function defaultSave(){
     daily:{key:'',best:0,done:false},  // daily challenge progress for the current day
     petXp:{},              // creatureId -> experience points (drives pet level)
     shinies:{},            // creatureId -> count of shiny (golden) copies owned
+    raceWins:0,            // multiplayer race wins
+    raceLosses:0,          // multiplayer race losses
   };
 }
 
