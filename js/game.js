@@ -99,6 +99,7 @@ function makeTurrets(level){
 function respawn(){
   const p=Game.player;
   p.x=p.respawnX; p.y=p.respawnY; p.vx=0; p.vy=0;
+  p.invuln=Math.max(p.invuln||0, 900);   // brief safety so turrets can't instakill on respawn
   // reset disappearing blocks so the climb is fair again
   for(const k in Game.disappear){ Game.disappear[k]={}; }
 }
@@ -308,10 +309,10 @@ function onStand(p, pl, now){
   } else if(pl.type==='checkpoint'){
     p.respawnX=pl.x+pl.w/2-p.w/2; p.respawnY=pl.y-p.h;
   }
-  // update generic respawn anchor to last safe non-special platform
-  if(pl.type==='normal'||pl.type==='big'||pl.type==='small'){
-    p.respawnX=p.x; p.respawnY=pl.y-p.h;
-  }
+  // NOTE: respawn point only updates at checkpoints (and starts at the bottom).
+  // Standing on any other block does NOT save your spot — fall or get shot and
+  // you always return to your last checkpoint.
+
   // disappearing block timer
   if(pl.type==='disappear'){
     const d=Game.disappear[pl.id]||(Game.disappear[pl.id]={});
