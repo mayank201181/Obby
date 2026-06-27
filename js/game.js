@@ -229,7 +229,7 @@ function moveAndCollide(p){
   }
 
   // handle effects of the platform we're standing on
-  Game.curPad=null;
+  Game.curPadKey=null;
   if(standingOn){ onStand(p, standingOn, now); }
   // clear pad reports if not standing on a pad this frame
   reconcilePads();
@@ -331,30 +331,28 @@ function onStand(p, pl, now){
   if(pl.type==='finish' && !Game.finished){
     levelFinished();
   }
-  // co-op pad
+  // co-op pad / lever
   if(pl.type==='pad'){
-    setPadReport(pl.grp, pl.pad, true);
-    Game.curPad=pl.grp+pl.pad;
+    const key=pl.grp+':'+pl.pad;
+    Game.curPadKey=key;
+    setPadReport(pl.grp, pl.pad, true, key);
   }
 }
 
-/* track which pad we report as pressed; release when we leave */
-function setPadReport(grp,pad,on){
-  const key=grp+pad;
-  if(Game.padReport[key]===on) return;
-  Game.padReport[key]=on;
+/* track which pad/lever we report as pressed; release when we leave it */
+function setPadReport(grp,pad,on,key){
+  key = key || (grp+':'+pad);
+  const has = !!Game.padReport[key];
+  if(on===has) return;
+  if(on) Game.padReport[key]={grp,pad}; else delete Game.padReport[key];
   if(Game.multiplayer) mpReportPad(grp,pad,on);
-  else {
-    // solo "race"/solo: allow single player to bridge for testing/play alone
-    if(on){ MP.bridges[grp]=nowMs()+10000; }
-  }
 }
 function reconcilePads(){
   for(const key in Game.padReport){
-    if(Game.padReport[key] && key!==Game.curPad){
-      const grp=key.slice(0,-1), pad=key.slice(-1);
-      Game.padReport[key]=false;
-      if(Game.multiplayer) mpReportPad(parseInt(grp),pad,false);
+    if(key!==Game.curPadKey){
+      const {grp,pad}=Game.padReport[key];
+      delete Game.padReport[key];
+      if(Game.multiplayer) mpReportPad(grp,pad,false);
     }
   }
 }
@@ -497,7 +495,10 @@ function drawPlatform(ctx,pl){
     case 'mover': fill='#ffd98a'; edge='#f0a93c'; break;
     case 'pad':{
       const lit = isPadLit(pl.grp);
-      fill = lit?'#ffe177':'#ffd6f0'; edge=lit?'#ffb300':'#ff9bce'; break;
+      const lever = pl.pad && pl.pad[0]==='H';
+      if(lever){ fill=lit?'#b6ffd0':'#d9c6ff'; edge=lit?'#46c98c':'#9b6bff'; }
+      else { fill=lit?'#ffe177':'#ffd6f0'; edge=lit?'#ffb300':'#ff9bce'; }
+      break;
     }
     case 'bridge':{
       if(!solidNow(pl)){ // ghost outline
@@ -535,8 +536,12 @@ function drawPlatform(ctx,pl){
     ctx.fillText('↔', pl.x+pl.w/2, pl.y+pl.h/2+1);
   }
   if(pl.type==='pad'){
-    ctx.font='14px serif';ctx.textAlign='center';ctx.fillStyle='#a05';
-    ctx.fillText(pl.pad, pl.x+pl.w/2, pl.y-8);
+    const lever = pl.pad && pl.pad[0]==='H';
+    ctx.textAlign='center';
+    ctx.font='bold 13px Nunito';
+    ctx.fillStyle = lever?'#6b3fb0':'#a05';
+    const label = lever ? ('HOLD '+pl.pad.slice(1)) : pl.pad;
+    ctx.fillText(label, pl.x+pl.w/2, pl.y-8);
   }
 }
 

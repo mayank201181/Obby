@@ -184,17 +184,28 @@ function mpSendPos(d){ mpSend({t:'pos', id:MP.selfId, d}); }
 function mpSendCheckpoint(index){ MP.roster[MP.selfId]&&(MP.roster[MP.selfId].cp=index); mpSend({t:'cp', id:MP.selfId, index}); }
 function mpSendFinish(){ mpSend({t:'finish', id:MP.selfId}); }
 
-/* ---- co-op bridge pads ---- */
+/* ---- co-op devices (host authoritative) ----
+   Pads 'A'/'B'  -> TIMED bridge: both pressed by two different players => 10s.
+   Levers 'HA'/'HB' -> HELD bridge: solid while either lever is held; vanishes
+   the instant nobody holds one (one player can't pass alone). */
 function mpSetPad(playerId,grp,pad,on){
-  if(!MP.padState[grp]) MP.padState[grp]={A:new Set(),B:new Set()};
-  const set=MP.padState[grp][pad];
-  if(on) set.add(playerId); else set.delete(playerId);
-  // need TWO DIFFERENT players: one on pad A and a different one on pad B
-  const a=MP.padState[grp].A, b=MP.padState[grp].B;
-  let both=false;
-  for(const ia of a){ for(const ib of b){ if(ia!==ib){ both=true; } } }
-  if(both && (!MP.bridges[grp] || MP.bridges[grp] < nowMs())){
-    const until = nowMs()+10000;
+  if(!MP.padState[grp]) MP.padState[grp]={};
+  const s=MP.padState[grp];
+  if(!s[pad]) s[pad]=new Set();
+  if(on) s[pad].add(playerId); else s[pad].delete(playerId);
+
+  if(pad==='A' || pad==='B'){
+    const a=s.A||new Set(), b=s.B||new Set();
+    let both=false;
+    for(const ia of a){ for(const ib of b){ if(ia!==ib) both=true; } }
+    if(both && (!MP.bridges[grp] || MP.bridges[grp] < nowMs())){
+      const until=nowMs()+10000; MP.bridges[grp]=until;
+      mpBroadcast({t:'bridge', grp, until});
+    }
+  } else if(pad==='HA' || pad==='HB'){
+    const ha=s.HA||new Set(), hb=s.HB||new Set();
+    const held = ha.size>0 || hb.size>0;
+    const until = held ? nowMs()+3600000 : 0;   // 0 => inactive
     MP.bridges[grp]=until;
     mpBroadcast({t:'bridge', grp, until});
   }

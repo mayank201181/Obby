@@ -51,6 +51,59 @@ function generateLevel(level, seed, mode){
     return m + diff*20;          // harder on later levels, still reachable
   }
 
+  // ===== CO-OP (Team) mode: a REQUIRED 2-player gate in EVERY section =====
+  // From the very first band onward, you can only progress by working together.
+  // Two gate kinds alternate so the teamwork stays varied.
+  if(mode==='coop'){
+    const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+    const cBottomY=3600, levW=82, padW=88, stepW=124;
+    platforms.push({id:id++, x:WORLD_W/2-140, y:cBottomY, w:280, h:40, type:'big'});
+    const cStart={x:WORLD_W/2, y:cBottomY-40};
+    let land={x:WORLD_W/2, y:cBottomY};   // current landing top, we build upward
+
+    // GATE 1 — "Both Pads": both players stand on A & B together => a bridge
+    // appears for 10s across a chasm only crossable as a pair.
+    function timedGate(entry,g){
+      const ex=entry.x, ey=entry.y;
+      const padAC=clamp(ex-150,70,WORLD_W-70), padBC=clamp(ex+150,70,WORLD_W-70);
+      platforms.push({id:id++, x:padAC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'A', grp:g});
+      platforms.push({id:id++, x:padBC-padW/2, y:ey-46, w:padW, h:24, type:'pad', pad:'B', grp:g});
+      const brW=300, brY=ey-112, brX=clamp(ex-brW/2,40,WORLD_W-40-brW);
+      platforms.push({id:id++, x:brX, y:brY, w:brW, h:24, type:'bridge', grp:g, gate:'timed'});
+      const npW=190, npY=brY-92, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
+      platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
+      checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      return {x:npX+npW/2, y:npY};
+    }
+    // GATE 2 — "Hold & Cross": one player holds a lever (HA) keeping a staircase
+    // of bridges solid while the other climbs; the climber then holds HB so the
+    // first can follow. The bridges vanish the instant nobody holds a lever.
+    function holdGate(entry,g){
+      const ex=entry.x, ey=entry.y;
+      const haC=clamp(ex-150,70,WORLD_W-70);
+      platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
+      const sy=[ey-95, ey-186, ey-274], sx=[ex-20, ex+40, ex-30];
+      for(let i=0;i<3;i++){
+        const x=clamp(sx[i]-stepW/2,40,WORLD_W-40-stepW);
+        platforms.push({id:id++, x, y:sy[i], w:stepW, h:24, type:'bridge', grp:g, gate:'hold'});
+      }
+      const npW=190, npY=ey-330, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
+      platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
+      checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      const hbC=clamp(npX+npW/2+150,70,WORLD_W-70);
+      platforms.push({id:id++, x:hbC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HB', grp:g});
+      return {x:npX+npW/2, y:npY};
+    }
+
+    for(let g=0; g<CHECKPOINTS; g++){
+      land = (g%2===0) ? timedGate(land,g) : holdGate(land,g);
+    }
+    const fw=240, fY=land.y-100;   // finish a short hop above the last checkpoint
+    platforms.push({id:id++, x:WORLD_W/2-fw/2, y:fY, w:fw, h:34, type:'finish'});
+    return { level, seed, mode, width:WORLD_W, height:cBottomY,
+             platforms, checkpoints, start:cStart, finishY:fY };
+  }
+
   // start ground platform
   platforms.push({id:id++, x:WORLD_W/2-130, y:bottomY, w:260, h:40, type:'big'});
   const start = {x:WORLD_W/2, y:bottomY-40};
@@ -113,29 +166,6 @@ function generateLevel(level, seed, mode){
       platforms.push(cp);
       checkpoints.push({index:band+1, x:cx+cw/2, y:bandTop});
       prevX = cx+cw/2;
-
-      // ---- REQUIRED co-op gate (every 3rd band) ----
-      // A chasm only crossable when BOTH players stand on pads A & B, which
-      // makes a bridge appear for 10 seconds. Solo can't pass this.
-      if(mode==='coop' && band>0 && band%3===0 && band<CHECKPOINTS){
-        const Y0=bandTop, cxC=prevX;
-        const padW=86, padH=24;
-        // pads flank the checkpoint (a small hop up & out) — dead ends
-        const padAC=Math.max(70, cxC-150), padBC=Math.min(WORLD_W-70, cxC+150);
-        const padY=Y0-44;
-        platforms.push({id:id++, x:padAC-padW/2, y:padY, w:padW, h:padH, type:'pad', pad:'A', grp:band});
-        platforms.push({id:id++, x:padBC-padW/2, y:padY, w:padW, h:padH, type:'pad', pad:'B', grp:band});
-        // bridge spans the chasm centre; appears 10s when both pads are pressed
-        const brW=300, brY=Y0-110;
-        const brX=Math.max(40, Math.min(WORLD_W-40-brW, cxC-brW/2));
-        platforms.push({id:id++, x:brX, y:brY, w:brW, h:24, type:'bridge', active:false, grp:band});
-        // landing platform above the bridge — the only way onward
-        const npW=160, npY=brY-90;
-        const npX=Math.max(60, Math.min(WORLD_W-60-npW, cxC-npW/2));
-        platforms.push({id:id++, x:npX, y:npY, w:npW, h:26, type:'normal'});
-        // continue the climb from above the bridge (chasm below stays empty)
-        prevX=npX+npW/2; y=npY;
-      }
     }
   }
 
