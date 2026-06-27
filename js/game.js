@@ -540,7 +540,7 @@ function drawPlatform(ctx,pl){
     ctx.textAlign='center';
     ctx.font='bold 13px Nunito';
     ctx.fillStyle = lever?'#6b3fb0':'#a05';
-    const label = lever ? ('HOLD '+pl.pad.slice(1)) : pl.pad;
+    const label = lever ? 'HOLD' : pl.pad;
     ctx.fillText(label, pl.x+pl.w/2, pl.y-8);
   }
 }

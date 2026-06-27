@@ -73,6 +73,10 @@ function generateLevel(level, seed, mode){
       const npW=190, npY=brY-92, npX=clamp(ex-npW/2,60,WORLD_W-60-npW);
       platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
       checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
+      // top "hold" pad: the first player across stands here to KEEP the bridge
+      // open so their partner can cross too (even after the 10s timer).
+      const htC=clamp(npX+npW/2+150,70,WORLD_W-70);
+      platforms.push({id:id++, x:htC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HT', grp:g});
       return {x:npX+npW/2, y:npY};
     }
     // GATE 2 — "Hold & Cross": one player holds a lever (HA) keeping a staircase

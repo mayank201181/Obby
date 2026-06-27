@@ -13,7 +13,8 @@ const MP = {
   remote:{},           // id -> {name,skin,accessory,face,x,y,facing,cp,finished,t}
   roster:{},           // id -> profile (host-maintained, includes self)
   bridges:{},          // grp -> activeUntil (ms epoch) — host authoritative
-  padState:{},         // grp -> {A:Set(ids), B:Set(ids)}  (host only)
+  bridgeTimer:{},      // grp -> expiry of the 10s timer from an A+B activation
+  padState:{},         // grp -> {station -> Set(ids)}  (host only)
   startConfig:null,    // {level,seed,mode}
   // callbacks (assigned by game/ui):
   onStart:null,
@@ -193,19 +194,26 @@ function mpSetPad(playerId,grp,pad,on){
   const s=MP.padState[grp];
   if(!s[pad]) s[pad]=new Set();
   if(on) s[pad].add(playerId); else s[pad].delete(playerId);
+  mpEvalGate(grp);
+}
 
-  if(pad==='A' || pad==='B'){
-    const a=s.A||new Set(), b=s.B||new Set();
-    let both=false;
-    for(const ia of a){ for(const ib of b){ if(ia!==ib) both=true; } }
-    if(both && (!MP.bridges[grp] || MP.bridges[grp] < nowMs())){
-      const until=nowMs()+10000; MP.bridges[grp]=until;
-      mpBroadcast({t:'bridge', grp, until});
-    }
-  } else if(pad==='HA' || pad==='HB'){
-    const ha=s.HA||new Set(), hb=s.HB||new Set();
-    const held = ha.size>0 || hb.size>0;
-    const until = held ? nowMs()+3600000 : 0;   // 0 => inactive
+/* Unified gate state (host authoritative). A bridge group can have:
+   - pads 'A' & 'B'  -> pressing both (two different players) starts a 10s timer.
+   - any 'H*' lever  -> while held, the bridge stays solid (no lingering timer).
+   The bridge is solid if a lever is held OR the A+B timer is still running. */
+function mpEvalGate(grp){
+  const s=MP.padState[grp]||{};
+  let bothAB=false;
+  if(s.A && s.B){ for(const ia of s.A){ for(const ib of s.B){ if(ia!==ib) bothAB=true; } } }
+  let held=false;
+  for(const k in s){ if(k[0]==='H' && s[k].size>0) held=true; }
+  if(bothAB){
+    const t=MP.bridgeTimer[grp];
+    if(!t || t<nowMs()) MP.bridgeTimer[grp]=nowMs()+10000;
+  }
+  const timerActive = MP.bridgeTimer[grp] && MP.bridgeTimer[grp]>nowMs();
+  const until = held ? (nowMs()+3600000) : (timerActive ? MP.bridgeTimer[grp] : 0);
+  if(MP.bridges[grp]!==until){
     MP.bridges[grp]=until;
     mpBroadcast({t:'bridge', grp, until});
   }
@@ -221,7 +229,7 @@ function nowMs(){ return new Date().getTime(); }
 function mpLeave(){
   try{ MP.peer && MP.peer.destroy(); }catch(e){}
   MP.peer=null;MP.conns=[];MP.inRoom=false;MP.isHost=false;MP.roomCode='';
-  MP.remote={};MP.roster={};MP.bridges={};MP.padState={};MP.startConfig=null;
+  MP.remote={};MP.roster={};MP.bridges={};MP.bridgeTimer={};MP.padState={};MP.startConfig=null;
 }
 
 function mpRemoteList(){ return Object.keys(MP.remote).map(id=>Object.assign({id},MP.remote[id])); }
