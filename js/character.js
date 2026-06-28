@@ -141,6 +141,16 @@ function drawFace(ctx,w,h,face,facing){
     ctx.beginPath();ctx.arc(-ex,ey,er*0.9,Math.PI*0.1,Math.PI*0.9);ctx.stroke();
     ctx.beginPath();ctx.arc(ex,ey,er*0.9,Math.PI*0.1,Math.PI*0.9);ctx.stroke();
     smile(ctx,w,h);
+  }else if(face==='cheeky'){
+    // raised quirky eyebrows
+    ctx.lineWidth=Math.max(2.5,w*0.035);ctx.strokeStyle='#3a3050';ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(-ex,ey-er*1.9,er*0.95,Math.PI*1.12,Math.PI*1.92);ctx.stroke();
+    ctx.beginPath();ctx.arc( ex,ey-er*1.9,er*0.95,Math.PI*1.08,Math.PI*1.88);ctx.stroke();
+    // big wide eyes looking forward
+    eye(ctx,-ex,ey,er*1.18,pup*0.5);eye(ctx,ex,ey,er*1.18,pup*0.5);
+    // wide cheeky closed-mouth grin
+    ctx.lineWidth=Math.max(2.5,w*0.04);ctx.strokeStyle='#3a3050';
+    ctx.beginPath();ctx.arc(0,h*0.0,w*0.27,Math.PI*0.13,Math.PI*0.87);ctx.stroke();
   }else{
     eye(ctx,-ex,ey,er,pup);eye(ctx,ex,ey,er,pup);smile(ctx,w,h);
   }

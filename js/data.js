@@ -36,6 +36,7 @@ const ACCESSORIES = [
 const FACES = [
   { id:'classic', label:'Classic', price:0 },
   { id:'wink',    label:'Wink',    price:0 },
+  { id:'cheeky',  label:'Cheeky',  price:2000 },
   { id:'star',    label:'Starry',  price:-1, special:true },
   { id:'cool',    label:'Cool',    price:-1, special:true },
   { id:'kawaii',  label:'Kawaii',  price:-1, special:true },

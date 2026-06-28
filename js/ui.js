@@ -153,7 +153,7 @@ function renderFaces(grid){
     const cx=c.getContext('2d');
     drawCharacter(cx,35,38,52,{skin:SAVE.skin,accessory:'none',face:f.id,facing:1,t:0});
     sw.appendChild(c);
-    if(!owned){const p=document.createElement('span');p.className='price';p.textContent=f.special?'Chest':'Free';sw.appendChild(p);}
+    if(!owned){const p=document.createElement('span');p.className='price';p.textContent=f.special?'Chest':(f.price>0?'🪙'+f.price:'Free');sw.appendChild(p);}
     sw.onclick=()=>buyOrEquip('face',f,owned);
     grid.appendChild(sw);
   });
