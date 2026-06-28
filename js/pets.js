@@ -23,6 +23,7 @@ const ABILITY_INFO = {
   glideStrong:'Float gently down',
   platform:   'Place a platform (tap the ✨ button!)',
   doubleJump: 'Double jump (tap jump again in mid-air!)',
+  tripleJump: 'Triple jump (jump THREE times in the air!)',
 };
 
 // the creature roster
@@ -49,8 +50,8 @@ const CREATURES = [
   { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
   { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'], sell:320 },
   // secret — sell 700 (the rarest!)
-  { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['speed2','platform'],     sell:700 },
-  { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['platform','glideStrong'],sell:700 },
+  { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['tripleJump','speed2','platform'],     sell:700 },
+  { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['tripleJump','platform','glideStrong'],sell:700 },
   { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['speed2','glideStrong'],  sell:700 },
   { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['platform','speed2'],     sell:700 },
   { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['glideStrong','speed1'],  sell:700 },
@@ -205,7 +206,7 @@ function equippedAbilities(){
     moveMul: baseMove>1 ? baseMove+lvlBoost : 1,
     jumpMul: set.has('highJump2')?1.2 : set.has('highJump1')?1.1 : 1,
     fallMul: baseFall<1 ? Math.max(0.45, baseFall-glideBoost) : 1,
-    maxJumps: set.has('doubleJump')?2 : 1,
+    maxJumps: set.has('tripleJump')?3 : set.has('doubleJump')?2 : 1,
     canPlatform: set.has('platform'),
   };
 }
