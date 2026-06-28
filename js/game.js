@@ -128,7 +128,7 @@ function loadLevel(level){
   Game.world = Game.heist ? generateHeist(Game.seed)
              : Game.tower ? generateTower(Game.seed)
              : generateLevel(level, Game.seed, Game.mode);
-  Game.heistLoot=0; Game.heistEndT=Game.t+45000;   // 45-second heist clock
+  Game.heistLoot=0; Game.heistEndT=Game.t+20000;   // 20-second heist clock
   Game.disappear={};
   Game.hitCheckpoints=new Set();
   Game.coinsThisRun=0;

@@ -329,14 +329,14 @@ function startHeist(){
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
   startGame({mode:'heist', seed:dailySeed(), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('tower');
-  toast('💰 Grab ALL the gold — 45 seconds! Watch the lasers!');
+  toast('💰 Grab ALL the gold — 20 seconds! Watch the lasers!');
 }
 function refreshHeistButton(){
   const b=document.getElementById('heistBtn'); if(!b) return;
   const done = SAVE.heist && SAVE.heist.key===dailyKey() && SAVE.heist.done;
   b.innerHTML = done
     ? '💰 Gold Heist <span class="badge">✓ done</span>'
-    : '💰 Gold Heist <span class="badge" style="background:var(--gold);color:#7a5512">45s!</span>';
+    : '💰 Gold Heist <span class="badge" style="background:var(--gold);color:#7a5512">20s!</span>';
 }
 function refreshDailyButton(){
   const b=document.getElementById('dailyBtn'); if(!b) return;
@@ -526,7 +526,7 @@ function onLevelComplete(level, earned, isFinal, res){
   const isHeist=!!res.heist;
   if(isHeist){
     waitMsg=`<p class="timer-big">💰 You grabbed 🪙${res.loot}!</p>
-      <p class="muted">${res.coins} gold in 45 seconds${SAVE.heist&&SAVE.heist.best?` · best 🪙${SAVE.heist.best}`:''}</p>`;
+      <p class="muted">${res.coins} gold in 20 seconds${SAVE.heist&&SAVE.heist.best?` · best 🪙${SAVE.heist.best}`:''}</p>`;
   }
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
   const showStats = !Game.multiplayer && !isHeist;
