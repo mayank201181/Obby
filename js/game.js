@@ -584,10 +584,20 @@ function updateSoloHazards(){
       if(Math.sin(Game.t*h.omega+h.phase)>0){ hit=rectsOverlap(p.x,p.y,p.w,p.h, h.x,h.y-h.h,h.w,h.h+4); label='🔺 Ouch! Spikes!'; }
     } else if(h.kind==='lasergate'){
       if(Math.sin(Game.t*h.omega+h.phase)>0.1){ hit=rectsOverlap(p.x,p.y,p.w,p.h, h.x,h.y,h.w,h.h); label='⚡ Zapped!'; }
+    } else if(h.kind==='movelaser'){
+      const bx=h.cx + h.range*Math.sin(Game.t*h.omega+h.phase);
+      if(rectsOverlap(p.x,p.y,p.w,p.h, bx-h.w/2,h.y,h.w,h.h)){ hit=true; label='⚡ Laser!'; h._bx=bx; }
     }
     if(hit){
       if(absorbWithShield()){ p.invuln=600; break; }
-      respawn(); p.invuln=1100; SFX.hit();
+      if(Game.heist){
+        // heist: knock you back a bit instead of resetting to the bottom
+        const fromX = (h.kind==='movelaser') ? h._bx : (h.x+ (h.w||0)/2);
+        p.vy=Math.max(p.vy,5); p.vx = (p.x+p.w/2 < fromX ? -7 : 7); p.invuln=900;
+        SFX.hit(); addShake(4);
+      } else {
+        respawn(); p.invuln=1100; SFX.hit();
+      }
       if(typeof toast==='function') toast(label);
       break;
     }
@@ -659,6 +669,13 @@ function drawSoloHazards(ctx){
       if(on){ ctx.globalAlpha=Math.sin(Game.t/60)*0.25+0.75; ctx.fillStyle='#ff5a5a'; roundRect(ctx,h.x,h.y,h.w,h.h,4); ctx.fill();
         ctx.fillStyle='#fff'; ctx.fillRect(h.x,h.y+h.h/2-1,h.w,2); ctx.globalAlpha=1;
       } else { ctx.globalAlpha=0.25; ctx.fillStyle='#b8c4d6'; ctx.fillRect(h.x,h.y+h.h/2-1,h.w,2); ctx.globalAlpha=1; }
+    } else if(h.kind==='movelaser'){
+      const bx=h.cx + h.range*Math.sin(Game.t*h.omega+h.phase);
+      // emitter caps top & bottom
+      ctx.fillStyle='#6b5b78'; ctx.fillRect(bx-9,h.y-9,18,9); ctx.fillRect(bx-9,h.y+h.h,18,9);
+      ctx.globalAlpha=Math.sin(Game.t/50)*0.2+0.8; ctx.fillStyle='#ff5a5a';
+      roundRect(ctx,bx-h.w/2,h.y,h.w,h.h,4); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.fillRect(bx-1.5,h.y,3,h.h); ctx.globalAlpha=1;
     }
   }
 }

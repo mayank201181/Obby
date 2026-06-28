@@ -380,34 +380,58 @@ function generateHeist(seed){
   const rnd = mulberry32((seed*1000 + 777)|0);
   const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
-  const W=WORLD_W, H=1900;
+  const W=WORLD_W;
   const platforms=[]; const hazards=[]; let id=0;
-  // vault floor
-  platforms.push({id:id++, x:0, y:H-30, w:W, h:30, type:'big'});
-  const start={x:W/2, y:H-30-40};
-  // a few ground coins to start the grab
-  for(let i=0;i<6;i++) platforms.push({id:id++, type:'coin', heist:true, x:80+i*((W-160)/5)-10, y:H-78, w:20, h:20});
-  // stacked ledges full of gold
-  const rows=7;
-  for(let r=0;r<rows;r++){
-    const y=H-150 - r*235;
-    const count=rint(2,3);
-    for(let i=0;i<count;i++){
-      const w=rint(96,168);
-      const x=clamp(rint(40, W-40-w), 30, W-30-w);
-      platforms.push({id:id++, x, y, w, h:24, type:'normal'});
-      const nc=rint(2,4);
-      for(let k=0;k<nc;k++) platforms.push({id:id++, type:'coin', heist:true, x:x+12+k*((w-24)/Math.max(1,nc-1))-10, y:y-36, w:20, h:20});
-    }
-    // a toggling laser wall blocking part of this floor
-    if(r>0 && rnd()<0.65){
-      const lw=rint(120,200), lx=clamp(rint(40,W-40-lw),30,W-30-lw);
-      hazards.push({kind:'lasergate', x:lx, y:y-92, w:lw, h:12, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1300,2000)});
+  const coin=(x,y)=>platforms.push({id:id++, type:'coin', heist:true, x:x-10, y:y-10, w:20, h:20});
+
+  // vault floor + a row of starter gold
+  const bottomY=2500;
+  platforms.push({id:id++, x:0, y:bottomY, w:W, h:30, type:'big'});
+  const start={x:W/2, y:bottomY-40};
+  for(let i=0;i<6;i++) coin(W/2-130+i*52, bottomY-34);
+
+  // a guaranteed-climbable path of platforms (single-jump gaps), packed with gold.
+  // every 5th step is a bouncy "jump pad" to launch you up to a side coin shelf.
+  const STEPS=22;
+  let prevX=W/2, y=bottomY;
+  for(let s=0;s<STEPS;s++){
+    y -= rint(80, 98);                          // reachable single jump
+    const w=rint(112,160);
+    const maxOff = w>=140?150:124;
+    const off=rint(46, maxOff);
+    let dir=rnd()<0.5?-1:1;
+    let nx=prevX+dir*off;
+    if(nx<70 || nx>W-70) nx=prevX-dir*off;
+    nx=clamp(nx, 70+w/2, W-70-w/2);
+    prevX=nx;
+    const bouncy = (s%5===4);
+    platforms.push({id:id++, x:nx-w/2, y, w, h:24, type:bouncy?'bouncy':'normal', path:true});
+    // gold sitting on the platform
+    const nc=rint(2,3);
+    for(let k=0;k<nc;k++) coin(nx + (k-(nc-1)/2)*32, y-26);
+    // a small coin shelf up & to the side (bonus loot — reach it with a jump/bounce)
+    if(rnd()<0.55){
+      const sw=rint(82,120), sdir=(dir>0?-1:1);
+      const sx=clamp(nx + sdir*rint(120,165) - sw/2, 40, W-40-sw);
+      platforms.push({id:id++, x:sx, y:y-78, w:sw, h:22, type:'normal'});
+      const sc=rint(2,4);
+      for(let k=0;k<sc;k++) coin(sx + 14 + k*((sw-28)/Math.max(1,sc-1)), y-78-26);
     }
   }
-  // bonus coins floating in the open gaps
-  for(let i=0;i<16;i++) platforms.push({id:id++, type:'coin', heist:true, x:rint(40,W-60), y:rint(140,H-160), w:20, h:20});
-  return { mode:'heist', heist:true, level:1, seed, width:W, height:H, platforms, checkpoints:[], hazards, start, finishY:-1e9 };
+
+  // security lasers: a few toggling gates + sweeping beams that slide side-to-side
+  for(let s=2;s<STEPS;s+=4){
+    const gy = bottomY - s*89;
+    if(rnd()<0.6){
+      const lw=rint(110,180), lx=clamp(rint(60,W-60-lw),40,W-40-lw);
+      hazards.push({kind:'lasergate', x:lx, y:gy, w:lw, h:12, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1300,2000)});
+    } else {
+      // a vertical beam that sweeps horizontally across the shaft
+      hazards.push({kind:'movelaser', cx:W/2, y:gy-70, h:150, w:11, range:W*0.32, phase:rnd()*6.283, omega:(2*Math.PI)/rint(2200,3400)});
+    }
+  }
+
+  return { mode:'heist', heist:true, level:1, seed, width:W, height:bottomY, platforms, checkpoints:[], hazards, start, finishY:-1e9 };
 }
 
 /* called each frame in tower mode: keep a couple of floors generated ahead */
