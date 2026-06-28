@@ -372,6 +372,44 @@ function towerFloor(world){
   world._floor++;
 }
 
+/* ===== GOLD HEIST =====
+   A daily 45-second time-attack vault: a compact arena stuffed with gold
+   coins, with toggling laser-wall gates blocking some of the loot. Grab as
+   much as you can before the timer runs out — there's no finish line. */
+function generateHeist(seed){
+  const rnd = mulberry32((seed*1000 + 777)|0);
+  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const W=WORLD_W, H=1900;
+  const platforms=[]; const hazards=[]; let id=0;
+  // vault floor
+  platforms.push({id:id++, x:0, y:H-30, w:W, h:30, type:'big'});
+  const start={x:W/2, y:H-30-40};
+  // a few ground coins to start the grab
+  for(let i=0;i<6;i++) platforms.push({id:id++, type:'coin', heist:true, x:80+i*((W-160)/5)-10, y:H-78, w:20, h:20});
+  // stacked ledges full of gold
+  const rows=7;
+  for(let r=0;r<rows;r++){
+    const y=H-150 - r*235;
+    const count=rint(2,3);
+    for(let i=0;i<count;i++){
+      const w=rint(96,168);
+      const x=clamp(rint(40, W-40-w), 30, W-30-w);
+      platforms.push({id:id++, x, y, w, h:24, type:'normal'});
+      const nc=rint(2,4);
+      for(let k=0;k<nc;k++) platforms.push({id:id++, type:'coin', heist:true, x:x+12+k*((w-24)/Math.max(1,nc-1))-10, y:y-36, w:20, h:20});
+    }
+    // a toggling laser wall blocking part of this floor
+    if(r>0 && rnd()<0.65){
+      const lw=rint(120,200), lx=clamp(rint(40,W-40-lw),30,W-30-lw);
+      hazards.push({kind:'lasergate', x:lx, y:y-92, w:lw, h:12, phase:rnd()*6.283, omega:(2*Math.PI)/rint(1300,2000)});
+    }
+  }
+  // bonus coins floating in the open gaps
+  for(let i=0;i<16;i++) platforms.push({id:id++, type:'coin', heist:true, x:rint(40,W-60), y:rint(140,H-160), w:20, h:20});
+  return { mode:'heist', heist:true, level:1, seed, width:W, height:H, platforms, checkpoints:[], hazards, start, finishY:-1e9 };
+}
+
 /* called each frame in tower mode: keep a couple of floors generated ahead */
 function maybeExtendTower(){
   const w=Game.world;

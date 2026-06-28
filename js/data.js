@@ -83,6 +83,7 @@ const ACHIEVEMENTS = [
   { id:'questmaster',name:'Go-Getter', desc:'Complete a daily quest',       emoji:'✅' },
   { id:'streak', name:'On Fire',       desc:'Hit a 7-day quest streak',     emoji:'🔥' },
   { id:'tagger', name:"Tag, You're It",desc:'Tag a friend in Tag mode',     emoji:'🏃' },
+  { id:'heist',  name:'Master Thief',  desc:'Pull off a Gold Heist',         emoji:'💰' },
 ];
 
 // Quick-chat emotes. The first six are free; the rest unlock in the shop.
@@ -210,6 +211,7 @@ function defaultSave(){
     questStreak:0,         // consecutive days completing all 3 quests
     questStreakDay:0,      // day index a streak bonus was last awarded
     ownedEmotes:['happy','laugh','heart','thumb','wow','party'],  // unlocked quick emotes
+    heist:{key:'',best:0,done:false},  // daily Gold Heist progress
   };
 }
 

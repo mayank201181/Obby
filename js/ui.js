@@ -71,6 +71,7 @@ function initLobby(){
   refreshChestButton();
   refreshDailyButton();
   refreshQuestButton();
+  refreshHeistButton();
   startMusicIfOn('lobby');
 }
 function applyLobbyBg(){
@@ -316,6 +317,27 @@ function startDaily(){
   startGame({level:3, seed:dailySeed(), mode:'solo', multiplayer:false, difficulty:'hard', daily:true});
   startMusicIfOn('game');
 }
+/* ---------------- Gold Heist (daily 45s coin grab) ---------------- */
+function startHeist(){
+  SFX.click();
+  const k=dailyKey();
+  if(SAVE.heist && SAVE.heist.key===k && SAVE.heist.done){
+    toast('💰 Heist already done today — come back tomorrow!'); return;
+  }
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'heist', seed:dailySeed(), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('tower');
+  toast('💰 Grab ALL the gold — 45 seconds! Watch the lasers!');
+}
+function refreshHeistButton(){
+  const b=document.getElementById('heistBtn'); if(!b) return;
+  const done = SAVE.heist && SAVE.heist.key===dailyKey() && SAVE.heist.done;
+  b.innerHTML = done
+    ? '💰 Gold Heist <span class="badge">✓ done</span>'
+    : '💰 Gold Heist <span class="badge" style="background:var(--gold);color:#7a5512">45s!</span>';
+}
 function refreshDailyButton(){
   const b=document.getElementById('dailyBtn'); if(!b) return;
   const done = SAVE.daily && SAVE.daily.key===dailyKey() && SAVE.daily.done;
@@ -501,25 +523,33 @@ function onLevelComplete(level, earned, isFinal, res){
       waitMsg=`<p class="muted">Teammates finished: ${doneCount}/${others.length}</p>`;
     }
   }
+  const isHeist=!!res.heist;
+  if(isHeist){
+    waitMsg=`<p class="timer-big">💰 You grabbed 🪙${res.loot}!</p>
+      <p class="muted">${res.coins} gold in 45 seconds${SAVE.heist&&SAVE.heist.best?` · best 🪙${SAVE.heist.best}`:''}</p>`;
+  }
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const starsRow = !Game.multiplayer ? `<div class="stars-row">${
+  const showStats = !Game.multiplayer && !isHeist;
+  const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
-  const timeRow = !Game.multiplayer ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
+  const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-    : (res.daily
-        ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-        : (isFinal
-            ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-            : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`));
-  const heading = res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
+    : (isHeist
+        ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+        : (res.daily
+            ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+            : (isFinal
+                ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)));
+  const heading = isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
-    <p class="timer-big">+🪙${earned}</p>${waitMsg}
+    ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;
   openModal('winModal');
   spawnConfetti(document.getElementById('confettiBox'));

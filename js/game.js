@@ -21,6 +21,7 @@ const Game = {
   difficulty:'hard',            // 'easy' = no shooting cannons, 'hard' = cannons
   tower:false,                  // endless Tower mode
   daily:false,                  // daily challenge run
+  heist:false, heistLoot:0, heistEndT:0,  // daily Gold Heist (45s coin grab)
   myEmote:null, myEmoteAt:0,    // quick-emoji bubble over the local player
   spectating:false, spectateId:null,  // watch a friend after finishing
   racePlace:0,                  // your finishing place in a race (1 = first)
@@ -97,6 +98,7 @@ function startGame(opts){
   Game.difficulty=opts.difficulty||'hard';
   Game.tower = opts.mode==='tower';
   Game.daily = !!opts.daily;
+  Game.heist = opts.mode==='heist';
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
   if(Game.mode==='coop' && Game.multiplayer){
@@ -123,7 +125,10 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.tower ? generateTower(Game.seed) : generateLevel(level, Game.seed, Game.mode);
+  Game.world = Game.heist ? generateHeist(Game.seed)
+             : Game.tower ? generateTower(Game.seed)
+             : generateLevel(level, Game.seed, Game.mode);
+  Game.heistLoot=0; Game.heistEndT=Game.t+45000;   // 45-second heist clock
   Game.disappear={};
   Game.hitCheckpoints=new Set();
   Game.coinsThisRun=0;
@@ -268,6 +273,7 @@ function update(dt){
   updateSoloHazards();                  // pendulums / spikes / laser gates (Hard)
   collectCoins(p);
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
+  if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
@@ -465,9 +471,14 @@ function collectCoins(p){
       }
       if(grab){
         const gain = Game.t<Game.power.x2Until ? 2 : 1;     // ⭐ double-coins power-up
-        c.taken=true; Game.runCoins+=gain; addCoins(gain); SFX.coin();
-        SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+gain; persist();
-        if(SAVE.lvlCoinsCollected>=50) unlockAchievement('coins50');
+        c.taken=true; Game.runCoins+=gain; SFX.coin();
+        if(Game.heist){
+          Game.heistLoot += 5*gain;      // gold bars — banked all at once when the timer ends
+        } else {
+          addCoins(gain);
+          SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+gain; persist();
+          if(SAVE.lvlCoinsCollected>=50) unlockAchievement('coins50');
+        }
         if(typeof questEvent==='function') questEvent('coins',gain);
       }
     } else if(c.type==='powerup'){
@@ -560,7 +571,7 @@ function updateTrapdoors(){
    toggling laser gates. Frozen during automated tests and inert in Easy. */
 function updateSoloHazards(){
   if(Game.freezeHazards || !Game.world || !Game.world.hazards) return;
-  if(Game.difficulty!=='hard') return;
+  if(Game.difficulty!=='hard' && !Game.heist) return;
   const p=Game.player; if(!isHittable(p)) return;
   for(const h of Game.world.hazards){
     let hit=false, label='💫 Bonked!';
@@ -585,6 +596,7 @@ function updateSoloHazards(){
 
 /* ---- per-level themes / weather ---- */
 function levelTheme(){
+  if(Game.heist) return {css:'linear-gradient(180deg,#2a2030,#4a3a2a 55%,#6e5a2e)', weather:'embers', glow:'rgba(255,210,90,.25)'};
   if(Game.tower) return {css:'linear-gradient(180deg,#1a1340,#3b2a7a 55%,#5a4a9a)', weather:'stars', glow:'rgba(180,160,255,.22)'};
   const T={
     1:{css:'linear-gradient(180deg,#cfeaff,#bcd9ff)',         weather:null,     glow:'rgba(123,224,176,.25)'},
@@ -624,7 +636,7 @@ function drawWeather(ctx){
   ctx.restore();
 }
 function drawSoloHazards(ctx){
-  if(Game.difficulty!=='hard' || !Game.world.hazards) return;
+  if((Game.difficulty!=='hard' && !Game.heist) || !Game.world.hazards) return;
   for(const h of Game.world.hazards){
     if(h.kind==='pendulum'){
       const ang=h.amp*Math.sin(Game.t*h.omega+h.phase);
@@ -989,6 +1001,20 @@ function levelFinished(){
   }
   if(Game.onLevelComplete) Game.onLevelComplete(Game.level, earned, isFinal,
                             {timeMs, stars, newRecord, deaths:Game.deaths, coins:Game.runCoins});
+}
+
+/* Gold Heist: the 45s timer ran out — bank all the loot at once */
+function endHeist(){
+  Game.finished=true;
+  const loot=Game.heistLoot;
+  addCoins(loot); SFX.win(); addShake(6);
+  const k=dailyKey();
+  if(!SAVE.heist || SAVE.heist.key!==k) SAVE.heist={key:k, best:0, done:false};
+  SAVE.heist.done=true;
+  if(loot>SAVE.heist.best) SAVE.heist.best=loot;
+  unlockAchievement('heist');
+  persist();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, loot, true, {heist:true, loot, coins:Game.runCoins});
 }
 
 function nextLevel(){
@@ -1386,13 +1412,17 @@ function roundRect(ctx,x,y,w,h,r){
 /* ---------- HUD ---------- */
 function updateHud(){
   const el=document.getElementById('hudLevel');
-  el.textContent = Game.tower ? '🏗️ Tower'
+  el.textContent = Game.heist ? '💰 Gold Heist'
+                 : Game.tower ? '🏗️ Tower'
                  : Game.daily ? '🗓️ Daily'
                  : 'Level '+Game.level+'/'+TOTAL_LEVELS;
 }
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
-  if(Game.tower){
+  if(Game.heist){
+    const left=Math.max(0, Math.ceil((Game.heistEndT-Game.t)/1000));
+    document.getElementById('hudCp').textContent='⏱ '+left+'s · 🪙'+Game.heistLoot;
+  } else if(Game.tower){
     document.getElementById('hudCp').textContent='🏗️ Floor '+done+(SAVE.towerBest?(' · best '+SAVE.towerBest):'');
   } else {
     document.getElementById('hudCp').textContent='⛳ '+done+'/'+CHECKPOINTS;
