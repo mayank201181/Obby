@@ -22,6 +22,7 @@ const ABILITY_INFO = {
   glide:      'Fall slower (float)',
   glideStrong:'Float gently down',
   platform:   'Place a platform (tap the ✨ button!)',
+  doubleJump: 'Double jump (tap jump again in mid-air!)',
 };
 
 // the creature roster
@@ -44,8 +45,8 @@ const CREATURES = [
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
   { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['glideStrong'], sell:200 },
   // mythical — sell 320
-  { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['glideStrong'],     sell:320 },
-  { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['glideStrong'],     sell:320 },
+  { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['doubleJump','glideStrong'], sell:320 },
+  { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
   { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'], sell:320 },
   // secret — sell 700 (the rarest!)
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['speed2','platform'],     sell:700 },
