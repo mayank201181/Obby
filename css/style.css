@@ -123,6 +123,16 @@ input.text:focus{border-color:var(--purple-2);}
 .swatch .price{position:absolute;bottom:-9px;font-size:11px;font-weight:800;background:#fff;border-radius:8px;padding:0 5px;color:#a07a16;box-shadow:0 2px 4px rgba(0,0,0,.1);}
 .swatch.rainbow{background:linear-gradient(45deg,#ff9bce,#ffd36b,#9be7a0,#9cc4ff,#c8a0ff);background-size:200% 200%;animation:rainbow 3s linear infinite;}
 @keyframes rainbow{0%{background-position:0 0}100%{background-position:200% 200%}}
+.swatch.royal{background:linear-gradient(45deg,#b06bff,#ff7ed8,#74a8ff,#b06bff);background-size:200% 200%;animation:rainbow 2.4s linear infinite;}
+
+/* Gold Vault exclusive chest + reward bundle */
+.chest-row.gold-vault{background:linear-gradient(135deg,#fff6e0,#ffe9b0);border:2px solid #ffd36b;box-shadow:0 0 14px rgba(255,200,80,.4);}
+.vault-grid{display:flex;gap:8px;justify-content:center;margin:10px 0;}
+.vault-item{flex:1;background:#faf5ff;border-radius:14px;padding:10px 6px;border:2px solid #efe7fb;}
+.vi-emoji{font-size:34px;height:38px;line-height:38px;}
+.vi-emoji.vi-royal,.vi-emoji.vi-rainbow{width:34px;height:34px;border-radius:50%;margin:2px auto;}
+.vi-emoji.vi-royal{background:linear-gradient(45deg,#b06bff,#ff7ed8,#74a8ff,#b06bff);background-size:200% 200%;animation:rainbow 2.4s linear infinite;}
+.vi-emoji.vi-rainbow{background:linear-gradient(45deg,#ff9bce,#ffd36b,#9be7a0,#9cc4ff,#c8a0ff);background-size:200% 200%;animation:rainbow 3s linear infinite;}
 
 .tabs{display:flex;gap:8px;margin-bottom:10px;justify-content:center;}
 .tab{flex:1;padding:10px;border-radius:12px;background:#f1e9fb;font-weight:800;color:var(--ink-soft);}

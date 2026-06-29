@@ -473,7 +473,7 @@ function collectCoins(p){
         const gain = Game.t<Game.power.x2Until ? 2 : 1;     // ⭐ double-coins power-up
         c.taken=true; Game.runCoins+=gain; SFX.coin();
         if(Game.heist){
-          Game.heistLoot += 5*gain;      // gold bars — banked all at once when the timer ends
+          Game.heistLoot += gain;        // 1 coin each — banked all at once when the timer ends
         } else {
           addCoins(gain);
           SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+gain; persist();
@@ -1179,6 +1179,13 @@ function drawWorldBackdrop(ctx){
   ctx.fillRect(-200, Game.world.finishY-200, w+400, 200);
 }
 
+/* Royal trail colour: smoothly cycles purple -> pink -> blue */
+function royalColor(t){
+  const cols=[[176,107,255],[255,126,216],[116,168,255]];
+  const p=((t/700)%cols.length+cols.length)%cols.length, i=Math.floor(p), f=p-i;
+  const a=cols[i], b=cols[(i+1)%cols.length];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*f)},${Math.round(a[1]+(b[1]-a[1])*f)},${Math.round(a[2]+(b[2]-a[2])*f)})`;
+}
 /* cosmetic trail of fading dots / emojis behind the player */
 function drawTrail(ctx, p){
   const tr = trailById(SAVE.trail);
@@ -1193,7 +1200,9 @@ function drawTrail(ctx, p){
       ctx.font=`${Math.round(8+a*16)}px serif`;
       ctx.fillText(tr.emoji, pt.x, pt.y);
     } else {
-      ctx.fillStyle = tr.color==='rainbow' ? `hsl(${(Game.t/6 + i*22)%360},90%,62%)` : tr.color;
+      ctx.fillStyle = tr.color==='rainbow' ? `hsl(${(Game.t/6 + i*22)%360},90%,62%)`
+                    : tr.color==='royal'   ? royalColor(Game.t + i*110)
+                    : tr.color;
       ctx.beginPath(); ctx.arc(pt.x, pt.y, 3+a*8, 0, Math.PI*2); ctx.fill();
     }
   }

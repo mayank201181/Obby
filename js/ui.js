@@ -107,9 +107,11 @@ function renderTrails(grid){
     const sw=document.createElement('div');
     sw.className='swatch'+(SAVE.trail===t.id?' selected':'')+(!owned?' locked':'');
     if(t.color==='rainbow') sw.classList.add('rainbow');
+    else if(t.color==='royal') sw.classList.add('royal');
     else if(t.color) sw.style.background=t.color;
+    else if(t.emoji){ sw.style.background='#fff'; sw.textContent=t.emoji; }
     else { sw.style.background='#fff'; sw.textContent='🚫'; }
-    if(!owned){ const p=document.createElement('span');p.className='price';p.textContent='🪙'+t.price;sw.appendChild(p); }
+    if(!owned){ const p=document.createElement('span');p.className='price';p.textContent=t.special?'🌟':('🪙'+t.price);sw.appendChild(p); }
     sw.onclick=()=>buyOrEquip('trail',t,owned);
     grid.appendChild(sw);
   });
@@ -787,15 +789,24 @@ function oddsLine(weights){
 function renderChestsTab(body){
   body.innerHTML = Object.keys(CHESTS).map(id=>{
     const c=CHESTS[id]; const can=SAVE.coins>=c.cost;
+    if(c.exclusive){
+      return `<div class="chest-row gold-vault">
+        <div class="chest-ico">${c.emoji}</div>
+        <div class="chest-info"><b>${c.label} <span class="rarity-badge" style="background:#ffd36b;color:#7a5512">EXCLUSIVE</span></b>
+          <div class="muted" style="font-size:11px;line-height:1.4">Guaranteed: 🦄 Unicorn (triple jump!) · 💜 Royal trail · 🌈 Rainbow skin</div></div>
+        <button class="btn gold small" ${can?'':'disabled'} onclick="doOpenChest('${id}')">🪙${c.cost}</button>
+      </div>`;
+    }
     return `<div class="chest-row">
       <div class="chest-ico">${c.emoji}</div>
       <div class="chest-info"><b>${c.label}</b>
         <div class="muted" style="font-size:11px;line-height:1.35">${oddsLine(c.weights)}</div></div>
       <button class="btn gold small" ${can?'':'disabled'} onclick="doOpenChest('${id}')">🪙${c.cost}</button>
     </div>`;
-  }).join('') + `<p class="hint">Better chests = better odds for rare pets. Sell duplicates in the Pets tab. Equip a pet to use its power in the obby!</p>`;
+  }).join('') + `<p class="hint">Better chests = better odds for rare pets. Save up for the 🌟 Gold Vault! Equip a pet to use its power in the obby!</p>`;
 }
 function doOpenChest(id){
+  if(id==='gold'){ doOpenGoldVault(); return; }
   const res=openPetChest(id);
   if(res.error){ toast(res.error); return; }
   const rare = ['legendary','mythical','secret'].includes(res.creature.rarity);
@@ -804,6 +815,25 @@ function doOpenChest(id){
   checkPetAchievements();
   updateCoinDisplays(); renderPets();
   showPetReveal(res.creature, res.count);
+}
+function doOpenGoldVault(){
+  const res=openGoldVault();
+  if(res.error){ toast(res.error); return; }
+  SFX.rare(); unlockAchievement('secret'); checkPetAchievements();
+  updateCoinDisplays(); renderPets();
+  const body=document.getElementById('petModalBody');
+  body.innerHTML=`
+    <div class="muted">🌟 ✨ GOLD VAULT UNLOCKED ✨ 🌟</div>
+    <div class="pet-big" style="--rc:#ffd36b">🌟</div>
+    <h2 style="margin:4px 0">Exclusive Bundle!</h2>
+    <div class="vault-grid">
+      <div class="vault-item"><div class="vi-emoji">🦄</div><b>Unicorn</b><div class="muted" style="font-size:11px">Secret · Triple jump${res.petWasNew?'':' (another one!)'}</div></div>
+      <div class="vault-item"><div class="vi-emoji vi-royal"></div><b>Royal Trail</b><div class="muted" style="font-size:11px">Purple→pink→blue</div></div>
+      <div class="vault-item"><div class="vi-emoji vi-rainbow"></div><b>Rainbow Skin</b><div class="muted" style="font-size:11px">Colour-changing</div></div>
+    </div>
+    <p class="hint">Equip them in Pets &amp; Customise! 🎉</p>
+    <button class="btn pink" onclick="closeModal('petModal')">Awesome!</button>`;
+  openModal('petModal');
 }
 function rarityBadge(r){ const i=RARITY_INFO[r]; return `<span class="rarity-badge" style="background:${i.color}">${i.label}</span>`; }
 function abilityText(c){ return c.abilities.length? c.abilities.map(a=>ABILITY_INFO[a]).join(' + ') : 'No special power'; }

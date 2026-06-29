@@ -70,7 +70,27 @@ const CHESTS = {
     weights:{ basic:38, rare:34, superRare:18, legendary:7,  mythical:2.5,secret:0.5 } },
   legendary: { label:'Legendary Chest', cost:350, emoji:'🏆',
     weights:{ basic:12, rare:24, superRare:28, legendary:21, mythical:11, secret:4 } },
+  // exclusive fixed-reward vault — guarantees a bundle (no random roll)
+  gold:      { label:'Gold Vault', cost:10000, emoji:'🌟', exclusive:true,
+    grants:{ pet:'unicorn', trail:'royal', skin:'rainbow' } },
 };
+
+/* open the exclusive Gold Vault: a guaranteed bundle, repeatable */
+function openGoldVault(){
+  const chest=CHESTS.gold;
+  if(SAVE.coins < chest.cost) return {error:'Not enough coins'};
+  SAVE.coins -= chest.cost;
+  const g=chest.grants;
+  // Unicorn (secret, triple jump) — stacks if you already have one
+  const had=SAVE.pets[g.pet]||0;
+  SAVE.pets[g.pet]=had+1;
+  if(!SAVE.equippedPet) SAVE.equippedPet=g.pet;
+  // Royal trail + Rainbow colour-changing skin
+  if(!SAVE.ownedTrails.includes(g.trail)) SAVE.ownedTrails.push(g.trail);
+  if(!SAVE.ownedSkins.includes(g.skin)) SAVE.ownedSkins.push(g.skin);
+  persist();
+  return { pet:creatureById(g.pet), petWasNew:had===0, trail:trailById(g.trail), skin:skinById(g.skin) };
+}
 
 function rollRarity(weights){
   let total=0; for(const r of RARITIES) total += (weights[r]||0);

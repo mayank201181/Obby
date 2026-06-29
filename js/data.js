@@ -59,6 +59,8 @@ const TRAILS = [
   { id:'fire',    name:'Fire',    emoji:'🔥',       price:200 },
   { id:'bubble',  name:'Bubbles', emoji:'🫧',       price:200 },
   { id:'rainbow', name:'Rainbow', color:'rainbow', price:300 },
+  // exclusive — only from the Gold Vault chest:
+  { id:'royal',   name:'Royal',   color:'royal',   price:-1, special:true },
 ];
 const trailById = id => TRAILS.find(t=>t.id===id) || TRAILS[0];
 
