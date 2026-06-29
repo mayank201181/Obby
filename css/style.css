@@ -375,3 +375,15 @@ select.text{appearance:none;background:#fff;}
 .lobby-col{flex:1;min-width:0;display:flex;flex-direction:column;}
 .lobby-col .btn{font-size:14px;padding:12px 8px;line-height:1.15;}
 .lobby-col .btn .badge{font-size:10px;padding:1px 5px;margin-left:3px;}
+
+/* wide screens (tablet/desktop): float the two button groups out of the
+   card and pin them to the empty left & right side margins */
+@media (min-width:860px){
+  .lobby-cols{display:block;}                 /* collapse the now-empty wrapper */
+  .lobby-col{position:fixed;top:50%;transform:translateY(-50%);
+    width:min(230px,22vw);z-index:4;}
+  .lobby-col:first-child{left:max(18px,3vw);}  /* first four → far left */
+  .lobby-col:last-child{right:max(18px,3vw);}  /* the rest → far right */
+  .lobby-col .btn{font-size:16px;padding:15px 16px;}
+  .lobby-col .btn .badge{font-size:12px;padding:2px 8px;margin-left:5px;}
+}
