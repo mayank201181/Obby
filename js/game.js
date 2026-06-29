@@ -22,6 +22,10 @@ const Game = {
   tower:false,                  // endless Tower mode
   daily:false,                  // daily challenge run
   heist:false, heistLoot:0, heistEndT:0,  // daily Gold Heist (45s coin grab)
+  disaster:false, disasterType:null, disasterPhase:'build', disasterPhaseT:0,
+  disasterButtons:0, disasterLives:3,
+  buildMode:false, buildColor:'#cdb8ff', buildLavaProof:false, builtPlatforms:[],
+  dz:null,                       // active disaster entities
   myEmote:null, myEmoteAt:0,    // quick-emoji bubble over the local player
   spectating:false, spectateId:null,  // watch a friend after finishing
   racePlace:0,                  // your finishing place in a race (1 = first)
@@ -86,6 +90,13 @@ function gameInit(){
     if(e.key==='ArrowUp'||e.key===' '||e.key==='w') Game.input.jump=true;
   },{passive:false});
   window.addEventListener('keyup',e=>{ if(typingInField(e)) return; Game.keys[e.key]=false; });
+  // tap the arena to place a block while building (disaster mode)
+  Game.canvas.addEventListener('pointerdown', e=>{
+    if(Game.disaster && Game.buildMode){
+      const r=Game.canvas.getBoundingClientRect();
+      disasterBuildAt(e.clientX-r.left, e.clientY-r.top);
+    }
+  });
   setupTouchControls();
 }
 
@@ -112,6 +123,8 @@ function startGame(opts){
   Game.tower = opts.mode==='tower';
   Game.daily = !!opts.daily;
   Game.heist = opts.mode==='heist';
+  Game.disaster = opts.mode==='disaster';
+  Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
   if(Game.mode==='coop' && Game.multiplayer){
@@ -131,6 +144,7 @@ function startGame(opts){
   // multiplayer-only chrome: quick emojis (all modes) + boost button (co-op)
   const eb=document.getElementById('emoteBar'); if(eb){ eb.style.display = Game.multiplayer ? 'flex':'none'; if(Game.multiplayer && typeof buildEmoteBar==='function') buildEmoteBar(); }
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
+  const bbar=document.getElementById('buildBar'); if(bbar){ bbar.style.display = Game.disaster ? 'flex':'none'; if(Game.disaster && typeof setupBuildBar==='function') setupBuildBar(); }
   if(typeof setSpectateChrome==='function') setSpectateChrome(false);
   Game.running=true; Game.finished=false; Game.last=performance.now(); Game.acc=0;
   cancelAnimationFrame(Game.raf);
@@ -138,9 +152,16 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.heist ? generateHeist(Game.seed)
+  Game.world = Game.disaster ? generateDisaster(Game.seed)
+             : Game.heist ? generateHeist(Game.seed)
              : Game.tower ? generateTower(Game.seed)
              : generateLevel(level, Game.seed, Game.mode);
+  if(Game.disaster){
+    Game.disasterPhase='build'; Game.disasterPhaseT=Game.t+15000;
+    Game.disasterButtons=0; Game.disasterLives=3;
+    Game.buildMode=false; Game.buildLavaProof=false; Game.builtPlatforms=[]; Game.dz=null;
+    Game.disasterType = Game.disasterTypeForce || DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
+  }
   Game.heistLoot=0; Game.heistEndT=Game.t+20000;   // 20-second heist clock
   Game.disappear={};
   Game.hitCheckpoints=new Set();
@@ -300,6 +321,10 @@ function update(dt){
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
   if(Game.bananas.length) updateBananas();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
+  if(Game.disaster && !Game.finished){
+    if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT) startDisasterActive(); }
+    else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT) endDisaster(true); }
+  }
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
@@ -310,8 +335,9 @@ function update(dt){
   const half=(Game.W/gameScale())/2;
   Game.cam.x=Math.max(half, Math.min(Game.world.width-half, Game.cam.x));
 
-  // Tag mode: if I'm "it", tagging a friend passes it on
-  if(Game.multiplayer && Game.mode==='tag' && MP.itId===MP.selfId && Game.t>Game.tagCdUntil){
+  // Tag mode (or the disaster 'killer' bonus): if I'm "it", tagging a friend passes it on
+  const tagActive = Game.mode==='tag' || (Game.disaster && Game.disasterType==='killer' && Game.disasterPhase==='active');
+  if(Game.multiplayer && tagActive && MP.itId===MP.selfId && Game.t>Game.tagCdUntil){
     for(const r of mpRemoteList()){
       if(typeof r.x!=='number') continue;
       if(rectsOverlap(p.x,p.y,p.w,p.h, r.x,r.y,34,34)){
@@ -797,6 +823,7 @@ function solidNow(pl){
   if(pl.type==='laser'){ return false; }               // beams aren't solid (they hurt)
   if(pl.type==='coin'){ return false; }                // collectible, not a platform
   if(pl.type==='powerup'){ return false; }             // collectible, not a platform
+  if(pl.type==='dbutton'){ return false; }             // disaster button, not a platform
   return true;
 }
 
@@ -1096,6 +1123,143 @@ function endHeist(){
   if(Game.onLevelComplete) Game.onLevelComplete(1, loot, true, {heist:true, loot, coins:Game.runCoins});
 }
 
+/* ===== NATURAL DISASTER SURVIVAL ===== */
+const DISASTERS = ['lava','meteor','flood','tornado','tsunami','zombies'];
+const DISASTER_INFO = {
+  lava:    {name:'🌋 LAVA RISING', tip:'Get to high ground!'},
+  meteor:  {name:'☄️ METEOR SHOWER', tip:'Dodge the meteors!'},
+  flood:   {name:'🌊 FLOOD', tip:'Stay above the water!'},
+  tornado: {name:'🌪️ TORNADO', tip:'Run from the twister!'},
+  tsunami: {name:'🌊 TSUNAMI', tip:'Get high — a wave is coming!'},
+  zombies: {name:'🧟 ZOMBIES', tip:'Run from the zombies!'},
+};
+/* place a built platform at a world position (during disaster mode) */
+function placeBuild(wx, wy){
+  if(!Game.disaster || !Game.buildMode) return;
+  if(Game.builtPlatforms.length>=50){ if(typeof toast==='function') toast('Build limit reached!'); return; }
+  const lavaProof=Game.buildLavaProof;
+  if(lavaProof){ if(SAVE.coins<20){ if(typeof toast==='function') toast('Need 🪙20 for a lava-proof block'); return; } addCoins(-20); }
+  const w=96, h=20;
+  const p={id:1e6+Game.builtPlatforms.length, type:'built', x:wx-w/2, y:wy-h/2, w, h, color:Game.buildColor, lavaProof};
+  Game.builtPlatforms.push(p); Game.world.platforms.push(p);
+  SFX.click();
+}
+function disasterStandingProof(){          // true if the player is on a lava-proof block
+  const p=Game.player;
+  for(const pl of Game.builtPlatforms){ if(!pl.lavaProof) continue;
+    if(p.x<pl.x+pl.w && p.x+p.w>pl.x && Math.abs((p.y+p.h)-pl.y)<6) return true; }
+  return false;
+}
+function startDisasterActive(){
+  Game.disasterPhase='active'; Game.disasterPhaseT=Game.t+35000;
+  Game.buildMode=false;
+  const H=Game.world.height, W=Game.world.width;
+  Game.dz={ lavaY:H+40, meteors:[], waterY:H+40, tornadoX:W/2, tornadoDir:1, waveX:-120, waveDir:1, zombies:[], lastSpawn:0 };
+  const t=Game.disasterType;
+  if(t==='zombies'){ for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-60, vx:0}); }
+  if(typeof toast==='function') toast(DISASTER_INFO[t].name+' — '+DISASTER_INFO[t].tip);
+  SFX.hit();
+}
+function disasterHit(knockUp){
+  const p=Game.player; if(p.invuln>0) return;
+  Game.disasterLives--; p.invuln=1300; SFX.hit(); addShake(7);
+  p.vy=knockUp?-12:p.vy; p.vx=(Math.random()<0.5?-1:1)*8;
+  if(typeof toast==='function') toast('💥 Hit! ❤️ '+Math.max(0,Game.disasterLives)+' left');
+  if(Game.disasterLives<=0) endDisaster(false);
+}
+function checkDisasterButtons(){
+  const p=Game.player;
+  for(const c of Game.world.platforms){
+    if(c.type!=='dbutton' || c.taken) continue;
+    if(p.x<c.x+c.w && p.x+p.w>c.x && p.y<c.y+c.h && p.y+p.h>c.y){
+      c.taken=true; Game.disasterButtons++; addCoins(5); SFX.coin();
+      if(typeof toast==='function') toast('🔘 Button '+Game.disasterButtons+'/10!  +5🪙');
+    }
+  }
+}
+function updateDisaster(dt){
+  const p=Game.player, W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
+  checkDisasterButtons();
+  const prog=1-Math.max(0,(Game.disasterPhaseT-Game.t)/35000);   // 0..1
+  if(t==='lava' || t==='tsunami'){
+    // lava (or tsunami base water) rises over the round
+    dz.lavaY = H+40 - prog*(H-220);
+    const inLava = (p.y+p.h) > dz.lavaY && !disasterStandingProof();
+    if(inLava && p.invuln<=0) disasterHit(true);
+  }
+  if(t==='flood'){
+    dz.waterY = H+40 - prog*(H-260);
+    if((p.y+p.h) > dz.waterY+20 && !disasterStandingProof() && p.invuln<=0) disasterHit(true);
+  }
+  if(t==='meteor'){
+    if(Game.t-dz.lastSpawn>520){ dz.lastSpawn=Game.t; const n=1+Math.floor(prog*2);
+      for(let k=0;k<n;k++) dz.meteors.push({x:40+Math.random()*(W-80), y:p.y-520-Math.random()*200, vy:5+Math.random()*3, r:16}); }
+    for(let i=dz.meteors.length-1;i>=0;i--){ const m=dz.meteors[i]; m.vy=Math.min(15,m.vy+0.3); m.y+=m.vy;
+      if(m.y>p.y+700){ dz.meteors.splice(i,1); continue; }
+      if(p.invuln<=0 && p.x<m.x+m.r && p.x+p.w>m.x-m.r && p.y<m.y+m.r && p.y+p.h>m.y-m.r){ dz.meteors.splice(i,1); disasterHit(true); } }
+  }
+  if(t==='tornado'){
+    dz.tornadoX += dz.tornadoDir*(1.6+prog*1.6);
+    if(dz.tornadoX<80||dz.tornadoX>W-80) dz.tornadoDir*=-1;
+    const tx=dz.tornadoX, ty=p.y;   // follows player height loosely
+    if(p.invuln<=0 && Math.abs((p.x+p.w/2)-tx)<60){ disasterHit(true); p.vy=-16; }
+  }
+  if(t==='tsunami'){
+    dz.waveX += dz.waveDir*(3+prog*4);
+    if(dz.waveX>W+120){ dz.waveDir=-1; } if(dz.waveX<-120){ dz.waveDir=1; }
+    const waveTopY=H-30-160-prog*120;
+    if(p.invuln<=0 && Math.abs((p.x+p.w/2)-dz.waveX)<70 && (p.y+p.h)>waveTopY){ disasterHit(true); p.vx=dz.waveDir*12; }
+  }
+  if(t==='zombies'){
+    if(Game.t-dz.lastSpawn>2600 && dz.zombies.length<10){ dz.lastSpawn=Game.t; dz.zombies.push({x:Math.random()<0.5?40:W-40, y:H-60, vx:0}); }
+    for(const z of dz.zombies){
+      const dir=(p.x>z.x)?1:-1; z.x+=dir*1.4; z.y += (z.y < H-50 ? 2 : 0);  // settle to ground-ish
+      if(p.invuln<=0 && Math.abs((p.x+p.w/2)-z.x)<26 && Math.abs((p.y+p.h)-z.y)<60) disasterHit(false);
+    }
+  }
+}
+function endDisaster(survived){
+  if(Game.disasterPhase==='over') return;
+  Game.disasterPhase='over'; Game.finished=true;
+  const reward = Game.disasterButtons*5 + (survived?40:0);
+  if(survived) SFX.win(); else SFX.hit();
+  if(Game.multiplayer) mpSendFinish();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
+    {disaster:true, survived, buttons:Game.disasterButtons, type:Game.disasterType});
+}
+/* world->screen helpers for build taps */
+function disasterBuildAt(screenX, screenY){
+  if(!Game.disaster || !Game.buildMode) return;
+  const s=gameScale();
+  const wx=(screenX-Game.W/2)/s + Game.cam.x;
+  const wy=(screenY-Game.H/2)/s + Game.cam.y;
+  placeBuild(wx, wy);
+}
+function drawDisaster(ctx){
+  const W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
+  // build ghost grid hint during build phase
+  if(Game.buildMode){ ctx.globalAlpha=0.25; ctx.fillStyle=Game.buildColor;
+    ctx.fillText('',0,0); ctx.globalAlpha=1; }
+  if(!dz) return;
+  if((t==='lava'||t==='tsunami') && dz.lavaY<H+40){
+    ctx.fillStyle='#ff5a2a'; ctx.fillRect(-200, dz.lavaY, W+400, H+400);
+    ctx.fillStyle='rgba(255,200,80,.6)'; ctx.fillRect(-200, dz.lavaY-6, W+400, 6);
+  }
+  if(t==='flood' && dz.waterY<H+40){
+    ctx.fillStyle='rgba(70,150,255,.6)'; ctx.fillRect(-200, dz.waterY, W+400, H+400);
+    ctx.fillStyle='rgba(160,210,255,.7)'; ctx.fillRect(-200, dz.waterY-5, W+400, 5);
+  }
+  if(t==='meteor'){ ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(const m of dz.meteors){ ctx.font=`${m.r*2}px serif`; ctx.fillText('☄️', m.x, m.y); } }
+  if(t==='tornado'){ ctx.font='64px serif'; ctx.textAlign='center';
+    ctx.fillText('🌪️', dz.tornadoX, Game.player.y+20); }
+  if(t==='tsunami'){ ctx.fillStyle='rgba(40,120,230,.55)';
+    ctx.fillRect(dz.waveX-60, H-30-260, 120, 300);
+    ctx.font='60px serif'; ctx.textAlign='center'; ctx.fillText('🌊', dz.waveX, H-30-150); }
+  if(t==='zombies'){ ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+    for(const z of dz.zombies) ctx.fillText('🧟', z.x, z.y); }
+}
+
 function nextLevel(){
   if(Game.level<TOTAL_LEVELS){
     Game.level++;
@@ -1151,6 +1315,7 @@ function render(){
   // solo dodge hazards (pendulums / spikes / laser gates)
   drawSoloHazards(ctx);
   if(Game.bananas.length) drawBananas(ctx);
+  if(Game.disaster) drawDisaster(ctx);
 
   // pet-placed platforms (fading sparkle footholds)
   for(const pp of Game.placedPlatforms){
@@ -1172,7 +1337,7 @@ function render(){
                     petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
       drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
       if(r.emote && nowMs()-r.emoteAt < 2200) drawEmoteBubble(ctx, r.x+17, r.y-22, r.emote);
-      if(Game.mode==='tag' && MP.itId===r.id) drawItMarker(ctx, r.x+17, r.y);
+      if((Game.mode==='tag'||Game.disasterType==='killer') && MP.itId===r.id) drawItMarker(ctx, r.x+17, r.y);
     }
   }
 
@@ -1193,7 +1358,7 @@ function render(){
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
     if(Game.myEmote && Game.t-Game.myEmoteAt < 2200) drawEmoteBubble(ctx, p.x+p.w/2, p.y-22, Game.myEmote);
-    if(Game.mode==='tag' && MP.itId===MP.selfId) drawItMarker(ctx, p.x+p.w/2, p.y);
+    if((Game.mode==='tag'||Game.disasterType==='killer') && MP.itId===MP.selfId) drawItMarker(ctx, p.x+p.w/2, p.y);
   }
 
   ctx.restore();
@@ -1374,6 +1539,21 @@ function drawPlatform(ctx,pl){
       fill='#f7d8b0'; edge='#d89b63';
       break;
     }
+    case 'built':{
+      fill = pl.color || '#cdb8ff'; edge='rgba(0,0,0,.18)';
+      ctx.fillStyle=fill; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,6); ctx.fill();
+      ctx.fillStyle=edge; roundRect(ctx,pl.x,pl.y+pl.h-5,pl.w,5,6); ctx.fill();
+      if(pl.lavaProof){ ctx.font='13px serif'; ctx.textAlign='center'; ctx.fillText('🔥', pl.x+pl.w/2, pl.y+pl.h/2+1); }
+      return;
+    }
+    case 'dbutton':{
+      const cx=pl.x+pl.w/2, cy=pl.y+pl.h/2;
+      ctx.fillStyle = pl.taken?'#bdbdbd':'#ff5fb0';
+      roundRect(ctx,pl.x,pl.y,pl.w,pl.h,9); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='12px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(pl.taken?'✓':'🔘', cx, cy);
+      return;
+    }
     case 'bouncy': fill='#b6f5c8'; edge='#3fcf86'; break;
     case 'ice': fill='#dff4ff'; edge='#9fd8f5'; break;
     case 'wind': fill='#eef4ff'; edge='#c2d4ee'; break;
@@ -1504,14 +1684,20 @@ function roundRect(ctx,x,y,w,h,r){
 /* ---------- HUD ---------- */
 function updateHud(){
   const el=document.getElementById('hudLevel');
-  el.textContent = Game.heist ? '💰 Gold Heist'
+  el.textContent = Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
+                 : Game.heist ? '💰 Gold Heist'
                  : Game.tower ? '🏗️ Tower'
                  : Game.daily ? '🗓️ Daily'
                  : 'Level '+Game.level+'/'+TOTAL_LEVELS;
 }
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
-  if(Game.heist){
+  if(Game.disaster){
+    const left=Math.max(0, Math.ceil((Game.disasterPhaseT-Game.t)/1000));
+    document.getElementById('hudCp').textContent = (Game.disasterPhase==='build'?'🏗️ '+left+'s':'⏱ '+left+'s')+' · 🔘'+Game.disasterButtons+'/10';
+    const hp=document.getElementById('hudPower');
+    if(hp){ hp.style.display='block'; hp.textContent='❤️ '+Math.max(0,Game.disasterLives); }
+  } else if(Game.heist){
     const left=Math.max(0, Math.ceil((Game.heistEndT-Game.t)/1000));
     document.getElementById('hudCp').textContent='⏱ '+left+'s · 🪙'+Game.heistLoot;
   } else if(Game.tower){
@@ -1520,9 +1706,9 @@ function updateHudLive(){
     document.getElementById('hudCp').textContent='⛳ '+done+'/'+CHECKPOINTS;
   }
   document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
-  // active power-up indicator
+  // active power-up indicator (disaster mode uses hudPower for lives instead)
   const hp=document.getElementById('hudPower');
-  if(hp){
+  if(hp && !Game.disaster){
     const bits=[];
     if(Game.power.shield) bits.push('🛡️');
     if(Game.t<Game.power.magnetUntil) bits.push('🧲'+Math.ceil((Game.power.magnetUntil-Game.t)/1000));

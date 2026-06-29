@@ -308,6 +308,27 @@ function startTower(){
   startMusicIfOn('tower');
 }
 
+/* ---------------- Natural Disaster Survival ---------------- */
+const BUILD_COLOURS=['#cdb8ff','#ffc7e6','#9be7a0','#9cc4ff','#ffe177','#ff8f8f','#ffffff','#6b5b78'];
+function startDisaster(){
+  SFX.click();
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'disaster', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('tower');
+  toast('🏗️ Build for 15s — then survive the disaster!');
+}
+function setupBuildBar(){
+  const c=document.getElementById('buildColours'); if(!c) return;
+  c.innerHTML=BUILD_COLOURS.map(col=>`<div class="bcol${Game.buildColor===col?' sel':''}" style="background:${col}" onclick="setBuildColor('${col}')"></div>`).join('');
+  const tb=document.getElementById('buildToggle'); if(tb){ tb.classList.toggle('pink',Game.buildMode); tb.textContent=Game.buildMode?'🧱 Building…':'🧱 Build'; }
+  const lp=document.getElementById('lavaProofBtn'); if(lp) lp.classList.toggle('pink',Game.buildLavaProof);
+}
+function setBuildColor(col){ Game.buildColor=col; SFX.click(); setupBuildBar(); }
+function toggleBuild(){ Game.buildMode=!Game.buildMode; SFX.click(); setupBuildBar(); if(Game.buildMode) toast('Tap the arena to place blocks!'); }
+function toggleLavaProof(){ Game.buildLavaProof=!Game.buildLavaProof; SFX.click(); setupBuildBar(); }
+
 /* ---------------- Daily Challenge ---------------- */
 function dailyKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
 function dailySeed(){ const d=new Date(); return (d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate()); }
@@ -408,7 +429,9 @@ function selectRoomMode(m){
     ? 'Team-up: stand on both pads together to make bridges appear for 10s!'
     : m==='tag'
       ? "Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃"
-      : 'Race: same obby, separate climbs — first to the top wins! 🏁';
+      : m==='disaster'
+        ? '🌪️ Disaster: build for 15s, then everyone survives the same disaster together! (2+ players may get a Killer round)'
+        : 'Race: same obby, separate climbs — first to the top wins! 🏁';
 }
 function wireRoomCallbacks(){
   MP.onRosterChange=refreshRoster;
@@ -416,10 +439,10 @@ function wireRoomCallbacks(){
   MP.onStart=(config)=>{
     Game.onLevelComplete=onLevelComplete;
     Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-    startGame({level:config.level, seed:config.seed, mode:config.mode,
+    startGame({level:config.level, seed:config.seed, mode:config.mode, disasterType:config.disasterType,
                multiplayer:true, difficulty:config.difficulty||'hard'});
     startMusicIfOn('game');
-    if(MP.isHost && config.mode==='tag') setTimeout(()=>mpSendIt(MP.selfId), 600);  // host starts as "it"
+    if(MP.isHost && (config.mode==='tag' || config.disasterType==='killer')) setTimeout(()=>mpSendIt(MP.selfId), 600);  // host starts as "it"
   };
 }
 function selectRoomDiff(d){
@@ -492,7 +515,13 @@ function hostStart(){
   const seed=Math.floor(Math.random()*1e6);
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  mpStart({level:1, seed, mode:pendingRoomMode, difficulty:pendingRoomDiff});
+  const cfg={level:1, seed, mode:pendingRoomMode, difficulty:pendingRoomDiff};
+  if(pendingRoomMode==='disaster'){
+    // host picks the disaster so everyone gets the same one; 'killer' tag only with 2+ players
+    const pool = (mpPlayerCount()>1) ? DISASTERS.concat(['killer']) : DISASTERS;
+    cfg.disasterType = pool[Math.floor(Math.random()*pool.length)];
+  }
+  mpStart(cfg);
 }
 function leaveRoom(){
   mpLeave();
@@ -532,26 +561,34 @@ function onLevelComplete(level, earned, isFinal, res){
     waitMsg=`<p class="timer-big">💰 You grabbed 🪙${res.loot}!</p>
       <p class="muted">${res.coins} gold in 20 seconds${SAVE.heist&&SAVE.heist.best?` · best 🪙${SAVE.heist.best}`:''}</p>`;
   }
+  const isDisaster=!!res.disaster;
+  if(isDisaster){
+    waitMsg = res.survived
+      ? `<p class="timer-big">🎉 You SURVIVED!</p><p class="muted">${(DISASTER_INFO[res.type]||{}).name||''} · 🔘${res.buttons}/10 buttons</p>`
+      : `<p class="timer-big">💀 You didn't make it…</p><p class="muted">🔘${res.buttons}/10 buttons · try again!</p>`;
+  }
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-    : (isHeist
+    : (isDisaster
+        ? `<button class="btn gold" onclick="startDisaster()">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        : (isHeist
         ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
         : (res.daily
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)));
-  const heading = isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))));
+  const heading = isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily&&!isHeist?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist&&!isDisaster?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;

@@ -434,6 +434,52 @@ function generateHeist(seed){
   return { mode:'heist', heist:true, level:1, seed, width:W, height:bottomY, platforms, checkpoints:[], hazards, start, finishY:-1e9 };
 }
 
+/* ===== NATURAL DISASTER SURVIVAL =====
+   A bounded arena: climb the platforms (or build your own) to survive a random
+   disaster, while pressing 10 buttons scattered around. Seeded so multiplayer
+   rooms share the same arena. */
+function generateDisaster(seed){
+  const rnd=mulberry32((seed*1000+555)|0);
+  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const W=WORLD_W, H=2200;
+  const platforms=[]; let id=0;
+  platforms.push({id:id++, x:0, y:H-30, w:W, h:30, type:'big'});          // ground
+  const start={x:W/2, y:H-30-40};
+  // a single guaranteed-climbable staircase up to safe high ground
+  const path=[]; let prevX=W/2, y=H-30;
+  for(let i=0;i<16;i++){
+    y -= rint(82,98);
+    const w=rint(104,140);
+    const off=rint(40, w>=130?130:112);
+    let dir=rnd()<0.5?-1:1, nx=prevX+dir*off;
+    if(nx<80 || nx>W-80) nx=prevX-dir*off;
+    nx=clamp(nx, 80+w/2, W-80-w/2);
+    prevX=nx;
+    const p={id:id++, x:nx-w/2, y, w, h:22, type:'normal', path:true};
+    platforms.push(p); path.push(p);
+  }
+  const roofY=y-70;
+  platforms.push({id:id++, x:W/2-150, y:roofY, w:300, h:26, type:'normal', roof:true});  // safe roof
+  // side ledges branching off the path (extra spots, hold most buttons)
+  const ledges=path.slice();
+  for(let i=0;i<10;i++){
+    const base=path[rint(2, path.length-1)];
+    const sw=rint(92,120);
+    const sx=clamp((base.x+base.w/2) + (rnd()<0.5?-1:1)*rint(110,165) - sw/2, 40, W-40-sw);
+    const sp={id:id++, x:sx, y:base.y - rint(0,46), w:sw, h:22, type:'normal'};
+    platforms.push(sp); ledges.push(sp);
+  }
+  // 10 disaster buttons scattered on the ledges
+  for(let i=ledges.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=ledges[i];ledges[i]=ledges[j];ledges[j]=t; }
+  for(let i=0;i<10 && i<ledges.length;i++){
+    const L=ledges[i];
+    platforms.push({id:id++, type:'dbutton', bId:i, x:L.x+L.w/2-15, y:L.y-30, w:30, h:18});
+  }
+  return { mode:'disaster', disaster:true, level:1, seed, width:W, height:H,
+           platforms, checkpoints:[], hazards:[], start, finishY:-1e9, roofY };
+}
+
 /* called each frame in tower mode: keep a couple of floors generated ahead */
 function maybeExtendTower(){
   const w=Game.world;

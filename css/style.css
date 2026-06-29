@@ -337,6 +337,13 @@ select.text{appearance:none;background:#fff;}
 .spectate-bar{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;z-index:6;pointer-events:auto;background:rgba(255,255,255,.92);border-radius:24px;padding:8px 12px;box-shadow:var(--shadow);font-weight:800;}
 .spectate-bar .btn{margin:0;}
 
+/* ===== Natural Disaster build bar ===== */
+.build-bar{position:absolute;top:64px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;z-index:6;pointer-events:auto;background:rgba(255,255,255,.9);border-radius:20px;padding:6px 10px;box-shadow:var(--shadow);flex-wrap:wrap;justify-content:center;max-width:94vw;}
+.build-bar .btn{margin:0;}
+.build-colours{display:flex;gap:4px;}
+.bcol{width:26px;height:26px;border-radius:8px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:pointer;}
+.bcol.sel{outline:3px solid var(--purple-2);outline-offset:1px;}
+
 /* ===== Daily shop ===== */
 .shop-swatch{width:40px;height:40px;border-radius:12px;border:3px solid #fff;box-shadow:0 2px 6px rgba(150,120,190,.25);flex:none;}
 

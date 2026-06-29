@@ -228,6 +228,7 @@
       <button class="btn pink" onclick="playSolo('hard')">🔥 Hard<br><span style="font-size:12px;font-weight:700">shooting guns!</span></button>
     </div>
     <button class="btn gold" onclick="startTower()">🏗️ Endless Tower<br><span style="font-size:12px;font-weight:700">climb as high as you can!</span></button>
+    <button class="btn blue" onclick="startDisaster()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
 
     <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
 
@@ -261,6 +262,7 @@
         <button class="btn ghost small" data-mode="coop" onclick="selectRoomMode('coop')">🤝 Team-up</button>
         <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
         <button class="btn ghost small" data-mode="tag" onclick="selectRoomMode('tag')">🏃 Tag</button>
+        <button class="btn ghost small" data-mode="disaster" onclick="selectRoomMode('disaster')">🌪️ Disaster</button>
       </div>
       <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
       <p class="hint">Difficulty:</p>
@@ -309,6 +311,12 @@
       <span id="spectateName">👁 Watching…</span>
       <button class="btn ghost small" onclick="spectateNext()">Next 👁</button>
       <button class="btn pink small" onclick="backToLobby()">Lobby</button>
+    </div>
+
+    <div class="build-bar" id="buildBar" style="display:none">
+      <button class="btn ghost small" id="buildToggle" onclick="toggleBuild()">🧱 Build</button>
+      <div class="build-colours" id="buildColours"></div>
+      <button class="btn ghost small" id="lavaProofBtn" onclick="toggleLavaProof()">🔥 Lava-proof 🪙20</button>
     </div>
   </div>
 </section>
