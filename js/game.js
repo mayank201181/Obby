@@ -1156,7 +1156,7 @@ function startDisasterActive(){
   const H=Game.world.height, W=Game.world.width;
   Game.dz={ lavaY:H+40, meteors:[], waterY:H+40, tornadoX:W/2, tornadoDir:1, waveX:-120, waveDir:1, zombies:[], lastSpawn:0 };
   const t=Game.disasterType;
-  if(t==='zombies'){ for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-60, vx:0}); }
+  if(t==='zombies'){ for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false}); }
   if(typeof toast==='function') toast(DISASTER_INFO[t].name+' — '+DISASTER_INFO[t].tip);
   SFX.hit();
 }
@@ -1211,10 +1211,18 @@ function updateDisaster(dt){
     if(p.invuln<=0 && Math.abs((p.x+p.w/2)-dz.waveX)<70 && (p.y+p.h)>waveTopY){ disasterHit(true); p.vx=dz.waveDir*12; }
   }
   if(t==='zombies'){
-    if(Game.t-dz.lastSpawn>2600 && dz.zombies.length<10){ dz.lastSpawn=Game.t; dz.zombies.push({x:Math.random()<0.5?40:W-40, y:H-60, vx:0}); }
+    if(Game.t-dz.lastSpawn>2200 && dz.zombies.length<12){ dz.lastSpawn=Game.t; dz.zombies.push({x:Math.random()<0.5?40:W-40, y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false}); }
+    const ZSPEED=2.7+prog*1.6;            // faster, and ramps up through the round
     for(const z of dz.zombies){
-      const dir=(p.x>z.x)?1:-1; z.x+=dir*1.4; z.y += (z.y < H-50 ? 2 : 0);  // settle to ground-ish
-      if(p.invuln<=0 && Math.abs((p.x+p.w/2)-z.x)<26 && Math.abs((p.y+p.h)-z.y)<60) disasterHit(false);
+      const dir=(p.x>z.x+z.w/2)?1:-1; z.vx=dir*ZSPEED;
+      if(z.onGround && p.y < z.y-24) { z.vy=-12.5; z.onGround=false; }   // jump to climb toward you
+      z.vy=Math.min(16, z.vy+0.7);
+      z.x=Math.max(8, Math.min(W-8-z.w, z.x+z.vx));
+      const prevBottom=z.y+z.h; z.y+=z.vy; const newBottom=z.y+z.h;
+      z.onGround=false;
+      if(z.vy>=0){ for(const pl of Game.world.platforms){ if(pl.type==='dbutton' || !solidNow(pl)) continue;
+        if(z.x < pl.x+pl.w && z.x+z.w > pl.x && prevBottom<=pl.y+2 && newBottom>=pl.y){ z.y=pl.y-z.h; z.vy=0; z.onGround=true; break; } } }
+      if(p.invuln<=0 && rectsOverlap(p.x,p.y,p.w,p.h, z.x,z.y,z.w,z.h)) disasterHit(false);
     }
   }
 }
@@ -1256,8 +1264,8 @@ function drawDisaster(ctx){
   if(t==='tsunami'){ ctx.fillStyle='rgba(40,120,230,.55)';
     ctx.fillRect(dz.waveX-60, H-30-260, 120, 300);
     ctx.font='60px serif'; ctx.textAlign='center'; ctx.fillText('🌊', dz.waveX, H-30-150); }
-  if(t==='zombies'){ ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-    for(const z of dz.zombies) ctx.fillText('🧟', z.x, z.y); }
+  if(t==='zombies'){ ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(const z of dz.zombies) ctx.fillText('🧟', z.x+z.w/2, z.y+z.h/2); }
 }
 
 function nextLevel(){

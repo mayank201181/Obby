@@ -228,7 +228,7 @@
       <button class="btn pink" onclick="playSolo('hard')">🔥 Hard<br><span style="font-size:12px;font-weight:700">shooting guns!</span></button>
     </div>
     <button class="btn gold" onclick="startTower()">🏗️ Endless Tower<br><span style="font-size:12px;font-weight:700">climb as high as you can!</span></button>
-    <button class="btn blue" onclick="startDisaster()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
+    <button class="btn blue" onclick="openDisasterPick()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
 
     <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
 
@@ -239,6 +239,19 @@
       <input class="text" id="joinCodeInput" maxlength="6" placeholder="ENTER TEAM CODE" style="text-transform:uppercase"/>
     </div>
     <button class="btn gold" onclick="joinRoomWithCode()">🔑 Join Team</button>
+  </div>
+</section>
+
+<!-- ============ DISASTER PICKER ============ -->
+<section class="screen" id="disasterPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🌪️ Pick a Disaster</h2>
+    <p class="hint">Choose which disaster to survive — or go Random!</p>
+    <div class="scroll" id="disasterPickBody"></div>
   </div>
 </section>
 

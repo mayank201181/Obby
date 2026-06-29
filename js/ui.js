@@ -310,12 +310,20 @@ function startTower(){
 
 /* ---------------- Natural Disaster Survival ---------------- */
 const BUILD_COLOURS=['#cdb8ff','#ffc7e6','#9be7a0','#9cc4ff','#ffe177','#ff8f8f','#ffffff','#6b5b78'];
-function startDisaster(){
+function openDisasterPick(){ showScreen('disasterPickScreen'); renderDisasterPick(); }
+function renderDisasterPick(){
+  updateCoinDisplays();
+  document.getElementById('disasterPickBody').innerHTML =
+    `<button class="btn gold" onclick="startDisaster('random')">🎲 Surprise Me (Random)</button>` +
+    DISASTERS.map(t=>`<button class="btn blue" onclick="startDisaster('${t}')">${(DISASTER_INFO[t]||{}).name||t}</button>`).join('');
+}
+function startDisaster(type){
   SFX.click();
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({mode:'disaster', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startGame({mode:'disaster', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy',
+             disasterType:(type && type!=='random')?type:null});
   startMusicIfOn('tower');
   toast('🏗️ Build for 15s — then survive the disaster!');
 }
