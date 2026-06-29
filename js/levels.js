@@ -73,13 +73,13 @@ function generateLevel(level, seed, mode){
     function leapfrogGate(entry, g, nSteps){
       const ex=entry.x, ey=entry.y;
       // bottom button (you hold this for your partner)
-      const haC=clamp(ex-150,70,WORLD_W-70);
+      const haC=clamp(ex-118,70,WORLD_W-70);
       platforms.push({id:id++, x:haC-levW/2, y:ey-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
       // staircase of held bridges (randomised zig-zag shape)
-      const lean=rnd()<0.5?1:-1, sp=rint(16,44);
+      const lean=rnd()<0.5?1:-1, sp=rint(14,34);
       let y=ey;
       for(let i=0;i<nSteps;i++){
-        y -= rint(88,100);
+        y -= rint(78,92);
         const x=clamp(ex + lean*((i%2)?sp:-sp) - stepW/2, 40, WORLD_W-40-stepW);
         platforms.push({id:id++, x, y, w:stepW, h:24, type:'bridge', grp:g, gate:'hold'});
       }
@@ -87,8 +87,8 @@ function generateLevel(level, seed, mode){
       platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
       checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
       // top button (your partner holds this so YOU can climb up after)
-      const hbC=clamp(npX+npW/2+150,70,WORLD_W-70);
-      platforms.push({id:id++, x:hbC-levW/2, y:npY-44, w:levW, h:24, type:'pad', pad:'HB', grp:g});
+      const hbC=clamp(npX+npW/2+108,70,WORLD_W-70);
+      platforms.push({id:id++, x:hbC-levW/2, y:npY-40, w:levW, h:24, type:'pad', pad:'HB', grp:g});
       return {x:npX+npW/2, y:npY};
     }
 
@@ -100,9 +100,9 @@ function generateLevel(level, seed, mode){
       const aC=clamp(ex-spc,60,WORLD_W-60), bC=clamp(ex+spc,60,WORLD_W-60);
       platforms.push({id:id++, x:aC-levW/2, y:ey-46, w:levW, h:24, type:'pad', pad:'A', grp:g, stand:true});
       platforms.push({id:id++, x:bC-levW/2, y:ey-46, w:levW, h:24, type:'pad', pad:'B', grp:g, stand:true});
-      const lean=rnd()<0.5?1:-1, sp=rint(16,42); let y=ey;
+      const lean=rnd()<0.5?1:-1, sp=rint(14,34); let y=ey;
       for(let i=0;i<nSteps;i++){
-        y -= rint(90,100);
+        y -= rint(80,92);
         const x=clamp(ex + lean*((i%2)?sp:-sp) - stepW/2, 40, WORLD_W-40-stepW);
         platforms.push({id:id++, x, y, w:stepW, h:24, type:'bridge', grp:g, gate:'timed'});
       }
@@ -132,7 +132,7 @@ function generateLevel(level, seed, mode){
     // single player can never get past.
     function laserGate(entry, g){
       const ex=entry.x, ey=entry.y;
-      const wy=ey-80;                                 // walkway height (one hop up)
+      const wy=ey-70;                                 // walkway height (one hop up)
       const wWidth=380;
       const wxL=clamp(ex-40, 40, WORLD_W-40-wWidth);
       const wxR=wxL+wWidth;
@@ -145,7 +145,7 @@ function generateLevel(level, seed, mode){
       platforms.push({id:id++, x:wallX-110-levW/2, y:wy-44, w:levW, h:24, type:'pad', pad:'HA', grp:g});
       platforms.push({id:id++, x:wallX+110-levW/2, y:wy-44, w:levW, h:24, type:'pad', pad:'HB', grp:g});
       // exit checkpoint above the far end of the walkway
-      const npW=180, npY=wy-96, npX=clamp(wxR-npW-8, 60, WORLD_W-60-npW);
+      const npW=180, npY=wy-80, npX=clamp(wxR-npW-8, 60, WORLD_W-60-npW);
       platforms.push({id:id++, x:npX, y:npY, w:npW, h:30, type:'checkpoint', cpIndex:g+1});
       checkpoints.push({index:g+1, x:npX+npW/2, y:npY});
       return {x:npX+npW/2, y:npY};

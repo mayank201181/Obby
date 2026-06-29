@@ -1204,7 +1204,7 @@ function updateDisaster(dt){
     dz.tornadoX += dz.tornadoDir*(1.6+prog*1.6);
     if(dz.tornadoX<80||dz.tornadoX>W-80) dz.tornadoDir*=-1;
     const tx=dz.tornadoX, ty=p.y;   // follows player height loosely
-    if(p.invuln<=0 && Math.abs((p.x+p.w/2)-tx)<60){ disasterHit(true); p.vy=-16; }
+    if(p.invuln<=0 && Math.abs((p.x+p.w/2)-tx)<92){ disasterHit(true); p.vy=-16; }
   }
   if(t==='tsunami'){
     dz.waveX += dz.waveDir*(3+prog*4);
@@ -1274,8 +1274,8 @@ function drawDisaster(ctx){
   }
   if(t==='meteor'){ ctx.textAlign='center'; ctx.textBaseline='middle';
     for(const m of dz.meteors){ ctx.font=`${m.r*2}px serif`; ctx.fillText('☄️', m.x, m.y); } }
-  if(t==='tornado'){ ctx.font='64px serif'; ctx.textAlign='center';
-    ctx.fillText('🌪️', dz.tornadoX, Game.player.y+20); }
+  if(t==='tornado'){ ctx.font='120px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🌪️', dz.tornadoX, Game.player.y+10); }
   if(t==='tsunami'){ ctx.fillStyle='rgba(40,120,230,.55)';
     ctx.fillRect(dz.waveX-60, H-30-260, 120, 300);
     ctx.font='60px serif'; ctx.textAlign='center'; ctx.fillText('🌊', dz.waveX, H-30-150); }
