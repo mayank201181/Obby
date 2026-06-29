@@ -63,24 +63,25 @@ const creatureById = id => CREATURES.find(c=>c.id===id);
 const creaturesOfRarity = r => CREATURES.filter(c=>c.rarity===r);
 
 // ===== Pet feeding: catch food -> merge 3 into a meal -> feed your pet =====
+// all-vegetarian foods 🥦
 const FOODS = [
-  {id:'biscuit', emoji:'🍪', name:'Biscuit'},
-  {id:'apple',   emoji:'🍎', name:'Apple'},
-  {id:'peach',   emoji:'🍑', name:'Peach'},
-  {id:'banana',  emoji:'🍌', name:'Banana'},
-  {id:'fish',    emoji:'🐟', name:'Fish'},
-  {id:'meat',    emoji:'🍖', name:'Meat'},
-  {id:'carrot',  emoji:'🥕', name:'Carrot'},
-  {id:'cheese',  emoji:'🧀', name:'Cheese'},
-  {id:'berry',   emoji:'🫐', name:'Berry'},
-  {id:'honey',   emoji:'🍯', name:'Honey'},
+  {id:'biscuit',    emoji:'🍪', name:'Biscuit'},
+  {id:'apple',      emoji:'🍎', name:'Apple'},
+  {id:'peach',      emoji:'🍑', name:'Peach'},
+  {id:'banana',     emoji:'🍌', name:'Banana'},
+  {id:'strawberry', emoji:'🍓', name:'Strawberry'},
+  {id:'corn',       emoji:'🌽', name:'Corn'},
+  {id:'carrot',     emoji:'🥕', name:'Carrot'},
+  {id:'cheese',     emoji:'🧀', name:'Cheese'},
+  {id:'berry',      emoji:'🫐', name:'Berry'},
+  {id:'honey',      emoji:'🍯', name:'Honey'},
 ];
 const foodById = id => FOODS.find(f=>f.id===id);
 
 // each pet has a favourite food (love) — thematic where it makes sense, else hashed
-const PET_FAVS = { lion:'biscuit', cat:'fish', mouse:'cheese', hamster:'cheese', bunny:'carrot',
-  fox:'berry', wolf:'meat', tiger:'meat', dragon:'meat', unicorn:'honey', phoenix:'honey',
-  eagle:'fish', octopus:'fish', kraken:'fish', giraffe:'apple', elephant:'peach', chick:'banana' };
+const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'cheese', bunny:'carrot',
+  fox:'berry', wolf:'corn', tiger:'corn', dragon:'corn', unicorn:'honey', phoenix:'honey',
+  eagle:'berry', octopus:'banana', kraken:'carrot', giraffe:'apple', elephant:'peach', chick:'banana' };
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
 function petOkFoods(id){
@@ -112,6 +113,11 @@ function mealLiking(petId, foods){
 // give every owned pet a starting full belly so nothing breaks; the clock drains from there
 function ensurePetFeed(){
   if(!SAVE.petFeed) SAVE.petFeed={};
+  // migrate old non-vegetarian food to veggie equivalents
+  if(SAVE.foods){
+    if(SAVE.foods.fish){ SAVE.foods.strawberry=(SAVE.foods.strawberry||0)+SAVE.foods.fish; delete SAVE.foods.fish; }
+    if(SAVE.foods.meat){ SAVE.foods.corn=(SAVE.foods.corn||0)+SAVE.foods.meat; delete SAVE.foods.meat; }
+  }
   const now=nowMs();
   const ids=new Set([...Object.keys(SAVE.pets||{}), ...Object.keys(SAVE.shinies||{})]);
   let changed=false;

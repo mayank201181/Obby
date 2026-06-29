@@ -135,14 +135,11 @@
 
     <h3 style="margin:12px 0 4px">🍳 Make a meal (pick 3)</h3>
     <div class="meal-tray" id="mealTray"></div>
-    <div class="grid scroll" id="cafePantry" style="max-height:26vh"></div>
-    <div class="row" style="align-items:center;gap:8px">
-      <select class="text" id="cafePetSelect" style="margin:0"></select>
-    </div>
-    <button class="btn pink" id="feedBtn" onclick="doFeed()">🍽️ Feed meal</button>
+    <div class="grid scroll" id="cafePantry" style="max-height:24vh"></div>
 
-    <h3 style="margin:14px 0 4px">🐾 Your pets</h3>
-    <div class="scroll" id="cafePets" style="max-height:30vh"></div>
+    <h3 style="margin:14px 0 4px">🐾 Tap a pet to feed</h3>
+    <div class="scroll" id="cafePets" style="max-height:32vh"></div>
+    <button class="btn pink" id="feedBtn" onclick="doFeed()">🍽️ Feed <span id="feedPetName">a pet</span></button>
   </div>
 </section>
 
