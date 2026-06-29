@@ -687,7 +687,8 @@ function openPlayground(){
     const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
     let best=null,bd=1e9;
     for(const p of pets){ const d=(p.x-mx)*(p.x-mx)+(p.y-my)*(p.y-my); if(d<bd){bd=d;best=p;} }
-    if(best && bd<2600){ best.hop=1; hearts.push({x:best.x,y:best.y-18,life:1}); SFX.coin(); }
+    if(best && bd<2600){ best.hop=1; hearts.push({x:best.x,y:best.y-18,life:1}); SFX.coin();
+      if(typeof playWithPet==='function') playWithPet(best.id); }   // playing cheers them up
   };
   cancelAnimationFrame(playgroundRaf);
   const loop=t=>{
@@ -746,18 +747,17 @@ function renderCafe(){
   if(!feedPetId || !ownedPets.some(c=>c.id===feedPetId))
     feedPetId = (SAVE.equippedPet && ownedPets.some(c=>c.id===SAVE.equippedPet)) ? SAVE.equippedPet : (ownedPets[0]&&ownedPets[0].id) || null;
   document.getElementById('cafePets').innerHTML = ownedPets.map(c=>{
-    const st=petFedState(c.id), full=Math.max(0,petFullnessMs(c.id));
+    const full=Math.max(0,petFullnessMs(c.id));
     const hung=petHungerPct(c.id), happy=petHappiness(c.id), sad=petIsSad(c.id);
-    const reason = petPowerBlockReason(c.id);
-    const lab = reason==='hungry'?'<b style="color:#e06b6b">Hungry — no power!</b>'
-              : reason==='overfed'?'<b style="color:#e0a01a">Too full — no power!</b>'
-              : reason==='sad'?'<b style="color:#9b6bff">Sad — needs love!</b>'
+    const hungry = petFedState(c.id)==='hungry';
+    const lab = hungry ? '<b style="color:#e06b6b">Hungry — no power!</b>'
+              : sad    ? '<b style="color:#9b6bff">A bit sad — play with me! 🐾</b>'
               : '<b style="color:#46c98c">Happy '+petMoodFace(c.id)+'</b>';
     const sel = feedPetId===c.id ? ' feed-sel' : '';
     return `<div class="today-row${sel}" onclick="selectFeedPet('${c.id}')">
       <div class="today-ico">${c.emoji}<div class="mood-face">${petMoodFace(c.id)}</div></div>
       <div class="today-info"><b>${c.name}</b> ${lab} ${feedPetId===c.id?'<span class="badge">feeding</span>':''}
-        <div class="meter-row"><span class="meter-lab">🍽️</span><div class="qbar"><div class="qfill" style="width:${hung}%;background:${st==='overfed'?'#ffce4d':'linear-gradient(90deg,#ffb38a,#ff9bce)'}"></div></div></div>
+        <div class="meter-row"><span class="meter-lab">🍽️</span><div class="qbar"><div class="qfill" style="width:${hung}%;background:linear-gradient(90deg,#ffb38a,#ff9bce)"></div></div></div>
         <div class="meter-row"><span class="meter-lab">${sad?'😢':'💜'}</span><div class="qbar"><div class="qfill" style="width:${happy}%;background:linear-gradient(90deg,#c8a0ff,#9b6bff)"></div></div></div>
         <div class="muted" style="font-size:11px">${fmtHunger(full)} · loves ${foodById(petFav(c.id)).emoji}</div></div>
     </div>`;
@@ -779,7 +779,7 @@ function doFeed(){
   const res=feedPet(pet, mealTray.slice());
   if(res.error){ toast(res.error); return; }
   const c=creatureById(pet); SFX.chest();
-  toast(c.emoji+' '+c.name+' ate '+meal.name+' — '+res.liking+'! +'+res.addedH+'h'+(res.overfed?' · 🤢 too full!':''));
+  toast(c.emoji+' '+c.name+' ate '+meal.name+' — '+res.liking+'!'+(res.addedH>0?' +'+res.addedH+'h full':' (already full 😋)'));
   mealTray=[]; renderCafe();
 }
 

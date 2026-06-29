@@ -133,11 +133,8 @@ function petFullnessMs(id){
   const until=(SAVE.petFeed&&SAVE.petFeed[id]!=null)?SAVE.petFeed[id]:(nowMs()+petCapacityH(id)*3600*1000);
   return until - nowMs();
 }
-function petFedState(id){                       // 'hungry' | 'fed' | 'overfed'
-  const full=petFullnessMs(id);
-  if(full<=0) return 'hungry';
-  if(full > petCapacityH(id)*3600*1000 + 60000) return 'overfed';
-  return 'fed';
+function petFedState(id){                       // 'hungry' | 'fed' (pets can never be overfed)
+  return petFullnessMs(id) <= 0 ? 'hungry' : 'fed';
 }
 function petHungerPct(id){                       // 100 = stuffed, 0 = starving
   return Math.max(0, Math.min(100, Math.round(petFullnessMs(id)/(petCapacityH(id)*3600000)*100)));
@@ -160,13 +157,9 @@ function petIsSad(id){ return petHappiness(id) < 25; }
 function petMoodFace(id){ const h=petHappiness(id); return h>=70?'😄':h>=40?'🙂':h>=25?'😐':'😢'; }
 function bumpMood(id, amt){ tickMood(id); SAVE.petMood[id].h=Math.max(0,Math.min(100, SAVE.petMood[id].h+amt)); }
 
-// a pet needs to be FED (not hungry, not overfed) AND not sad to use its power
-function petCanUsePower(id){ return petFedState(id)==='fed' && !petIsSad(id); }
-function petPowerBlockReason(id){
-  const st=petFedState(id);
-  if(st==='hungry') return 'hungry'; if(st==='overfed') return 'overfed';
-  if(petIsSad(id)) return 'sad'; return null;
-}
+// only STARVING removes a pet's power (happiness is just wellbeing now)
+function petCanUsePower(id){ return petFedState(id)==='fed'; }
+function petPowerBlockReason(id){ return petFedState(id)==='hungry' ? 'hungry' : null; }
 
 // ---- merging 3 foods into a named meal ----
 const FOOD_GROUPS = {
@@ -195,15 +188,20 @@ function feedPet(petId, foods){
   const now=nowMs();
   const add=mealHours(petId,foods)*3600*1000;
   const cur=Math.max(now, SAVE.petFeed[petId]!=null?SAVE.petFeed[petId]:now);
-  SAVE.petFeed[petId]=cur+add;
-  const overfed = (SAVE.petFeed[petId]-now) > petCapacityH(petId)*3600*1000 + 60000;
-  // happiness: love meal cheers them up a lot; disliked barely; overfeeding upsets them
+  const cap=now + petCapacityH(petId)*3600*1000;
+  SAVE.petFeed[petId]=Math.min(cur+add, cap);   // tops up to full, never overfed
+  const gained=Math.max(0, Math.round((SAVE.petFeed[petId]-cur)/3600000));
+  // happiness: love meal cheers them up a lot; disliked barely
   const lk=mealLiking(petId,foods);
-  bumpMood(petId, lk==='loves it'?40 : lk==='likes it'?22 : lk==='it\'s ok'?12 : 4);
-  if(overfed) bumpMood(petId,-18);
+  bumpMood(petId, lk==='loves it'?40 : lk==='likes it'?22 : lk==='it\'s ok'?12 : 6);
   persist();
-  return { addedH:Math.round(add/3600000), overfed, liking:lk, state:petFedState(petId),
-           meal:mealInfo(foods), happiness:petHappiness(petId) };
+  return { addedH:gained, liking:lk, state:petFedState(petId), meal:mealInfo(foods), happiness:petHappiness(petId) };
+}
+/* playing with a pet (in the Playground) makes it happier — less neglected */
+function playWithPet(id){
+  if(!id || !creatureById(id)) return 0;
+  bumpMood(id, 14); persist();
+  return petHappiness(id);
 }
 function foodCount(id){ return (SAVE.foods&&SAVE.foods[id])||0; }
 function totalFood(){ let n=0; for(const k in (SAVE.foods||{})) n+=SAVE.foods[k]; return n; }
