@@ -1153,7 +1153,7 @@ function startDisasterActive(){
   Game.buildMode=false;
   const H=Game.world.height, W=Game.world.width;
   Game.dz={ lavaY:H+40, meteors:[],
-    waveBX:W/2, waveBY:200, wtx:W/2, wty:200, wr:88,   // roaming tsunami orb
+    waveBX:W/2, waveBY:200, wtx:W/2, wty:200, wr:140,   // roaming tsunami orb (big)
     zombies:[], lastSpawn:0 };
   const t=Game.disasterType;
   if(t==='zombies'){ Game.dz.maxChasers = 2+Math.floor(Math.random()*2);   // only 2-3 ever chase you
@@ -1203,9 +1203,10 @@ function updateDisaster(dt){
     const sp = 3.0 + prog*3.2;
     const dx = dz.wtx - dz.waveBX, dy = dz.wty - dz.waveBY, d = Math.hypot(dx,dy)||1;
     dz.waveBX += dx/d*Math.min(sp,d); dz.waveBY += dy/d*Math.min(sp,d);
-    if(d < sp+6){   // reached the target → dart to a new random on-screen spot
-      dz.wtx = Math.max(70, Math.min(W-70, Game.cam.x + (Math.random()*2-1)*viewW*0.82));
-      dz.wty = Math.max(70, Math.min(H-30, Game.cam.y + (Math.random()*2-1)*viewH*0.78));
+    if(d < sp+6){   // reached the target → dart to a new spot, kept close to the player
+      const px=p.x+p.w/2, py=p.y+p.h/2;
+      dz.wtx = Math.max(70, Math.min(W-70, px + (Math.random()*2-1)*Math.min(viewW*0.5, 360)));
+      dz.wty = Math.max(70, Math.min(H-30, py + (Math.random()*2-1)*Math.min(viewH*0.5, 320)));
     }
     const cx=p.x+p.w/2, cy=p.y+p.h/2;
     if(p.invuln<=0 && Math.hypot(cx-dz.waveBX, cy-dz.waveBY) < dz.wr){
@@ -1222,7 +1223,15 @@ function updateDisaster(dt){
     const ZSPEED=3.5+prog*0.7;
     for(const z of dz.zombies){
       let dir;
-      if(z.chase){ dir=(p.x>z.x+z.w/2)?1:-1; }
+      if(z.chase){
+        // not a perfect mirror — they react with a delay and sometimes guess wrong / juke
+        if(z.aimUntil==null || Game.t>z.aimUntil){
+          z.aim=(p.x>z.x+z.w/2)?1:-1;
+          if(Math.random()<0.22) z.aim*=-1;          // mis-step, lets you slip past
+          z.aimUntil=Game.t+280+Math.random()*360;   // reaction lag before re-aiming
+        }
+        dir=z.aim;
+      }
       else {       // wanderers shuffle around in random directions
         if(z.x<=10) z.wanderDir=1; else if(z.x>=W-10-z.w) z.wanderDir=-1;
         else if(Game.t>z.wanderUntil){ z.wanderDir=Math.random()<0.5?-1:1; z.wanderUntil=Game.t+700+Math.random()*1400; }
