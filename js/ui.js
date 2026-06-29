@@ -1275,11 +1275,38 @@ function refreshMusicBtn(){
   const b=document.getElementById('musicBtn'); if(b) b.style.opacity = SAVE.musicOn!==false ? '1' : '0.45';
 }
 let lastMusicMode='lobby';
-function startMusicIfOn(mode){ if(mode) lastMusicMode=mode; if(SAVE.musicOn!==false){ SFX.resume(); SFX.startMusic(lastMusicMode); } }
-function toggleMusic(){
-  SAVE.musicOn = !(SAVE.musicOn!==false); persist(); refreshMusicBtn();
-  if(SAVE.musicOn){ SFX.resume(); SFX.startMusic(lastMusicMode); } else { SFX.stopMusic(); }
+// play whichever song the player picked (or an ambient loop if they chose "off-pick")
+function playPickedMusic(){
+  if(SAVE.musicOn===false) return;
+  SFX.resume();
+  const id=SAVE.musicTrack||'chill';
+  if(id==='ambient') SFX.startMusic(lastMusicMode);
+  else SFX.playSong(id);
 }
+function startMusicIfOn(mode){ if(mode) lastMusicMode=mode; if(SAVE.musicOn!==false){ playPickedMusic(); } }
+
+const MUSIC_PICKS=['rushe','entertainer','tarantella','muppets','chill'];
+function openMusicPicker(){ SFX.init(); SFX.resume(); showScreen('musicScreen'); renderMusicPicker(); }
+function renderMusicPicker(){
+  const body=document.getElementById('musicBody'); if(!body) return;
+  const on=SAVE.musicOn!==false, cur=SAVE.musicTrack||'chill';
+  body.innerHTML = MUSIC_PICKS.map(id=>{
+    const s=SFX.SONGS[id]; const sel=(on && cur===id);
+    return `<button class="music-pick ${sel?'sel':''}" onclick="pickSong('${id}')">
+      <span class="mp-name">${s.name}</span>${sel?'<span class="mp-now">▶ playing</span>':''}</button>`;
+  }).join('') +
+  `<button class="music-pick ${!on?'sel':''}" onclick="musicOff()">
+     <span class="mp-name">🔇 Music Off</span>${!on?'<span class="mp-now">muted</span>':''}</button>`;
+}
+function pickSong(id){
+  SAVE.musicOn=true; SAVE.musicTrack=id; persist();
+  refreshMusicBtn(); SFX.resume(); SFX.playSong(id); renderMusicPicker();
+}
+function musicOff(){
+  SAVE.musicOn=false; persist(); refreshMusicBtn(); SFX.stopMusic(); renderMusicPicker();
+}
+// kept for any old callers
+function toggleMusic(){ openMusicPicker(); }
 
 /* ---------------- Achievements ---------------- */
 function openAchievements(){ showScreen('achievementsScreen'); renderAchievements(); }

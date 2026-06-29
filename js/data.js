@@ -211,6 +211,7 @@ function defaultSave(){
     ownedTrails:['none'],  // unlocked trails
     soundOn:true,          // sound effects on/off
     musicOn:true,          // background music on/off
+    musicTrack:'chill',    // chosen song id (rushe/entertainer/tarantella/muppets/chill/ambient)
     bestTimes:{},          // level -> best time (ms)
     starsByLevel:{},       // level -> best stars (1-3)
     achievements:[],       // unlocked achievement ids

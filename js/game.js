@@ -1124,13 +1124,12 @@ function endHeist(){
 }
 
 /* ===== NATURAL DISASTER SURVIVAL ===== */
-const DISASTERS = ['lava','meteor','flood','tornado','tsunami','zombies'];
+const DISASTERS = ['lava','meteor','tornado','tsunami','zombies'];
 const DISASTER_INFO = {
   lava:    {name:'🌋 LAVA RISING', tip:'Get to high ground!'},
   meteor:  {name:'☄️ METEOR SHOWER', tip:'Dodge the meteors!'},
-  flood:   {name:'🌊 FLOOD', tip:'Stay above the water!'},
   tornado: {name:'🌪️ TORNADO', tip:'Run from the twister!'},
-  tsunami: {name:'🌊 TSUNAMI', tip:'Get high — a wave is coming!'},
+  tsunami: {name:'🌊 TSUNAMI', tip:'Each wave goes higher — climb!'},
   zombies: {name:'🧟 ZOMBIES', tip:'Run from the zombies!'},
 };
 /* place a built platform at a world position (during disaster mode) */
@@ -1154,7 +1153,7 @@ function startDisasterActive(){
   Game.disasterPhase='active'; Game.disasterPhaseT=Game.t+35000;
   Game.buildMode=false;
   const H=Game.world.height, W=Game.world.width;
-  Game.dz={ lavaY:H+40, meteors:[], waterY:H+40, tornadoX:W/2, tornadoDir:1, waveX:-120, waveDir:1, zombies:[], lastSpawn:0 };
+  Game.dz={ lavaY:H+40, meteors:[], tornadoX:W/2, tornadoDir:1, waveX:-140, waveDir:1, waveCount:0, waveTopY:H-30-150, zombies:[], lastSpawn:0 };
   const t=Game.disasterType;
   if(t==='zombies'){ Game.dz.maxChasers = 2+Math.floor(Math.random()*2);   // only 2-3 ever chase you
     for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:i<Game.dz.maxChasers, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
@@ -1175,6 +1174,7 @@ function checkDisasterButtons(){
     if(p.x<c.x+c.w && p.x+p.w>c.x && p.y<c.y+c.h && p.y+p.h>c.y){
       c.taken=true; Game.disasterButtons++; addCoins(5); SFX.coin();
       if(typeof toast==='function') toast('🔘 Button '+Game.disasterButtons+'/10!  +5🪙');
+      if(Game.disasterButtons>=10){ if(typeof toast==='function') toast('🎉 All 10 buttons — YOU WIN!'); endDisaster(true); return; }
     }
   }
 }
@@ -1182,16 +1182,11 @@ function updateDisaster(dt){
   const p=Game.player, W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
   checkDisasterButtons();
   const prog=1-Math.max(0,(Game.disasterPhaseT-Game.t)/35000);   // 0..1
-  if(t==='lava' || t==='tsunami'){
-    // lava rises fast (reaches the top in ~22s); tsunami's base water rises slower
-    const rate = t==='lava' ? 1.6 : 1.0;
-    dz.lavaY = H+40 - Math.min(1, prog*rate)*(H-220);
+  if(t==='lava'){
+    // lava rises fast — reaches the top in ~18s now
+    dz.lavaY = H+40 - Math.min(1, prog*2.2)*(H-220);
     const inLava = (p.y+p.h) > dz.lavaY && !disasterStandingProof();
     if(inLava && p.invuln<=0) disasterHit(true);
-  }
-  if(t==='flood'){
-    dz.waterY = H+40 - prog*(H-260);
-    if((p.y+p.h) > dz.waterY+20 && !disasterStandingProof() && p.invuln<=0) disasterHit(true);
   }
   if(t==='meteor'){
     if(Game.t-dz.lastSpawn>520){ dz.lastSpawn=Game.t; const n=1+Math.floor(prog*2);
@@ -1207,10 +1202,13 @@ function updateDisaster(dt){
     if(p.invuln<=0 && Math.abs((p.x+p.w/2)-tx)<92){ disasterHit(true); p.vy=-16; }
   }
   if(t==='tsunami'){
-    dz.waveX += dz.waveDir*(3+prog*4);
-    if(dz.waveX>W+120){ dz.waveDir=-1; } if(dz.waveX<-120){ dz.waveDir=1; }
-    const waveTopY=H-30-160-prog*120;
-    if(p.invuln<=0 && Math.abs((p.x+p.w/2)-dz.waveX)<70 && (p.y+p.h)>waveTopY){ disasterHit(true); p.vx=dz.waveDir*12; }
+    // each pass the wave gets faster AND climbs higher up the arena
+    dz.waveX += dz.waveDir*(3.5+prog*4 + dz.waveCount*0.9);
+    if(dz.waveX>W+140){ dz.waveDir=-1; dz.waveCount++; }
+    else if(dz.waveX<-140){ dz.waveDir=1; dz.waveCount++; }
+    const waveH = Math.min(H-150, 150 + dz.waveCount*60);   // taller every wave
+    dz.waveTopY = H-30 - waveH;
+    if(p.invuln<=0 && Math.abs((p.x+p.w/2)-dz.waveX)<75 && (p.y+p.h)>dz.waveTopY){ disasterHit(true); p.vx=dz.waveDir*12; }
   }
   if(t==='zombies'){
     const maxCh=dz.maxChasers||3;
@@ -1264,21 +1262,20 @@ function drawDisaster(ctx){
   if(Game.buildMode){ ctx.globalAlpha=0.25; ctx.fillStyle=Game.buildColor;
     ctx.fillText('',0,0); ctx.globalAlpha=1; }
   if(!dz) return;
-  if((t==='lava'||t==='tsunami') && dz.lavaY<H+40){
+  if(t==='lava' && dz.lavaY<H+40){
     ctx.fillStyle='#ff5a2a'; ctx.fillRect(-200, dz.lavaY, W+400, H+400);
     ctx.fillStyle='rgba(255,200,80,.6)'; ctx.fillRect(-200, dz.lavaY-6, W+400, 6);
-  }
-  if(t==='flood' && dz.waterY<H+40){
-    ctx.fillStyle='rgba(70,150,255,.6)'; ctx.fillRect(-200, dz.waterY, W+400, H+400);
-    ctx.fillStyle='rgba(160,210,255,.7)'; ctx.fillRect(-200, dz.waterY-5, W+400, 5);
   }
   if(t==='meteor'){ ctx.textAlign='center'; ctx.textBaseline='middle';
     for(const m of dz.meteors){ ctx.font=`${m.r*2}px serif`; ctx.fillText('☄️', m.x, m.y); } }
   if(t==='tornado'){ ctx.font='120px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText('🌪️', dz.tornadoX, Game.player.y+10); }
-  if(t==='tsunami'){ ctx.fillStyle='rgba(40,120,230,.55)';
-    ctx.fillRect(dz.waveX-60, H-30-260, 120, 300);
-    ctx.font='60px serif'; ctx.textAlign='center'; ctx.fillText('🌊', dz.waveX, H-30-150); }
+  if(t==='tsunami'){ const top=dz.waveTopY!=null?dz.waveTopY:H-30-150;
+    ctx.fillStyle='rgba(40,120,230,.55)';
+    ctx.fillRect(dz.waveX-65, top, 130, H+40-top);
+    ctx.fillStyle='rgba(150,210,255,.75)'; ctx.fillRect(dz.waveX-65, top, 130, 8);
+    ctx.font='64px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🌊', dz.waveX, top+34); }
   if(t==='zombies'){ ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
     for(const z of dz.zombies) ctx.fillText('🧟', z.x+z.w/2, z.y+z.h/2); }
 }
