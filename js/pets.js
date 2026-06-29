@@ -24,6 +24,10 @@ const ABILITY_INFO = {
   platform:   'Place a platform (tap the ✨ button!)',
   doubleJump: 'Double jump (tap jump again in mid-air!)',
   tripleJump: 'Triple jump (jump THREE times in the air!)',
+  savefall:   'Rescue! If you fall you pop back on your last platform',
+  banana:     'Throw bananas (tap 🍌) at the boss & friends!',
+  coinmagnet: 'Coins are always pulled to you',
+  autoshield: 'Start every level with a shield 🛡️',
 };
 
 // the creature roster
@@ -33,22 +37,28 @@ const CREATURES = [
   { id:'frog',    name:'Frog',      emoji:'🐸', rarity:'basic', abilities:['glide'],  sell:30 },
   { id:'hamster', name:'Hamster',   emoji:'🐹', rarity:'basic', abilities:['speed1'], sell:30 },
   { id:'chick',   name:'Chick',     emoji:'🐤', rarity:'basic', abilities:[],         sell:30 },
+  { id:'hedgehog',name:'Hedgehog',  emoji:'🦔', rarity:'basic', abilities:['speed1'], sell:30 },
   // rare — sell 70
   { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'cat',     name:'Cat',       emoji:'🐱', rarity:'rare', abilities:['glide'],  sell:70 },
+  { id:'turtle',  name:'Turtle',    emoji:'🐢', rarity:'rare', abilities:['autoshield'], sell:70 },
+  { id:'penguin', name:'Penguin',   emoji:'🐧', rarity:'rare', abilities:['glide','speed1'], sell:70 },
   // super rare — sell 120
   { id:'wolf',    name:'Wolf',      emoji:'🐺', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
   { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['speed2'], sell:120 },
+  { id:'raccoon', name:'Raccoon',   emoji:'🦝', rarity:'superRare', abilities:['coinmagnet','speed1'], sell:120 },
   // legendary — sell 200
   { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
   { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['glideStrong'], sell:200 },
+  { id:'monkey',  name:'Monkey',    emoji:'🐵', rarity:'legendary', abilities:['banana'], sell:200 },
   // mythical — sell 320
-  { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['doubleJump','glideStrong'], sell:320 },
+  { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['savefall','glideStrong'], sell:320 },
   { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
   { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'], sell:320 },
+  { id:'pegasus', name:'Pegasus',   emoji:'🐴', rarity:'mythical', abilities:['doubleJump','speed2'],      sell:320 },
   // secret — sell 700 (the rarest!)
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['tripleJump','speed2','platform'],     sell:700 },
   { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['tripleJump','platform','glideStrong'],sell:700 },
@@ -81,7 +91,8 @@ const foodById = id => FOODS.find(f=>f.id===id);
 // each pet has a favourite food (love) — thematic where it makes sense, else hashed
 const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'cheese', bunny:'carrot',
   fox:'berry', wolf:'corn', tiger:'corn', dragon:'corn', unicorn:'honey', phoenix:'honey',
-  eagle:'berry', octopus:'banana', kraken:'carrot', giraffe:'apple', elephant:'peach', chick:'banana' };
+  eagle:'berry', octopus:'banana', kraken:'carrot', giraffe:'apple', elephant:'peach', chick:'banana',
+  monkey:'banana', raccoon:'berry', turtle:'corn', penguin:'strawberry', hedgehog:'apple', pegasus:'honey' };
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
 function petOkFoods(id){
@@ -392,6 +403,10 @@ function equippedAbilities(){
     fallMul: baseFall<1 ? Math.max(0.45, baseFall-glideBoost) : 1,
     maxJumps: set.has('tripleJump')?3 : set.has('doubleJump')?2 : 1,
     canPlatform: set.has('platform'),
+    canSaveFall: set.has('savefall'),
+    canBanana:   set.has('banana'),
+    canMagnet:   set.has('coinmagnet'),
+    canShield:   set.has('autoshield'),
   };
 }
 

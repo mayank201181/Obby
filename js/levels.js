@@ -364,7 +364,7 @@ function towerFloor(world){
   if(isBoss){
     const patterns=['rain','aimed','spread','sweep'];     // cycles every 4 bosses
     const pattern=patterns[((floorNo/5)-1) % patterns.length];
-    world.bosses.push({floorNo, topY:y, bottomY:arenaBottom, defeated:false, lastThrow:0, pattern, sweepX:60});
+    world.bosses.push({floorNo, topY:y, bottomY:arenaBottom, defeated:false, lastThrow:0, pattern, sweepX:60, hits:0});
   }
   world._prevX = cx+cw/2;
   world._y = y;

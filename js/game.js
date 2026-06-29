@@ -36,6 +36,8 @@ const Game = {
   myColorName:null, myColor:null, partnerColor:null,  // Team colour assignment
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
+  petSaveFall:false, petBanana:false, petMagnet:false, petAutoShield:false,
+  bananas:[], lastSafe:null,    // Monkey banana projectiles + Phoenix last-platform rescue
   placedPlatforms:[],           // platforms spawned by the 'platform' pet ability
   platformCdUntil:0,            // ability cooldown
   trailPoints:[],               // recent positions for the cosmetic trail
@@ -52,8 +54,14 @@ function applyEquippedPet(){
   }
   Game.petMoveMul=a.moveMul; Game.petJumpMul=a.jumpMul; Game.petFallMul=a.fallMul;
   Game.petMaxJumps=a.maxJumps; Game.petCanPlatform=a.canPlatform;
+  Game.petSaveFall=!!a.canSaveFall; Game.petBanana=!!a.canBanana;
+  Game.petMagnet=!!a.canMagnet; Game.petAutoShield=!!a.canShield;
   const btn=document.getElementById('abilityBtn');
-  if(btn) btn.style.display = a.canPlatform ? 'flex' : 'none';
+  if(btn){
+    btn.style.display = (a.canPlatform || a.canBanana) ? 'flex' : 'none';
+    btn.innerHTML = a.canBanana ? '🍌<br><span style="font-size:10px">THROW</span>'
+                                : '✨<br><span style="font-size:10px">PLATFORM</span>';
+  }
 }
 
 // Team colours: in Team mode you are PINK (host) or BLUE (joiner). A coloured
@@ -144,12 +152,14 @@ function loadLevel(level){
     onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
+  Game.bananas=[]; Game.lastSafe=null;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
   Game.trap={}; Game.abilityFx=[]; Game.tagCdUntil=0; Game.shakeMag=0; Game.tagEscaped=false;
   applyTheme();                     // per-level backdrop + weather
   applyEquippedPet();               // load equipped-pet ability effects
+  if(Game.petAutoShield) Game.power.shield=true;   // Turtle starts each level shielded
   // screen-anchored turrets ride the left/right edges, glide up/down, fire across
   Game.guns = makeTurrets(level);
   Game.bullets=[];
@@ -208,19 +218,24 @@ function readInput(){
   return Math.max(-1,Math.min(1,dir));
 }
 
-/* pet 'platform' ability: drop a temporary foothold (button next to JUMP) */
+/* pet ability button (next to JUMP): drop a platform OR throw a banana */
 function triggerAbility(){
-  if(!Game.running || !Game.petCanPlatform) return;
-  if(Game.t < Game.platformCdUntil) return;        // on cooldown
-  const p=Game.player, w=100, h=18;
-  Game.placedPlatforms.push({
-    type:'placed', w, h,
-    x: p.x + p.w/2 - w/2 + p.facing*16,
-    y: p.y + p.h + 6,
-    until: Game.t + 4500,
-  });
-  Game.platformCdUntil = Game.t + 2600;
-  if(typeof toast==='function') toast('✨ Platform!');
+  if(!Game.running) return;
+  if(Game.t < Game.platformCdUntil) return;        // shared cooldown
+  const p=Game.player;
+  if(Game.petBanana){                              // Monkey: lob a banana forward
+    Game.bananas.push({ x:p.x+p.w/2, y:p.y+p.h/2, vx:p.facing*9, vy:-6, r:11, born:Game.t });
+    Game.platformCdUntil = Game.t + 500;
+    SFX.jump();
+    return;
+  }
+  if(Game.petCanPlatform){
+    const w=100, h=18;
+    Game.placedPlatforms.push({ type:'placed', w, h,
+      x: p.x + p.w/2 - w/2 + p.facing*16, y: p.y + p.h + 6, until: Game.t + 4500 });
+    Game.platformCdUntil = Game.t + 2600;
+    if(typeof toast==='function') toast('✨ Platform!');
+  }
 }
 
 function update(dt){
@@ -270,7 +285,12 @@ function update(dt){
   p.squash += (0 - p.squash)*0.18;
 
   // out of bounds (fell off bottom)
-  if(p.y > Game.world.height + 240){ respawn(); }
+  if(p.y > Game.world.height + 240){
+    if(Game.petSaveFall && Game.lastSafe){    // Phoenix: pop back onto your last platform
+      p.x=Game.lastSafe.x; p.y=Game.lastSafe.y; p.vx=0; p.vy=0; p.invuln=600;
+      if(typeof toast==='function') toast('🔥 Rescued by your Phoenix!');
+    } else respawn();
+  }
 
   // cannons + bullets + laser beams
   updateHazards(dt);
@@ -278,6 +298,7 @@ function update(dt){
   updateSoloHazards();                  // pendulums / spikes / laser gates (Hard)
   collectCoins(p);
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
+  if(Game.bananas.length) updateBananas();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
 
   // conveyor push handled in collision (sets p.vx target)
@@ -364,6 +385,41 @@ function updateBoss(){
     }
   }
 }
+/* Monkey bananas: arc forward, smash boss projectiles, damage the boss,
+   and splat friends in multiplayer (just for fun). */
+function updateBananas(){
+  const W=Game.world.width;
+  for(let i=Game.bananas.length-1;i>=0;i--){
+    const b=Game.bananas[i];
+    b.vy+=0.5; b.x+=b.vx; b.y+=b.vy;
+    if(Game.t-b.born>3500 || b.x<-40 || b.x>W+40 || b.y>Game.world.height+200){ Game.bananas.splice(i,1); continue; }
+    let hit=false;
+    for(let k=Game.bossShots.length-1;k>=0;k--){ const s=Game.bossShots[k];
+      if(Math.abs(s.x-b.x)<s.r+b.r && Math.abs(s.y-b.y)<s.r+b.r){ Game.bossShots.splice(k,1); hit=true; break; } }
+    if(!hit){
+      const boss=Game.activeBoss;
+      if(boss && !boss.defeated){
+        const bx=Game.world.width/2, by=boss.topY-110;
+        if(Math.abs(bx-b.x)<60 && Math.abs(by-b.y)<62){
+          boss.hits=(boss.hits||0)+1; boss._flash=Game.t; hit=true; addShake(3);
+          if(boss.hits>=5){ boss.defeated=true; Game.bossShots=[]; bossReward(boss.floorNo); }
+          else if(typeof toast==='function') toast('🍌 Boss hit! ('+boss.hits+'/5)');
+        }
+      }
+    }
+    if(!hit && Game.multiplayer){
+      for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(Math.abs(r.x+17-b.x)<24 && Math.abs(r.y+17-b.y)<24){ hit=true; r.emote='🍌'; r.emoteAt=nowMs(); break; } }
+    }
+    if(hit) Game.bananas.splice(i,1);
+  }
+}
+function drawBananas(ctx){
+  ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const b of Game.bananas){
+    ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(Game.t/90 + b.x); ctx.fillText('🍌',0,0); ctx.restore();
+  }
+}
 function bossReward(floorNo){
   addShake(9);
   addCoins(25); unlockAchievement('boss');
@@ -445,6 +501,7 @@ function moveAndCollide(p){
       p.vy = 0;
       if(!p.onGround && p.squash > -0.4) p.squash = 0.9;
       p.onGround = true;
+      Game.lastSafe = {x:p.x, y:p.y};      // Phoenix rescue point
       // ride moving blocks: carry the player along with the platform
       if(standingOn.type==='mover'){ p.x += standingOn.dx||0; }
     }
@@ -464,7 +521,7 @@ function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){
 
 /* grab floating coins (magnet pulls them in) and power-ups you touch */
 function collectCoins(p){
-  const magnet = Game.t < Game.power.magnetUntil;
+  const magnet = Game.t < Game.power.magnetUntil || Game.petMagnet;   // Raccoon = always magnet
   const pcx=p.x+p.w/2, pcy=p.y+p.h/2;
   for(const c of Game.world.platforms){
     if(c.taken) continue;
@@ -1093,6 +1150,7 @@ function render(){
   }
   // solo dodge hazards (pendulums / spikes / laser gates)
   drawSoloHazards(ctx);
+  if(Game.bananas.length) drawBananas(ctx);
 
   // pet-placed platforms (fading sparkle footholds)
   for(const pp of Game.placedPlatforms){
@@ -1239,10 +1297,13 @@ function drawBoss(ctx,b){
   ctx.beginPath(); ctx.moveTo(cx-30,cy-18); ctx.lineTo(cx-8,cy-9); ctx.moveTo(cx+30,cy-18); ctx.lineTo(cx+8,cy-9); ctx.stroke();
   // mouth
   ctx.beginPath(); ctx.arc(cx,cy+22,12,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
-  // label (with this boss's attack style)
+  // banana-hit flash
+  if(b._flash && Game.t-b._flash<150){ ctx.globalAlpha=0.6; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+  // label (with this boss's attack style) + banana damage taken
   const pn={rain:'Block Rain',aimed:'Sniper',spread:'Volley',sweep:'Sweeper'}[b.pattern]||'';
   ctx.fillStyle='#fff'; ctx.font='bold 13px Nunito'; ctx.textAlign='center';
   ctx.fillText('BOSS · Floor '+b.floorNo+(pn?' · '+pn:''), cx, cy-R-22);
+  if(b.hits>0){ ctx.fillText('🍌 '+b.hits+'/5', cx, cy-R-38); }
   ctx.restore();
 }
 function drawBossShot(ctx,s){
