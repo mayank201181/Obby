@@ -72,6 +72,7 @@ function initLobby(){
   refreshDailyButton();
   refreshQuestButton();
   refreshHeistButton();
+  refreshTodayBadge();
   startMusicIfOn('lobby');
 }
 function applyLobbyBg(){
@@ -713,6 +714,95 @@ function openPlayground(){
 }
 function closePlayground(){ cancelAnimationFrame(playgroundRaf); showScreen('lobbyScreen'); initLobby(); }
 
+/* ---------------- Daily Login Rewards ---------------- */
+function loginNextDayIndex(){
+  const today=dayNum(), L=SAVE.login||{day:0,lastClaim:0};
+  if(L.lastClaim===today) return 0;                 // already claimed today
+  if(L.lastClaim===today-1) return (L.day % 7) + 1; // consecutive day -> advance (loops 7->1)
+  return 1;                                          // missed a day / first time -> reset to 1
+}
+function canClaimLogin(){ return loginNextDayIndex()>0; }
+function openLogin(){ showScreen('loginScreen'); renderLogin(); }
+function renderLogin(){
+  updateCoinDisplays();
+  const today=dayNum(), L=SAVE.login||{day:0,lastClaim:0};
+  const claimedToday = L.lastClaim===today;
+  const next = loginNextDayIndex();
+  const grid=document.getElementById('loginGrid');
+  grid.innerHTML = LOGIN_REWARDS.map((r,i)=>{
+    const d=i+1;
+    let cls;
+    if(claimedToday){ cls = d<L.day?'done':(d===L.day?'today':'future'); }
+    else { cls = d<next?'done':(d===next?'claim':'future'); }
+    const big = d===7?' big':'';
+    return `<div class="login-day ${cls}${big}">
+      <div class="ld-num">Day ${d}</div>
+      <div class="ld-rew">${r.pet?'🪙'+r.coins+'<br>+🐾':'🪙'+r.coins}</div>
+      ${cls==='done'||cls==='today'?'<div class="ld-check">✓</div>':''}
+    </div>`;
+  }).join('');
+  const btn=document.getElementById('loginClaimBtn');
+  const hint=document.getElementById('loginHint');
+  if(claimedToday){
+    btn.disabled=true; btn.textContent='✓ Come back tomorrow!';
+    hint.textContent='Nice — Day '+L.day+' claimed! Keep your streak going. 🔥';
+  } else {
+    btn.disabled=false; btn.textContent='Claim Day '+next+' reward 🎁';
+    hint.textContent = (L.lastClaim===dayNum()-1) ? 'Day '+next+' — your streak continues! 🔥' : 'Welcome back! Claim Day '+next+'.';
+  }
+}
+function claimLoginDay(){
+  const idx=loginNextDayIndex(); if(!idx){ toast('Already claimed today!'); return; }
+  const r=LOGIN_REWARDS[idx-1];
+  SAVE.login={day:idx, lastClaim:dayNum()};
+  addCoins(r.coins||0);
+  let petMsg='';
+  if(r.pet){
+    const rar=rollRarity({basic:28,rare:38,superRare:21,legendary:9,mythical:3,secret:1});
+    const pool=creaturesOfRarity(rar), c=pool[Math.floor(Math.random()*pool.length)];
+    SAVE.pets[c.id]=(SAVE.pets[c.id]||0)+1; if(!SAVE.equippedPet) SAVE.equippedPet=c.id;
+    if(c.rarity==='secret') unlockAchievement('secret'); checkPetAchievements();
+    petMsg=' & '+c.emoji+' '+c.name+'!';
+  }
+  persist(); SFX.chest();
+  toast('🎁 Day '+idx+'! +🪙'+(r.coins||0)+petMsg);
+  if(idx===7) spawnConfetti(document.getElementById('confettiBox'));
+  renderLogin(); refreshTodayBadge();
+}
+
+/* ---------------- Today hub ---------------- */
+const TODAY_ITEMS = [
+  { icon:'🎁', label:'Login Reward',    desc:'Daily streak prize',        act:'openLogin',  ready:()=>canClaimLogin() },
+  { icon:'📋', label:'Daily Quests',    desc:'3 quests for coins',        act:'openQuests', ready:()=>questsClaimable() },
+  { icon:'🎀', label:'Daily Chest',     desc:'A free goodie',             act:'openChest',  ready:()=>(SAVE.chestLastClaim===0 || nowMs()-SAVE.chestLastClaim>=DAY_MS) },
+  { icon:'💰', label:'Gold Heist',      desc:'20s coin grab',             act:'startHeist', ready:()=>!(SAVE.heist&&SAVE.heist.key===dailyKey()&&SAVE.heist.done) },
+  { icon:'🗓️', label:'Daily Challenge', desc:'+50 bonus coins',           act:'startDaily', ready:()=>!(SAVE.daily&&SAVE.daily.key===dailyKey()&&SAVE.daily.done) },
+  { icon:'📒', label:'Blob-Dex Goals',  desc:'Collection rewards',        act:'openDex',    ready:()=>dexClaimable() },
+];
+function availableCount(){ return TODAY_ITEMS.filter(t=>t.ready()).length; }
+function openToday(){ showScreen('todayScreen'); renderToday(); }
+function renderToday(){
+  updateCoinDisplays();
+  document.getElementById('todayBody').innerHTML = TODAY_ITEMS.map(t=>{
+    const ready=t.ready();
+    return `<div class="today-row ${ready?'ready':''}">
+      <div class="today-ico">${t.icon}</div>
+      <div class="today-info"><b>${t.label}</b><div class="muted" style="font-size:12px">${t.desc}</div></div>
+      <button class="btn ${ready?'gold':'ghost'} small" onclick="${t.act}()">${ready?'Get it!':'Done ✓'}</button>
+    </div>`;
+  }).join('');
+}
+function refreshTodayBadge(){
+  const b=document.getElementById('todayBadge'); if(!b) return;
+  const n=availableCount();
+  if(n>0){ b.style.display='inline-block'; b.textContent=n; } else b.style.display='none';
+}
+function openDex(){ openPets(); setPetsTab('collection'); }
+function doClaimDex(id){
+  const r=claimDexMilestone(id);
+  if(r){ SFX.rare(); toast('📒 Collection reward! +🪙'+r); renderPets(); refreshTodayBadge(); }
+}
+
 /* ---------------- Daily Quests ---------------- */
 function openQuests(){ showScreen('questsScreen'); renderQuests(); }
 function renderQuests(){
@@ -864,9 +954,23 @@ function doSell(id){
   if(document.getElementById('petModal').classList.contains('active')) showPetActions(id);
 }
 function renderCollectionTab(body){
-  const total=CREATURES.length, owned=CREATURES.filter(c=>ownsPet(c.id)).length;
+  const total=CREATURES.length, dex=dexOwnedCount();
   const eq=SAVE.equippedPet?creatureById(SAVE.equippedPet):null;
-  let html=`<p class="hint">Collected ${owned}/${total} · Equipped: ${eq?eq.emoji+' '+eq.name:'none'}</p>`;
+  // ----- Blob-Dex completion goals -----
+  const pct=Math.round(dex/total*100);
+  let html=`<div class="dex-head">📒 Blob-Dex <b>${dex}/${total}</b>
+    <div class="qbar" style="margin:6px 0"><div class="qfill" style="width:${pct}%"></div></div></div>`;
+  html += DEX_MILESTONES.map(m=>{
+    const done=dexMilestoneDone(m), claimed=dexMilestoneClaimed(m.id);
+    const btn = claimed ? `<span class="muted" style="font-size:12px">Claimed ✓</span>`
+      : done ? `<button class="btn gold small" onclick="doClaimDex('${m.id}')">🪙${m.reward}</button>`
+      : `<span class="muted" style="font-size:12px;white-space:nowrap">🪙${m.reward}</span>`;
+    return `<div class="today-row ${done&&!claimed?'ready':''}">
+      <div class="today-ico">${claimed?'🏅':done?'🎁':'🔒'}</div>
+      <div class="today-info"><b>${m.label}</b><div class="muted" style="font-size:11px">${Math.min(dex,m.need)}/${m.need}</div></div>
+      ${btn}</div>`;
+  }).join('');
+  html+=`<p class="hint">Equipped: ${eq?eq.emoji+' '+eq.name:'none'}</p>`;
   for(const r of RARITIES){
     html+=`<div class="rar-head" style="color:${RARITY_INFO[r].color}">${RARITY_INFO[r].label}</div><div class="pet-grid">`;
     for(const c of creaturesOfRarity(r)){
@@ -1037,6 +1141,8 @@ function boot(){
   initLobby();
   refreshSoundBtn(); refreshMusicBtn();
   showScreen('lobbyScreen');
+  // pop the login reward straight away if it's ready (strong daily hook)
+  if(canClaimLogin()) setTimeout(openLogin, 350);
   // build floating decor
   const decor=document.getElementById('bgDecor');
   for(let i=0;i<10;i++){

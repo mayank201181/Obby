@@ -62,6 +62,26 @@ const CREATURES = [
 const creatureById = id => CREATURES.find(c=>c.id===id);
 const creaturesOfRarity = r => CREATURES.filter(c=>c.rarity===r);
 
+// ===== Blob-Dex collection milestones (long-term completion goals) =====
+const DEX_MILESTONES = [
+  { id:'own5',  need:5,                reward:150,  label:'Collect 5 different pets' },
+  { id:'own10', need:10,               reward:300,  label:'Collect 10 different pets' },
+  { id:'own15', need:15,               reward:600,  label:'Collect 15 different pets' },
+  { id:'own20', need:20,               reward:1000, label:'Collect 20 different pets' },
+  { id:'all',   need:CREATURES.length, reward:3000, label:'Complete the Blob-Dex!' },
+];
+function dexOwnedCount(){ return CREATURES.filter(c=>(SAVE.pets[c.id]||0)>0 || (SAVE.shinies&&SAVE.shinies[c.id]>0)).length; }
+function dexMilestoneDone(m){ return dexOwnedCount()>=m.need; }
+function dexMilestoneClaimed(id){ return (SAVE.dexClaimed||[]).includes(id); }
+function claimDexMilestone(id){
+  const m=DEX_MILESTONES.find(x=>x.id===id); if(!m) return false;
+  if(!SAVE.dexClaimed) SAVE.dexClaimed=[];
+  if(dexMilestoneClaimed(id) || !dexMilestoneDone(m)) return false;
+  SAVE.dexClaimed.push(id); addCoins(m.reward); persist();
+  return m.reward;
+}
+function dexClaimable(){ return DEX_MILESTONES.some(m=>dexMilestoneDone(m) && !dexMilestoneClaimed(m.id)); }
+
 // chest shop: cost + rarity weights (sum 100). Basic can't give legendary/mythical.
 const CHESTS = {
   basic:     { label:'Basic Chest',     cost:150, emoji:'📦',

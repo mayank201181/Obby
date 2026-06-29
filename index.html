@@ -32,6 +32,7 @@
     <p class="subtitle">Bounce, climb &amp; race to the top! 🫧</p>
     <div class="preview-wrap"><canvas id="lobbyPreview"></canvas></div>
     <input class="text" id="nameInput" maxlength="12" placeholder="Type your name…"/>
+    <button class="btn gold" id="todayBtn" onclick="openToday()">⭐ Today's Stuff <span class="badge" id="todayBadge" style="display:none"></span></button>
     <button class="btn pink" onclick="openPlay()">▶ Play</button>
     <button class="btn blue" onclick="openPets()">🐾 Pets &amp; Chests</button>
     <div class="row">
@@ -90,6 +91,33 @@
     <h2>🏆 Badges</h2>
     <p class="hint" id="achProgress"></p>
     <div class="scroll" id="achBody"></div>
+  </div>
+</section>
+
+<!-- ============ TODAY HUB ============ -->
+<section class="screen" id="todayScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>⭐ Today's Stuff</h2>
+    <p class="hint">Free rewards reset every day — come back daily to grab them all!</p>
+    <div class="scroll" id="todayBody"></div>
+  </div>
+</section>
+
+<!-- ============ LOGIN REWARDS ============ -->
+<section class="screen" id="loginScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🎁 Daily Login Rewards</h2>
+    <p class="hint" id="loginHint">Play every day for bigger and bigger prizes!</p>
+    <div class="login-grid" id="loginGrid"></div>
+    <button class="btn pink" id="loginClaimBtn" onclick="claimLoginDay()">Claim today's reward 🎁</button>
   </div>
 </section>
 

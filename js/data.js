@@ -178,6 +178,17 @@ const DAY_MS = 24*60*60*1000;
 // power-up pickup kinds that can spawn in levels
 const POWERUP_KINDS = ['magnet','shield','dash','slow','x2','ghost'];
 
+// 7-day login-streak calendar (loops); day 7 is the jackpot (coins + free pet)
+const LOGIN_REWARDS = [
+  { coins:50 },
+  { coins:75 },
+  { coins:100 },
+  { coins:150 },
+  { coins:250 },
+  { coins:350 },
+  { coins:600, pet:true },
+];
+
 function defaultSave(){
   return {
     name:'',
@@ -214,6 +225,8 @@ function defaultSave(){
     questStreakDay:0,      // day index a streak bonus was last awarded
     ownedEmotes:['happy','laugh','heart','thumb','wow','party'],  // unlocked quick emotes
     heist:{key:'',best:0,done:false},  // daily Gold Heist progress
+    login:{day:0, lastClaim:0},        // daily login-streak calendar
+    dexClaimed:[],                     // claimed Blob-Dex collection milestones
   };
 }
 
