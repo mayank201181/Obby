@@ -229,6 +229,7 @@ function defaultSave(){
     dexClaimed:[],                     // claimed Blob-Dex collection milestones
     foods:{},                          // pantry: foodId -> count (from the Food Hunt)
     petFeed:{},                        // creatureId -> timestamp(ms) the pet stays full until
+    petMood:{},                        // creatureId -> {h:happiness 0-100, t:lastUpdate ms}
   };
 }
 

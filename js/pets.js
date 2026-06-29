@@ -113,6 +113,7 @@ function mealLiking(petId, foods){
 // give every owned pet a starting full belly so nothing breaks; the clock drains from there
 function ensurePetFeed(){
   if(!SAVE.petFeed) SAVE.petFeed={};
+  if(!SAVE.petMood) SAVE.petMood={};
   // migrate old non-vegetarian food to veggie equivalents
   if(SAVE.foods){
     if(SAVE.foods.fish){ SAVE.foods.strawberry=(SAVE.foods.strawberry||0)+SAVE.foods.fish; delete SAVE.foods.fish; }
@@ -123,6 +124,8 @@ function ensurePetFeed(){
   let changed=false;
   for(const id of ids){ if((SAVE.pets[id]||0)>0 || (SAVE.shinies&&SAVE.shinies[id]>0)){
     if(SAVE.petFeed[id]==null){ SAVE.petFeed[id]=now + Math.round(petCapacityH(id)*0.3)*3600*1000; changed=true; }  // start ~30% full (room to feed)
+    if(SAVE.petMood[id]==null){ SAVE.petMood[id]={h:80, t:now}; changed=true; }   // start fairly happy
+    else tickMood(id);
   }}
   if(changed) persist();
 }
@@ -130,13 +133,57 @@ function petFullnessMs(id){
   const until=(SAVE.petFeed&&SAVE.petFeed[id]!=null)?SAVE.petFeed[id]:(nowMs()+petCapacityH(id)*3600*1000);
   return until - nowMs();
 }
-function petFedState(id){                       // 'hungry' | 'happy' | 'overfed'
+function petFedState(id){                       // 'hungry' | 'fed' | 'overfed'
   const full=petFullnessMs(id);
   if(full<=0) return 'hungry';
   if(full > petCapacityH(id)*3600*1000 + 60000) return 'overfed';
-  return 'happy';
+  return 'fed';
 }
-function petCanUsePower(id){ return petFedState(id)==='happy'; }
+function petHungerPct(id){                       // 100 = stuffed, 0 = starving
+  return Math.max(0, Math.min(100, Math.round(petFullnessMs(id)/(petCapacityH(id)*3600000)*100)));
+}
+
+// ---- happiness / sadness: drifts down over time, restored by feeding ----
+function tickMood(id){
+  if(!SAVE.petMood) SAVE.petMood={};
+  const m=SAVE.petMood[id]||(SAVE.petMood[id]={h:80,t:nowMs()});
+  const now=nowMs(), dtH=(now-m.t)/3600000;
+  if(dtH>0){
+    const hungry=petFullnessMs(id)<=0;
+    m.h=Math.max(0,Math.min(100, m.h - dtH*(hungry?6:0.5)));  // sad fast when hungry, slow when fed
+    m.t=now;
+  }
+  return m.h;
+}
+function petHappiness(id){ return Math.round(tickMood(id)); }
+function petIsSad(id){ return petHappiness(id) < 25; }
+function petMoodFace(id){ const h=petHappiness(id); return h>=70?'😄':h>=40?'🙂':h>=25?'😐':'😢'; }
+function bumpMood(id, amt){ tickMood(id); SAVE.petMood[id].h=Math.max(0,Math.min(100, SAVE.petMood[id].h+amt)); }
+
+// a pet needs to be FED (not hungry, not overfed) AND not sad to use its power
+function petCanUsePower(id){ return petFedState(id)==='fed' && !petIsSad(id); }
+function petPowerBlockReason(id){
+  const st=petFedState(id);
+  if(st==='hungry') return 'hungry'; if(st==='overfed') return 'overfed';
+  if(petIsSad(id)) return 'sad'; return null;
+}
+
+// ---- merging 3 foods into a named meal ----
+const FOOD_GROUPS = {
+  fruit:new Set(['apple','peach','banana','strawberry','berry']),
+  veg:new Set(['carrot','corn']),
+  sweet:new Set(['biscuit','honey','cheese']),
+};
+function mealInfo(foods){
+  const f=foods.map(foodById);
+  if(foods[0]===foods[1] && foods[1]===foods[2]) return { name:'Big '+f[0].name, emoji:f[0].emoji+f[0].emoji };
+  const all=set=>foods.every(x=>set.has(x));
+  if(all(FOOD_GROUPS.fruit))  return { name:'Fruit Platter', emoji:'🍓🍎' };
+  if(all(FOOD_GROUPS.veg))    return { name:'Veggie Plate',  emoji:'🥗' };
+  if(all(FOOD_GROUPS.sweet))  return { name:'Sweet Treat',   emoji:'🍰' };
+  if(foods.every(x=>FOOD_GROUPS.fruit.has(x)||FOOD_GROUPS.sweet.has(x))) return { name:'Dessert Bowl', emoji:'🍨' };
+  return { name:'Yummy Combo', emoji:'🍱' };
+}
 
 /* feed a 3-food meal to a pet; extends fullness, may overfeed */
 function feedPet(petId, foods){
@@ -150,8 +197,13 @@ function feedPet(petId, foods){
   const cur=Math.max(now, SAVE.petFeed[petId]!=null?SAVE.petFeed[petId]:now);
   SAVE.petFeed[petId]=cur+add;
   const overfed = (SAVE.petFeed[petId]-now) > petCapacityH(petId)*3600*1000 + 60000;
+  // happiness: love meal cheers them up a lot; disliked barely; overfeeding upsets them
+  const lk=mealLiking(petId,foods);
+  bumpMood(petId, lk==='loves it'?40 : lk==='likes it'?22 : lk==='it\'s ok'?12 : 4);
+  if(overfed) bumpMood(petId,-18);
   persist();
-  return { addedH:Math.round(add/3600000), overfed, liking:mealLiking(petId,foods), state:petFedState(petId) };
+  return { addedH:Math.round(add/3600000), overfed, liking:lk, state:petFedState(petId),
+           meal:mealInfo(foods), happiness:petHappiness(petId) };
 }
 function foodCount(id){ return (SAVE.foods&&SAVE.foods[id])||0; }
 function totalFood(){ let n=0; for(const k in (SAVE.foods||{})) n+=SAVE.foods[k]; return n; }

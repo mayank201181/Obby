@@ -153,6 +153,13 @@ input.text:focus{border-color:var(--purple-2);}
 .food-cell{position:relative;flex-direction:column;}
 .today-row.feed-sel{background:#eef6ff;border-color:var(--blue-2);box-shadow:0 0 0 2px var(--blue-2);cursor:pointer;}
 #cafePets .today-row{cursor:pointer;}
+.meal-name{text-align:center;font-size:16px;margin:2px 0 8px;min-height:22px;}
+.meal-name .mn-emoji{font-size:20px;}
+.today-ico{position:relative;}
+.mood-face{position:absolute;bottom:-6px;right:-4px;font-size:16px;}
+.meter-row{display:flex;align-items:center;gap:6px;margin:3px 0;}
+.meter-lab{font-size:13px;width:18px;text-align:center;flex:none;}
+.meter-row .qbar{flex:1;margin:0;height:9px;}
 .fh-wrap{position:absolute;inset:0;background:linear-gradient(160deg,#ffe9c2,#ffd4e6 60%,#d9c6ff);}
 #foodHuntCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;}
 #foodHuntScreen .hud{z-index:5;}

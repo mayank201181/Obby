@@ -732,6 +732,10 @@ function renderCafe(){
     const f=mealTray[i]?foodById(mealTray[i]):null;
     return `<div class="meal-slot ${f?'filled':''}" onclick="removeFromTray(${i})">${f?f.emoji:'➕'}</div>`;
   }).join('');
+  // named meal preview once you've picked all 3
+  const mn=document.getElementById('mealName');
+  if(mealTray.length===3){ const mi=mealInfo(mealTray); mn.innerHTML=`<span class="mn-emoji">${mi.emoji}</span> <b>${mi.name}</b>`; }
+  else mn.innerHTML=`<span class="muted">Pick ${3-mealTray.length} more food to make a meal…</span>`;
   const owned=FOODS.filter(f=>foodCount(f.id)>0);
   document.getElementById('cafePantry').innerHTML = owned.length ? owned.map(f=>`
     <div class="swatch food-cell" onclick="addToTray('${f.id}')">
@@ -742,14 +746,19 @@ function renderCafe(){
   if(!feedPetId || !ownedPets.some(c=>c.id===feedPetId))
     feedPetId = (SAVE.equippedPet && ownedPets.some(c=>c.id===SAVE.equippedPet)) ? SAVE.equippedPet : (ownedPets[0]&&ownedPets[0].id) || null;
   document.getElementById('cafePets').innerHTML = ownedPets.map(c=>{
-    const st=petFedState(c.id), full=Math.max(0,petFullnessMs(c.id)), cap=petCapacityH(c.id)*3600000;
-    const pct=Math.min(100,Math.round(full/cap*100));
-    const lab = st==='hungry'?'<b style="color:#e06b6b">Hungry — no power!</b>':st==='overfed'?'<b style="color:#e0a01a">Too full — no power!</b>':'<b style="color:#46c98c">Happy 😊</b>';
+    const st=petFedState(c.id), full=Math.max(0,petFullnessMs(c.id));
+    const hung=petHungerPct(c.id), happy=petHappiness(c.id), sad=petIsSad(c.id);
+    const reason = petPowerBlockReason(c.id);
+    const lab = reason==='hungry'?'<b style="color:#e06b6b">Hungry — no power!</b>'
+              : reason==='overfed'?'<b style="color:#e0a01a">Too full — no power!</b>'
+              : reason==='sad'?'<b style="color:#9b6bff">Sad — needs love!</b>'
+              : '<b style="color:#46c98c">Happy '+petMoodFace(c.id)+'</b>';
     const sel = feedPetId===c.id ? ' feed-sel' : '';
     return `<div class="today-row${sel}" onclick="selectFeedPet('${c.id}')">
-      <div class="today-ico">${c.emoji}</div>
+      <div class="today-ico">${c.emoji}<div class="mood-face">${petMoodFace(c.id)}</div></div>
       <div class="today-info"><b>${c.name}</b> ${lab} ${feedPetId===c.id?'<span class="badge">feeding</span>':''}
-        <div class="qbar" style="margin:4px 0 2px"><div class="qfill" style="width:${pct}%;background:${st==='overfed'?'#ffce4d':'linear-gradient(90deg,#7be0b0,#46c98c)'}"></div></div>
+        <div class="meter-row"><span class="meter-lab">🍽️</span><div class="qbar"><div class="qfill" style="width:${hung}%;background:${st==='overfed'?'#ffce4d':'linear-gradient(90deg,#ffb38a,#ff9bce)'}"></div></div></div>
+        <div class="meter-row"><span class="meter-lab">${sad?'😢':'💜'}</span><div class="qbar"><div class="qfill" style="width:${happy}%;background:linear-gradient(90deg,#c8a0ff,#9b6bff)"></div></div></div>
         <div class="muted" style="font-size:11px">${fmtHunger(full)} · loves ${foodById(petFav(c.id)).emoji}</div></div>
     </div>`;
   }).join('') || '<p class="hint">Collect pets from chests first!</p>';
@@ -766,10 +775,11 @@ function doFeed(){
   const pet=feedPetId;
   if(!pet){ toast('Tap a pet to feed first!'); return; }
   if(mealTray.length!==3){ toast('A meal needs 3 foods — tap food to add!'); return; }
+  const meal=mealInfo(mealTray);
   const res=feedPet(pet, mealTray.slice());
   if(res.error){ toast(res.error); return; }
   const c=creatureById(pet); SFX.chest();
-  toast(c.emoji+' '+c.name+' '+res.liking+'! +'+res.addedH+'h'+(res.overfed?' · 🤢 too full!':''));
+  toast(c.emoji+' '+c.name+' ate '+meal.name+' — '+res.liking+'! +'+res.addedH+'h'+(res.overfed?' · 🤢 too full!':''));
   mealTray=[]; renderCafe();
 }
 
