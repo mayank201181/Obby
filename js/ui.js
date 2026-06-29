@@ -325,7 +325,7 @@ function startDisaster(type){
   startGame({mode:'disaster', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy',
              disasterType:(type && type!=='random')?type:null});
   startMusicIfOn('tower');
-  toast('🏗️ Build for 15s — then survive the disaster!');
+  toast('🏗️ Build FAST — 5 seconds until the disaster!');
 }
 function setupBuildBar(){
   const c=document.getElementById('buildColours'); if(!c) return;
@@ -438,7 +438,7 @@ function selectRoomMode(m){
     : m==='tag'
       ? "Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃"
       : m==='disaster'
-        ? '🌪️ Disaster: build for 15s, then everyone survives the same disaster together! (2+ players may get a Killer round)'
+        ? '🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)'
         : 'Race: same obby, separate climbs — first to the top wins! 🏁';
 }
 function wireRoomCallbacks(){

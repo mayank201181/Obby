@@ -157,7 +157,7 @@ function loadLevel(level){
              : Game.tower ? generateTower(Game.seed)
              : generateLevel(level, Game.seed, Game.mode);
   if(Game.disaster){
-    Game.disasterPhase='build'; Game.disasterPhaseT=Game.t+15000;
+    Game.disasterPhase='build'; Game.disasterPhaseT=Game.t+5000;
     Game.disasterButtons=0; Game.disasterLives=3;
     Game.buildMode=false; Game.buildLavaProof=false; Game.builtPlatforms=[]; Game.dz=null;
     Game.disasterType = Game.disasterTypeForce || DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
