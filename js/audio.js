@@ -36,13 +36,33 @@ const SFX = {
     game: { mel:[523,587,659,784,880,784,659,587, 523,659,784,1047,880,784,659,523], bass:[131,131,165,165,196,196,165,165], step:300, vol:0.05 },
     tower:{ mel:[659,784,880,988,1047,988,880,784, 659,880,1047,1175,1047,880,784,659], bass:[165,165,196,196,220,220,196,196], step:235, vol:0.05 },
   },
+  _pianoWave:null,
+  _getPianoWave(){
+    if(this._pianoWave) return this._pianoWave;
+    // harmonic amplitudes roughly modelling a struck acoustic-piano string
+    const real=new Float32Array([0, 1, 0.62, 0.42, 0.27, 0.17, 0.11, 0.07, 0.045, 0.03, 0.02, 0.013, 0.008]);
+    const imag=new Float32Array(real.length);
+    this._pianoWave=this.ctx.createPeriodicWave(real, imag, {disableNormalization:false});
+    return this._pianoWave;
+  },
   note(freq, dur, vol){
     if(!this.ctx) return;
-    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
-    o.type='triangle'; o.frequency.value=freq;
-    g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(vol,t+0.04);
-    g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
-    o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+dur+0.05);
+    const t=this.ctx.currentTime, wave=this._getPianoWave();
+    // two slightly-detuned strings give the natural shimmer/beating of a real piano
+    const o=this.ctx.createOscillator(), o2=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.setPeriodicWave(wave);  o.frequency.value=freq;
+    o2.setPeriodicWave(wave); o2.frequency.value=freq; o2.detune.value=6;
+    // a lowpass that closes over the note = bright "ping" attack mellowing to a soft tail
+    const lp=this.ctx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.setValueAtTime(Math.min(9000, freq*8+1200), t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(700, freq*2.2), t+Math.max(0.25,dur));
+    // percussive piano envelope: instant hammer attack, then exponential string decay
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.006);
+    g.gain.exponentialRampToValueAtTime(vol*0.32, t+Math.min(dur,0.22));
+    g.gain.exponentialRampToValueAtTime(0.0006, t+dur+0.18);
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.ctx.destination);
+    o.start(t); o2.start(t); o.stop(t+dur+0.25); o2.stop(t+dur+0.25);
   },
   startMusic(mode){
     mode = mode || this.musicMode || 'lobby';
@@ -80,10 +100,10 @@ const SFX = {
     // The Entertainer (Scott Joplin, 1902 — public domain), recognizable A-strain
     entertainer:{ name:'🎹 The Entertainer', beat:150, vol:0.05, mel:[
       ['D5',1],['Eb5',1],['E5',1],
-      ['C5',2,'C3'],['E5',2],['C5',2,'C3'],['E5',2],
-      ['C5',1,'C3'],['D5',1],['E5',1],['B4',2,'G2'],['D5',2],['C5',4,'C3'],
-      ['C5',1],['D5',1],['E5',1],['F5',2,'F2'],['A5',2],['G5',2,'G2'],['F5',2],
-      ['E5',2,'C3'],['D5',2],['C5',4,'C3'],[null,2],
+      ['C5',2,'C3'],['E5',2,'G3'],['C5',2,'C3'],['E5',2,'G3'],
+      ['C5',1,'C3'],['D5',1],['E5',1,'G3'],['B4',2,'G2'],['D5',2,'G3'],['C5',4,'C3'],
+      ['C5',1,'C3'],['D5',1],['E5',1,'G3'],['F5',2,'F2'],['A5',2,'C3'],['G5',2,'G2'],['F5',2,'D3'],
+      ['E5',2,'C3'],['D5',2,'G2'],['C5',4,'C3'],[null,2],
     ]},
     // Tarantella Napoletana (traditional — public domain), fast 6/8 dance feel
     tarantella:{ name:'🎻 Tarantella', beat:120, vol:0.05, mel:[
