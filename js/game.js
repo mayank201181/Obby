@@ -698,7 +698,7 @@ function levelTheme(){
   if(Game.tower) return {css:'linear-gradient(180deg,#1a1340,#3b2a7a 55%,#5a4a9a)', weather:'stars', glow:'rgba(180,160,255,.22)'};
   const T={
     1:{css:'linear-gradient(180deg,#cfeaff,#bcd9ff)',         weather:null,     glow:'rgba(123,224,176,.25)'},
-    2:{css:'linear-gradient(180deg,#d9f6dc,#bdebc6)',         weather:'petals', glow:'rgba(255,180,210,.25)'},
+    2:{css:'linear-gradient(180deg,#d9f6dc,#bdebc6)',         weather:null,     glow:'rgba(255,180,210,.25)'},
     3:{css:'linear-gradient(180deg,#fff0c2,#ffd9a0)',         weather:null,     glow:'rgba(255,200,120,.3)'},
     4:{css:'linear-gradient(180deg,#eaf5ff,#cfe6ff)',         weather:'snow',   glow:'rgba(255,255,255,.4)'},
     5:{css:'linear-gradient(180deg,#ffd0b0,#ff9e7a 55%,#b86a8a)', weather:'embers', glow:'rgba(255,150,90,.3)'},

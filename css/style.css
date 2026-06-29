@@ -369,3 +369,9 @@ select.text{appearance:none;background:#fff;}
   padding:3px 9px;border-radius:999px}
 .music-pick.sel{background:#fff3c4;box-shadow:0 3px 0 rgba(0,0,0,.12)}
 .music-pick:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.1)}
+
+/* ---- lobby two-column button layout (no scrolling) ---- */
+.lobby-cols{display:flex;gap:10px;align-items:flex-start;}
+.lobby-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+.lobby-col .btn{font-size:14px;padding:12px 8px;line-height:1.15;}
+.lobby-col .btn .badge{font-size:10px;padding:1px 5px;margin-left:3px;}

@@ -35,20 +35,22 @@
     <button class="btn gold" id="todayBtn" onclick="openToday()">⭐ Today's Stuff <span class="badge" id="todayBadge" style="display:none"></span></button>
     <button class="btn pink" onclick="openPlay()">▶ Play</button>
     <button class="btn blue" onclick="openPets()">🐾 Pets &amp; Chests</button>
-    <div class="row">
-      <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
-      <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
+    <div class="lobby-cols">
+      <div class="lobby-col">
+        <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
+        <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
+        <button class="btn ghost" onclick="openPlayground()">🐾 Playground</button>
+        <button class="btn ghost" onclick="openCafe()">🍔 Pet Café</button>
+      </div>
+      <div class="lobby-col">
+        <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
+        <button class="btn ghost" onclick="openShop()">🛍️ Daily Shop <span class="badge" style="background:var(--gold);color:#7a5512">sale!</span></button>
+        <button class="btn ghost" id="dailyBtn" onclick="startDaily()">🗓️ Daily Challenge</button>
+        <button class="btn ghost" id="heistBtn" onclick="startHeist()">💰 Gold Heist</button>
+        <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
+          <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
+      </div>
     </div>
-    <div class="row">
-      <button class="btn ghost" onclick="openPlayground()">🐾 Playground</button>
-      <button class="btn ghost" onclick="openCafe()">🍔 Pet Café</button>
-    </div>
-    <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
-    <button class="btn ghost" onclick="openShop()">🛍️ Daily Shop <span class="badge" style="background:var(--gold);color:#7a5512">sale!</span></button>
-    <button class="btn ghost" id="dailyBtn" onclick="startDaily()">🗓️ Daily Challenge</button>
-    <button class="btn ghost" id="heistBtn" onclick="startHeist()">💰 Gold Heist</button>
-    <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
-      <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
   </div>
 </section>
 
