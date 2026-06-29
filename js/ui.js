@@ -73,6 +73,7 @@ function initLobby(){
   refreshQuestButton();
   refreshHeistButton();
   refreshTodayBadge();
+  if(typeof ensurePetFeed==='function') ensurePetFeed();
   startMusicIfOn('lobby');
 }
 function applyLobbyBg(){
@@ -713,6 +714,113 @@ function openPlayground(){
   playgroundRaf=requestAnimationFrame(loop);
 }
 function closePlayground(){ cancelAnimationFrame(playgroundRaf); showScreen('lobbyScreen'); initLobby(); }
+
+/* ---------------- Pet Café (feeding) ---------------- */
+let mealTray=[];
+function openCafe(){ ensurePetFeed(); mealTray=[]; showScreen('cafeScreen'); renderCafe(); }
+function fmtHunger(ms){
+  if(ms<=0) return 'Hungry now!';
+  const h=ms/3600000;
+  if(h>=24) return 'Full for '+(h/24).toFixed(1)+' days';
+  if(h>=1) return 'Full for '+Math.round(h)+'h';
+  return 'Full for '+Math.max(1,Math.round(ms/60000))+'m';
+}
+function renderCafe(){
+  ensurePetFeed(); updateCoinDisplays();
+  document.getElementById('mealTray').innerHTML=[0,1,2].map(i=>{
+    const f=mealTray[i]?foodById(mealTray[i]):null;
+    return `<div class="meal-slot ${f?'filled':''}" onclick="removeFromTray(${i})">${f?f.emoji:'➕'}</div>`;
+  }).join('');
+  const owned=FOODS.filter(f=>foodCount(f.id)>0);
+  document.getElementById('cafePantry').innerHTML = owned.length ? owned.map(f=>`
+    <div class="swatch food-cell" onclick="addToTray('${f.id}')">
+      <span style="font-size:26px">${f.emoji}</span><span class="count-badge">${foodCount(f.id)}</span>
+    </div>`).join('') : `<p class="hint" style="grid-column:1/-1">No food yet — play Food Hunt to catch some! 🍽️</p>`;
+  const ownedPets=CREATURES.filter(c=>ownsPet(c.id)||isShiny(c.id));
+  const sel=document.getElementById('cafePetSelect');
+  sel.innerHTML = ownedPets.length ? ownedPets.map(c=>`<option value="${c.id}" ${SAVE.equippedPet===c.id?'selected':''}>${c.emoji} ${c.name} — loves ${foodById(petFav(c.id)).emoji}</option>`).join('') : '<option value="">No pets yet</option>';
+  document.getElementById('cafePets').innerHTML = ownedPets.map(c=>{
+    const st=petFedState(c.id), full=Math.max(0,petFullnessMs(c.id)), cap=petCapacityH(c.id)*3600000;
+    const pct=Math.min(100,Math.round(full/cap*100));
+    const lab = st==='hungry'?'<b style="color:#e06b6b">Hungry — no power!</b>':st==='overfed'?'<b style="color:#e0a01a">Too full — no power!</b>':'<b style="color:#46c98c">Happy 😊</b>';
+    return `<div class="today-row">
+      <div class="today-ico">${c.emoji}</div>
+      <div class="today-info"><b>${c.name}</b> ${lab}
+        <div class="qbar" style="margin:4px 0 2px"><div class="qfill" style="width:${pct}%;background:${st==='overfed'?'#ffce4d':'linear-gradient(90deg,#7be0b0,#46c98c)'}"></div></div>
+        <div class="muted" style="font-size:11px">${fmtHunger(full)} · loves ${foodById(petFav(c.id)).emoji}</div></div>
+    </div>`;
+  }).join('') || '<p class="hint">Collect pets from chests first!</p>';
+}
+function addToTray(id){
+  if(mealTray.length>=3){ toast('Meal is full — feed it!'); return; }
+  if(foodCount(id) <= mealTray.filter(x=>x===id).length){ toast('No more '+foodById(id).name); return; }
+  mealTray.push(id); SFX.click(); renderCafe();
+}
+function removeFromTray(i){ if(mealTray[i]!=null){ mealTray.splice(i,1); renderCafe(); } }
+function doFeed(){
+  const pet=document.getElementById('cafePetSelect').value;
+  if(!pet){ toast('Get a pet first!'); return; }
+  if(mealTray.length!==3){ toast('A meal needs 3 foods — tap food to add!'); return; }
+  const res=feedPet(pet, mealTray.slice());
+  if(res.error){ toast(res.error); return; }
+  const c=creatureById(pet); SFX.chest();
+  toast(c.emoji+' '+c.name+' '+res.liking+'! +'+res.addedH+'h'+(res.overfed?' · 🤢 too full!':''));
+  mealTray=[]; renderCafe();
+}
+
+/* Food Hunt minigame: 20 coins, 15 seconds, tap the fast-flying food to catch it */
+let foodHuntRaf=0;
+function startFoodHunt(){
+  if(SAVE.coins<20){ toast('Need 🪙20 to play'); return; }
+  SAVE.coins-=20; persist(); SFX.click();
+  showScreen('foodHuntScreen');
+  const cv=document.getElementById('foodHuntCanvas');
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const W=window.innerWidth, H=window.innerHeight;
+  cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
+  const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const flyers=[], caught={}, pops=[]; let total=0, spawnAt=0, endAt=performance.now()+15000;
+  cv.onpointerdown=e=>{
+    const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    for(let i=flyers.length-1;i>=0;i--){ const f=flyers[i];
+      if((f.x-mx)*(f.x-mx)+(f.y-my)*(f.y-my) < (f.r+16)*(f.r+16)){
+        caught[f.id]=(caught[f.id]||0)+1; total++; pops.push({x:f.x,y:f.y,t:1}); flyers.splice(i,1);
+        SFX.coin(); document.getElementById('fhCount').textContent='🍽️ '+total; break;
+      }
+    }
+  };
+  document.getElementById('fhCount').textContent='🍽️ 0';
+  cancelAnimationFrame(foodHuntRaf);
+  const loop=t=>{
+    const left=Math.max(0,endAt-t);
+    document.getElementById('fhTimer').textContent='⏱ '+Math.ceil(left/1000)+'s';
+    ctx.clearRect(0,0,W,H);
+    if(t>spawnAt){ spawnAt=t+(200+Math.random()*240);
+      const fromLeft=Math.random()<0.5, f=FOODS[Math.floor(Math.random()*FOODS.length)];
+      flyers.push({id:f.id, emoji:f.emoji, x:fromLeft?-30:W+30, y:70+Math.random()*(H-180),
+        vx:(fromLeft?1:-1)*(3+Math.random()*4.5), vy:(Math.random()*2-1)*1.3, r:22});
+    }
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(let i=flyers.length-1;i>=0;i--){ const f=flyers[i]; f.x+=f.vx; f.y+=f.vy;
+      if(f.y<50||f.y>H-70) f.vy*=-1;
+      if(f.x<-70||f.x>W+70){ flyers.splice(i,1); continue; }
+      ctx.font=`${f.r*2}px serif`; ctx.fillText(f.emoji,f.x,f.y);
+    }
+    for(let i=pops.length-1;i>=0;i--){ const p=pops[i]; p.t-=0.04; p.y-=1.6; if(p.t<=0){pops.splice(i,1);continue;}
+      ctx.globalAlpha=p.t; ctx.fillStyle='#46c98c'; ctx.font='bold 22px Nunito'; ctx.fillText('+1',p.x,p.y); ctx.globalAlpha=1; }
+    if(left<=0){ endFoodHunt(caught,total); return; }
+    foodHuntRaf=requestAnimationFrame(loop);
+  };
+  foodHuntRaf=requestAnimationFrame(loop);
+}
+function endFoodHunt(caught,total){
+  cancelAnimationFrame(foodHuntRaf);
+  if(!SAVE.foods) SAVE.foods={};
+  for(const id in caught) SAVE.foods[id]=(SAVE.foods[id]||0)+caught[id];
+  persist(); SFX.win();
+  toast('🍽️ Caught '+total+' food!');
+  openCafe();
+}
 
 /* ---------------- Daily Login Rewards ---------------- */
 function loginNextDayIndex(){

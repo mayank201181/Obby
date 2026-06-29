@@ -43,8 +43,14 @@ const Game = {
 };
 
 function applyEquippedPet(){
-  const a = (typeof equippedAbilities==='function') ? equippedAbilities()
+  let a = (typeof equippedAbilities==='function') ? equippedAbilities()
           : {moveMul:1,jumpMul:1,fallMul:1,maxJumps:1,canPlatform:false};
+  // a hungry or overfed pet can't use its power (feed it in the Pet Café!)
+  if(SAVE.equippedPet && typeof petCanUsePower==='function' && !petCanUsePower(SAVE.equippedPet)){
+    a = {moveMul:1,jumpMul:1,fallMul:1,maxJumps:1,canPlatform:false};
+    const st = petFedState(SAVE.equippedPet);
+    if(typeof toast==='function') toast(st==='overfed' ? '🤢 Your pet is too full — power off!' : '🍽️ Your pet is hungry — feed it for its power!');
+  }
   Game.petMoveMul=a.moveMul; Game.petJumpMul=a.jumpMul; Game.petFallMul=a.fallMul;
   Game.petMaxJumps=a.maxJumps; Game.petCanPlatform=a.canPlatform;
   const btn=document.getElementById('abilityBtn');

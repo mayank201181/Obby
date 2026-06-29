@@ -62,6 +62,94 @@ const CREATURES = [
 const creatureById = id => CREATURES.find(c=>c.id===id);
 const creaturesOfRarity = r => CREATURES.filter(c=>c.rarity===r);
 
+// ===== Pet feeding: catch food -> merge 3 into a meal -> feed your pet =====
+const FOODS = [
+  {id:'biscuit', emoji:'🍪', name:'Biscuit'},
+  {id:'apple',   emoji:'🍎', name:'Apple'},
+  {id:'peach',   emoji:'🍑', name:'Peach'},
+  {id:'banana',  emoji:'🍌', name:'Banana'},
+  {id:'fish',    emoji:'🐟', name:'Fish'},
+  {id:'meat',    emoji:'🍖', name:'Meat'},
+  {id:'carrot',  emoji:'🥕', name:'Carrot'},
+  {id:'cheese',  emoji:'🧀', name:'Cheese'},
+  {id:'berry',   emoji:'🫐', name:'Berry'},
+  {id:'honey',   emoji:'🍯', name:'Honey'},
+];
+const foodById = id => FOODS.find(f=>f.id===id);
+
+// each pet has a favourite food (love) — thematic where it makes sense, else hashed
+const PET_FAVS = { lion:'biscuit', cat:'fish', mouse:'cheese', hamster:'cheese', bunny:'carrot',
+  fox:'berry', wolf:'meat', tiger:'meat', dragon:'meat', unicorn:'honey', phoenix:'honey',
+  eagle:'fish', octopus:'fish', kraken:'fish', giraffe:'apple', elephant:'peach', chick:'banana' };
+function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
+function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
+function petOkFoods(id){
+  const fav=petFav(id), h=hashStr(id);
+  return [FOODS[(h+3)%FOODS.length].id, FOODS[(h+7)%FOODS.length].id].filter(f=>f!==fav);
+}
+function foodLiking(petId, foodId){   // 'love' | 'ok' | 'dislike'
+  if(foodId===petFav(petId)) return 'love';
+  if(petOkFoods(petId).includes(foodId)) return 'ok';
+  return 'dislike';
+}
+
+// bigger animals hold more food before they're overfed (hours of fullness capacity).
+// A 3-day (72h) favourite feast only fits in a Legendary+ belly — small pets
+// must eat smaller meals more often.
+const PET_CAPACITY = { basic:48, rare:60, superRare:84, legendary:108, mythical:144, secret:180 };
+function petCapacityH(id){ const c=creatureById(id); return PET_CAPACITY[c?c.rarity:'basic']||24; }
+
+// a meal is 3 foods; the more the pet loves them, the longer it stays full
+function mealHours(petId, foods){
+  let pts=0; for(const f of foods){ const l=foodLiking(petId,f); pts += l==='love'?3 : l==='ok'?1 : 0; }
+  return pts>=9?72 : pts>=6?48 : pts>=3?24 : pts>=1?6 : 2;   // up to 3 days for a perfect meal
+}
+function mealLiking(petId, foods){
+  const h=mealHours(petId,foods);
+  return h>=48?'loves it':h>=24?'likes it':h>=6?'it\'s ok':'doesn\'t like it';
+}
+
+// give every owned pet a starting full belly so nothing breaks; the clock drains from there
+function ensurePetFeed(){
+  if(!SAVE.petFeed) SAVE.petFeed={};
+  const now=nowMs();
+  const ids=new Set([...Object.keys(SAVE.pets||{}), ...Object.keys(SAVE.shinies||{})]);
+  let changed=false;
+  for(const id of ids){ if((SAVE.pets[id]||0)>0 || (SAVE.shinies&&SAVE.shinies[id]>0)){
+    if(SAVE.petFeed[id]==null){ SAVE.petFeed[id]=now + Math.round(petCapacityH(id)*0.3)*3600*1000; changed=true; }  // start ~30% full (room to feed)
+  }}
+  if(changed) persist();
+}
+function petFullnessMs(id){
+  const until=(SAVE.petFeed&&SAVE.petFeed[id]!=null)?SAVE.petFeed[id]:(nowMs()+petCapacityH(id)*3600*1000);
+  return until - nowMs();
+}
+function petFedState(id){                       // 'hungry' | 'happy' | 'overfed'
+  const full=petFullnessMs(id);
+  if(full<=0) return 'hungry';
+  if(full > petCapacityH(id)*3600*1000 + 60000) return 'overfed';
+  return 'happy';
+}
+function petCanUsePower(id){ return petFedState(id)==='happy'; }
+
+/* feed a 3-food meal to a pet; extends fullness, may overfeed */
+function feedPet(petId, foods){
+  if(!petId || !creatureById(petId)) return {error:'Pick a pet'};
+  if(!foods || foods.length!==3) return {error:'A meal needs exactly 3 foods'};
+  for(const f of foods){ if((SAVE.foods&&SAVE.foods[f]||0) < foods.filter(x=>x===f).length) return {error:'Not enough food — catch more!'}; }
+  for(const f of foods){ SAVE.foods[f]--; if(SAVE.foods[f]<=0) delete SAVE.foods[f]; }
+  if(!SAVE.petFeed) SAVE.petFeed={};
+  const now=nowMs();
+  const add=mealHours(petId,foods)*3600*1000;
+  const cur=Math.max(now, SAVE.petFeed[petId]!=null?SAVE.petFeed[petId]:now);
+  SAVE.petFeed[petId]=cur+add;
+  const overfed = (SAVE.petFeed[petId]-now) > petCapacityH(petId)*3600*1000 + 60000;
+  persist();
+  return { addedH:Math.round(add/3600000), overfed, liking:mealLiking(petId,foods), state:petFedState(petId) };
+}
+function foodCount(id){ return (SAVE.foods&&SAVE.foods[id])||0; }
+function totalFood(){ let n=0; for(const k in (SAVE.foods||{})) n+=SAVE.foods[k]; return n; }
+
 // ===== Blob-Dex collection milestones (long-term completion goals) =====
 const DEX_MILESTONES = [
   { id:'own5',  need:5,                reward:150,  label:'Collect 5 different pets' },

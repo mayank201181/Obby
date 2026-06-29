@@ -227,6 +227,8 @@ function defaultSave(){
     heist:{key:'',best:0,done:false},  // daily Gold Heist progress
     login:{day:0, lastClaim:0},        // daily login-streak calendar
     dexClaimed:[],                     // claimed Blob-Dex collection milestones
+    foods:{},                          // pantry: foodId -> count (from the Food Hunt)
+    petFeed:{},                        // creatureId -> timestamp(ms) the pet stays full until
   };
 }
 
