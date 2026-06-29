@@ -1156,7 +1156,8 @@ function startDisasterActive(){
   const H=Game.world.height, W=Game.world.width;
   Game.dz={ lavaY:H+40, meteors:[], waterY:H+40, tornadoX:W/2, tornadoDir:1, waveX:-120, waveDir:1, zombies:[], lastSpawn:0 };
   const t=Game.disasterType;
-  if(t==='zombies'){ for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false}); }
+  if(t==='zombies'){ Game.dz.maxChasers = 2+Math.floor(Math.random()*2);   // only 2-3 ever chase you
+    for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:i<Game.dz.maxChasers, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
   if(typeof toast==='function') toast(DISASTER_INFO[t].name+' — '+DISASTER_INFO[t].tip);
   SFX.hit();
 }
@@ -1182,8 +1183,9 @@ function updateDisaster(dt){
   checkDisasterButtons();
   const prog=1-Math.max(0,(Game.disasterPhaseT-Game.t)/35000);   // 0..1
   if(t==='lava' || t==='tsunami'){
-    // lava (or tsunami base water) rises over the round
-    dz.lavaY = H+40 - prog*(H-220);
+    // lava rises fast (reaches the top in ~22s); tsunami's base water rises slower
+    const rate = t==='lava' ? 1.6 : 1.0;
+    dz.lavaY = H+40 - Math.min(1, prog*rate)*(H-220);
     const inLava = (p.y+p.h) > dz.lavaY && !disasterStandingProof();
     if(inLava && p.invuln<=0) disasterHit(true);
   }
@@ -1211,11 +1213,24 @@ function updateDisaster(dt){
     if(p.invuln<=0 && Math.abs((p.x+p.w/2)-dz.waveX)<70 && (p.y+p.h)>waveTopY){ disasterHit(true); p.vx=dz.waveDir*12; }
   }
   if(t==='zombies'){
-    if(Game.t-dz.lastSpawn>2200 && dz.zombies.length<12){ dz.lastSpawn=Game.t; dz.zombies.push({x:Math.random()<0.5?40:W-40, y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false}); }
-    const ZSPEED=2.7+prog*1.6;            // faster, and ramps up through the round
+    const maxCh=dz.maxChasers||3;
+    if(Game.t-dz.lastSpawn>2200 && dz.zombies.length<12){ dz.lastSpawn=Game.t;
+      const chasers=dz.zombies.filter(z=>z.chase).length;
+      dz.zombies.push({x:Math.random()<0.5?40:W-40, y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:chasers<maxCh, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
+    const ZSPEED=2.7+prog*1.6;            // faster, ramps up through the round
     for(const z of dz.zombies){
-      const dir=(p.x>z.x+z.w/2)?1:-1; z.vx=dir*ZSPEED;
-      if(z.onGround && p.y < z.y-24) { z.vy=-12.5; z.onGround=false; }   // jump to climb toward you
+      let dir;
+      if(z.chase){ dir=(p.x>z.x+z.w/2)?1:-1; }
+      else {       // wanderers shuffle around in random directions
+        if(z.x<=10) z.wanderDir=1; else if(z.x>=W-10-z.w) z.wanderDir=-1;
+        else if(Game.t>z.wanderUntil){ z.wanderDir=Math.random()<0.5?-1:1; z.wanderUntil=Game.t+700+Math.random()*1400; }
+        dir=z.wanderDir;
+      }
+      z.vx=dir*ZSPEED*(z.chase?1:0.75);
+      if(z.onGround){
+        if(z.chase && p.y < z.y-24) { z.vy=-12.5; z.onGround=false; }      // chasers climb toward you
+        else if(!z.chase && Math.random()<0.012){ z.vy=-11; z.onGround=false; }   // wanderers hop now & then
+      }
       z.vy=Math.min(16, z.vy+0.7);
       z.x=Math.max(8, Math.min(W-8-z.w, z.x+z.vx));
       const prevBottom=z.y+z.h; z.y+=z.vy; const newBottom=z.y+z.h;
