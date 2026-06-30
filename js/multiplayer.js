@@ -180,6 +180,11 @@ function mpOnMessage(conn,msg){
       if(typeof onItChange==='function') onItChange(msg.id);
       break;
     }
+    case 'stun': {
+      if(MP.isHost) mpRelay(conn,msg);          // pass it along to the target
+      if(msg.target===MP.selfId && typeof onStunned==='function') onStunned(msg.from);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -269,6 +274,8 @@ function mpSendEmote(e){ mpSend({t:'emote', id:MP.selfId, e}); }
 function mpSendBoost(){ mpSend({t:'boost', id:MP.selfId}); }
 /* Tag mode: announce who is now "it" (everyone, host relays) */
 function mpSendIt(id){ MP.itId=id; mpSend({t:'it', id}); }
+/* Monkey banana: tell a specific friend they got splatted (they freeze 3s) */
+function mpSendStun(targetId){ mpSend({t:'stun', from:MP.selfId, target:targetId}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 

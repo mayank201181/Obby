@@ -42,6 +42,7 @@ const Game = {
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
   petSaveFall:false, petBanana:false, petMagnet:false, petAutoShield:false,
   bananas:[], lastSafe:null,    // Monkey banana projectiles + Phoenix last-platform rescue
+  stunUntil:0,                  // hit by a friend's banana -> can't move for a bit
   placedPlatforms:[],           // platforms spawned by the 'platform' pet ability
   platformCdUntil:0,            // ability cooldown
   trailPoints:[],               // recent positions for the cosmetic trail
@@ -90,12 +91,13 @@ function gameInit(){
     if(e.key==='ArrowUp'||e.key===' '||e.key==='w') Game.input.jump=true;
   },{passive:false});
   window.addEventListener('keyup',e=>{ if(typingInField(e)) return; Game.keys[e.key]=false; });
-  // tap the arena to place a block while building (disaster mode)
+  // tap the arena to place a block while building (disaster mode),
+  // or — with the Monkey banana ability — to fling a banana at that spot
   Game.canvas.addEventListener('pointerdown', e=>{
-    if(Game.disaster && Game.buildMode){
-      const r=Game.canvas.getBoundingClientRect();
-      disasterBuildAt(e.clientX-r.left, e.clientY-r.top);
-    }
+    const r=Game.canvas.getBoundingClientRect();
+    const sx=e.clientX-r.left, sy=e.clientY-r.top;
+    if(Game.disaster && Game.buildMode){ disasterBuildAt(sx,sy); return; }
+    if(Game.petBanana && Game.running) throwBananaAt(sx,sy);
   });
   setupTouchControls();
 }
@@ -173,7 +175,7 @@ function loadLevel(level){
     onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
-  Game.bananas=[]; Game.lastSafe=null;
+  Game.bananas=[]; Game.lastSafe=null; Game.stunUntil=0;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
@@ -258,6 +260,23 @@ function triggerAbility(){
     if(typeof toast==='function') toast('✨ Platform!');
   }
 }
+/* Monkey: tap anywhere on the arena to fling a banana straight at that spot */
+function throwBananaAt(screenX, screenY){
+  if(!Game.running || !Game.petBanana) return;
+  if(Game.t < Game.platformCdUntil) return;          // shared ability cooldown
+  if(Game.t < (Game.stunUntil||0)) return;           // can't throw while stunned
+  const p=Game.player; if(!p) return;
+  const s=(typeof gameScale==='function')?gameScale():1;
+  const wx=(screenX-Game.W/2)/s + Game.cam.x;         // tap point -> world coords
+  const wy=(screenY-Game.H/2)/s + Game.cam.y;
+  const ox=p.x+p.w/2, oy=p.y+p.h/2;
+  let dx=wx-ox, dy=wy-oy; const d=Math.hypot(dx,dy)||1;
+  const SP=15;
+  Game.bananas.push({ x:ox, y:oy, vx:dx/d*SP, vy:dy/d*SP, r:11, born:Game.t, aimed:true });
+  p.facing = dx>=0?1:-1;
+  Game.platformCdUntil = Game.t + 350;
+  SFX.jump();
+}
 
 function update(dt){
   if(Game.spectating){ spectateUpdate(); return; }
@@ -273,7 +292,8 @@ function update(dt){
 
   if(p.onGround) p.jumps=0;              // reset jump count when grounded
 
-  const dir=Math.max(-1,Math.min(1,readInput()));
+  const stunned = Game.t < (Game.stunUntil||0);     // frozen by a friend's banana
+  const dir = stunned ? 0 : Math.max(-1,Math.min(1,readInput()));
   // horizontal (pet speed boost) — ice makes you slip (low grip, slow stop)
   const dashing = Game.t < Game.power.dashUntil;
   const move = MOVE*Game.petMoveMul*(dashing?1.5:1);
@@ -285,7 +305,7 @@ function update(dt){
   p.onIce=false;                          // re-set by onStand if still on ice
 
   // jump (pet: higher jump + double jump)
-  if(Game.input.jump){
+  if(Game.input.jump && !stunned){
     const jv = JUMP*Game.petJumpMul;
     if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; SFX.jump(); }
     else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; SFX.jump(); }
@@ -417,7 +437,8 @@ function updateBananas(){
   const W=Game.world.width;
   for(let i=Game.bananas.length-1;i>=0;i--){
     const b=Game.bananas[i];
-    b.vy+=0.5; b.x+=b.vx; b.y+=b.vy;
+    if(!b.aimed) b.vy+=0.5;            // tapped/aimed shots fly straight; button lobs arc
+    b.x+=b.vx; b.y+=b.vy;
     if(Game.t-b.born>3500 || b.x<-40 || b.x>W+40 || b.y>Game.world.height+200){ Game.bananas.splice(i,1); continue; }
     let hit=false;
     for(let k=Game.bossShots.length-1;k>=0;k--){ const s=Game.bossShots[k];
@@ -433,9 +454,26 @@ function updateBananas(){
         }
       }
     }
+    // disaster zombies are "monsters": 3 banana hits and they're gone
+    if(!hit && Game.disaster && Game.dz && Game.dz.zombies){
+      const zs=Game.dz.zombies;
+      for(let k=zs.length-1;k>=0;k--){ const z=zs[k];
+        if(b.x>z.x-b.r && b.x<z.x+z.w+b.r && b.y>z.y-b.r && b.y<z.y+z.h+b.r){
+          z.bhits=(z.bhits||0)+1; z.flash=Game.t; hit=true; addShake(2); SFX.hit();
+          if(z.bhits>=3){ zs.splice(k,1); addCoins(2); if(typeof toast==='function') toast('🍌 Monster down! +2🪙'); }
+          else if(typeof toast==='function') toast('🍌 Monster hit! ('+z.bhits+'/3)');
+          break;
+        }
+      }
+    }
+    // splat a friend in multiplayer -> stun them for 3 seconds
     if(!hit && Game.multiplayer){
       for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
-        if(Math.abs(r.x+17-b.x)<24 && Math.abs(r.y+17-b.y)<24){ hit=true; r.emote='🍌'; r.emoteAt=nowMs(); break; } }
+        if(Math.abs(r.x+17-b.x)<24 && Math.abs(r.y+17-b.y)<24){
+          hit=true; r.emote='😵'; r.emoteAt=nowMs();
+          if(typeof mpSendStun==='function') mpSendStun(r.id);
+          if(typeof toast==='function') toast('🍌 Stunned your friend! 😵');
+          break; } }
     }
     if(hit) Game.bananas.splice(i,1);
   }
@@ -1031,6 +1069,15 @@ function onBoostFrom(senderId){
   }
 }
 
+/* a friend's banana splatted me -> freeze for 3 seconds */
+function onStunned(senderId){
+  const p=Game.player; if(!p || !Game.running) return;
+  Game.stunUntil = Game.t + 3000;
+  p.vx=0;
+  addShake(5); SFX.hit();
+  if(typeof toast==='function') toast('😵 Splatted! Stunned for 3s');
+}
+
 /* ---- spectate a friend after you finish a multiplayer race ---- */
 function startSpectate(){
   const others=mpRemoteList().filter(r=>typeof r.x==='number');
@@ -1315,7 +1362,10 @@ function drawDisaster(ctx){
     ctx.font='66px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText('🌊', dz.waveBX, dz.waveBY); }
   if(t==='zombies'){ ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    for(const z of dz.zombies) ctx.fillText('🧟', z.x+z.w/2, z.y+z.h/2); }
+    for(const z of dz.zombies){
+      const flashing = z.flash && Game.t-z.flash<160;
+      ctx.fillText(flashing?'💥':'🧟', z.x+z.w/2, z.y+z.h/2);
+    } }
 }
 
 function nextLevel(){
@@ -1415,6 +1465,11 @@ function render(){
                   petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
+    if(Game.t < (Game.stunUntil||0)){   // dizzy stars while stunned by a friend's banana
+      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      const sp=Math.sin(Game.t/120)*10;
+      ctx.fillText('😵', p.x+p.w/2+sp, p.y-26);
+    }
     if(Game.myEmote && Game.t-Game.myEmoteAt < 2200) drawEmoteBubble(ctx, p.x+p.w/2, p.y-22, Game.myEmote);
     if((Game.mode==='tag'||Game.disasterType==='killer') && MP.itId===MP.selfId) drawItMarker(ctx, p.x+p.w/2, p.y);
   }
