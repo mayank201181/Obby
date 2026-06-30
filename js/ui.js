@@ -337,6 +337,38 @@ function setBuildColor(col){ Game.buildColor=col; SFX.click(); setupBuildBar(); 
 function toggleBuild(){ Game.buildMode=!Game.buildMode; SFX.click(); setupBuildBar(); if(Game.buildMode) toast('Tap the arena to place blocks!'); }
 function toggleLavaProof(){ Game.buildLavaProof=!Game.buildLavaProof; SFX.click(); setupBuildBar(); }
 
+/* ---------------- Hide & Seek + Room Tag (solo vs AI) ---------------- */
+function startHideSeek(){
+  SFX.click(); closeModal('winModal');
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'hideseek', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
+}
+function openTagPick(){ showScreen('tagPickScreen'); }
+function startRoomTag(){
+  SFX.click(); closeModal('winModal');
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'roomtag', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
+}
+function startObbyTagFriends(){ SFX.click(); toast('🧗 Make a room, then pick 🏃 Tag!'); createTeam(); }
+/* camo bar (Hide & Seek hide phase) */
+function refreshCamoBar(){
+  const bar=document.getElementById('camoBar'); if(!bar) return;
+  const show = Game.room && Game.roomMode==='hideseek' && Game.rm && Game.rm.phase==='hide';
+  bar.style.display = show ? 'flex' : 'none';
+  if(!show) return;
+  const cur = Game.rm.disguise ? Game.rm.disguise.kind : null;
+  const kinds = (Game.world && Game.world.camoKinds) || [];
+  bar.innerHTML = '<span class="camo-label">🫥 Disguise:</span>' +
+    kinds.map(k=>`<button class="camo-pick${cur===k.kind?' sel':''}" onclick="pickCamo('${k.kind}')">${k.emoji}</button>`).join('');
+}
+function pickCamo(kind){ if(typeof setDisguise==='function') setDisguise(kind); }
+
 /* ---------------- Daily Challenge ---------------- */
 function dailyKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
 function dailySeed(){ const d=new Date(); return (d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate()); }
@@ -575,14 +607,23 @@ function onLevelComplete(level, earned, isFinal, res){
       ? `<p class="timer-big">🎉 You SURVIVED!</p><p class="muted">${(DISASTER_INFO[res.type]||{}).name||''} · 🔘${res.buttons}/10 buttons</p>`
       : `<p class="timer-big">💀 You didn't make it…</p><p class="muted">🔘${res.buttons}/10 buttons · try again!</p>`;
   }
+  const isRoom=!!res.room;
+  const hsRoom = res.roomMode==='hideseek';
+  if(isRoom){
+    waitMsg = res.survived
+      ? `<p class="timer-big">${hsRoom?'🎉 You stayed hidden!':'🎉 You survived!'}</p><p class="muted">${hsRoom?'The seeker never found you! 🙈':'You dodged the tagger the whole round! 🏃'}</p>`
+      : `<p class="timer-big">${hsRoom?'🔦 Caught!':'😈 Tagged!'}</p><p class="muted">Better luck next round!</p>`;
+  }
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist && !isDisaster;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-    : (isDisaster
+    : (isRoom
+        ? `<button class="btn gold" onclick="${hsRoom?'startHideSeek()':'startRoomTag()'}">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        : (isDisaster
         ? `<button class="btn gold" onclick="startDisaster()">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isHeist
         ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
@@ -590,13 +631,14 @@ function onLevelComplete(level, earned, isFinal, res){
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))));
-  const heading = isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)))));
+  const heading = isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
+                : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily&&!isHeist&&!isDisaster?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;

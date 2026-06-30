@@ -387,3 +387,14 @@ select.text{appearance:none;background:#fff;}
   .lobby-col .btn{font-size:16px;padding:15px 16px;}
   .lobby-col .btn .badge{font-size:12px;padding:2px 8px;margin-left:5px;}
 }
+
+/* ---- Hide & Seek camo bar ---- */
+.camo-bar{position:absolute;bottom:140px;left:50%;transform:translateX(-50%);
+  display:flex;gap:6px;align-items:center;z-index:6;pointer-events:auto;
+  background:rgba(255,255,255,.92);border-radius:20px;padding:7px 12px;
+  box-shadow:var(--shadow);flex-wrap:wrap;justify-content:center;max-width:94vw;}
+.camo-bar .camo-label{font-weight:800;font-size:14px;color:var(--ink);}
+.camo-pick{width:44px;height:44px;border-radius:12px;border:2px solid #efe7fb;
+  background:#fff;font-size:24px;cursor:pointer;box-shadow:0 2px 5px rgba(150,120,190,.2);}
+.camo-pick.sel{border-color:var(--purple-2);background:#fff3c4;outline:2px solid var(--purple-2);}
+.camo-pick:active{transform:scale(.92);}

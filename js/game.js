@@ -47,6 +47,9 @@ const Game = {
   platformCdUntil:0,            // ability cooldown
   trailPoints:[],               // recent positions for the cosmetic trail
   deaths:0, runStartT:0, runCoins:0,   // per-run timer / deaths / coins collected
+  room:false, roomMode:null,           // Hide&Seek / Room Tag arena ('hideseek'|'tag')
+  ai:null,                             // the AI seeker / tagger agent
+  rm:null,                             // room-mode state (phase, timers, disguise, suspicion…)
 };
 
 function applyEquippedPet(){
@@ -126,6 +129,9 @@ function startGame(opts){
   Game.daily = !!opts.daily;
   Game.heist = opts.mode==='heist';
   Game.disaster = opts.mode==='disaster';
+  Game.room = (opts.mode==='hideseek' || opts.mode==='roomtag');
+  Game.roomMode = opts.mode==='hideseek' ? 'hideseek' : (opts.mode==='roomtag' ? 'tag' : null);
+  if(Game.room) Game.difficulty='easy';     // no cannons in the room arena
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
@@ -147,6 +153,7 @@ function startGame(opts){
   const eb=document.getElementById('emoteBar'); if(eb){ eb.style.display = Game.multiplayer ? 'flex':'none'; if(Game.multiplayer && typeof buildEmoteBar==='function') buildEmoteBar(); }
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
   const bbar=document.getElementById('buildBar'); if(bbar){ bbar.style.display = Game.disaster ? 'flex':'none'; if(Game.disaster && typeof setupBuildBar==='function') setupBuildBar(); }
+  if(typeof refreshCamoBar==='function') refreshCamoBar();
   if(typeof setSpectateChrome==='function') setSpectateChrome(false);
   Game.running=true; Game.finished=false; Game.last=performance.now(); Game.acc=0;
   cancelAnimationFrame(Game.raf);
@@ -154,7 +161,8 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.disaster ? generateDisaster(Game.seed)
+  Game.world = Game.room ? generateRoom(Game.seed)
+             : Game.disaster ? generateDisaster(Game.seed)
              : Game.heist ? generateHeist(Game.seed)
              : Game.tower ? generateTower(Game.seed)
              : generateLevel(level, Game.seed, Game.mode);
@@ -188,6 +196,7 @@ function loadLevel(level){
   Game.bullets=[];
   Game.player.invuln = 1200;        // brief grace at the start of a level
   Game.cam.x=st.x; Game.cam.y=st.y-200;
+  if(Game.room) initRoom();
   updateHud();
 }
 
@@ -345,10 +354,11 @@ function update(dt){
     if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT) startDisasterActive(); }
     else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT) nextDisaster(); }
   }
+  if(Game.room && !Game.finished) updateRoom(dt);
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
-  const camTX=p.x, camTY=p.y-40;
+  const camTX=p.x, camTY=Game.room ? Game.world.height/2 - 20 : p.y-40;
   Game.cam.x += (camTX-Game.cam.x)*0.12;
   Game.cam.y += (camTY-Game.cam.y)*0.12;
   // clamp camera horizontally to world
@@ -1368,6 +1378,135 @@ function drawDisaster(ctx){
     } }
 }
 
+/* ===================== HIDE & SEEK / ROOM TAG ===================== */
+function initRoom(){
+  const W=Game.world.width, H=Game.world.height, floorTop=H-44;
+  Game.ai={ x:W-90, y:floorTop-34, vx:0, vy:0, w:34, h:34, facing:-1,
+            onGround:false, speed:3.6, tx:W-90, ty:null, jumpCdUntil:0, _stuck:0,
+            _wanderT:0, state:'search', lostT:0 };
+  if(Game.roomMode==='hideseek'){
+    Game.rm={ phase:'hide', hideEndT:Game.t+20000, endT:Game.t+20000+120000,
+              disguise:null, suspicion:0, caught:false };
+    if(typeof toast==='function') toast('🙈 HIDE! Pick a disguise at the bottom — 20s!');
+  } else {
+    Game.rm={ phase:'run', endT:Game.t+90000, caught:false };
+    Game.ai.speed=3.9; Game.ai.state='chase';
+    if(typeof toast==='function') toast("🏃 RUN! Don't get tagged — parkour on the furniture!");
+  }
+  if(typeof refreshCamoBar==='function') refreshCamoBar();
+}
+function setDisguise(kind){
+  if(!Game.room || Game.roomMode!=='hideseek' || !Game.rm || Game.rm.phase!=='hide') return;
+  const f=(Game.world.camoKinds||[]).find(k=>k.kind===kind); if(!f) return;
+  Game.rm.disguise={kind:f.kind, emoji:f.emoji}; SFX.click();
+  if(typeof toast==='function') toast('🫥 Disguised as '+f.emoji+'! Stay still to blend in.');
+  if(typeof refreshCamoBar==='function') refreshCamoBar();
+}
+// move the AI agent toward (tx,ty) with gravity + one-way landing (like the player)
+function stepAgent(a){
+  const GRAV=0.86, MAXFALL=18;
+  const dx = (a.tx!=null?a.tx:a.x) - (a.x+a.w/2);
+  const desired = Math.abs(dx)<6 ? 0 : (dx>0?1:-1);
+  if(desired) a.facing=desired;
+  a.vx += (desired*a.speed - a.vx)*0.28;
+  if(desired!==0 && Math.abs(a.vx)<1.1 && a.onGround) a._stuck++; else if(a.onGround) a._stuck=Math.max(0,a._stuck-1);
+  if(a.onGround){
+    const wantUp = (a.ty!=null && a.ty < a.y-26);
+    if((wantUp || a._stuck>6) && Game.t>a.jumpCdUntil){ a.vy=-13.4; a.onGround=false; a.jumpCdUntil=Game.t+420; a._stuck=0; }
+  }
+  a.vy+=GRAV; if(a.vy>MAXFALL)a.vy=MAXFALL;
+  a.x+=a.vx; if(a.x<0)a.x=0; if(a.x+a.w>Game.world.width)a.x=Game.world.width-a.w;
+  const prevB=a.y+a.h; a.y+=a.vy; const newB=a.y+a.h;
+  a.onGround=false;
+  if(a.vy>=0){ let bestTop=Infinity, on=null;
+    for(const pl of Game.world.platforms){ if(!solidNow(pl)||pl.type==='coin'||pl.type==='powerup') continue;
+      if(a.x<pl.x+pl.w && a.x+a.w>pl.x){ const top=pl.y;
+        if(prevB<=top+2 && newB>=top && top<bestTop){ bestTop=top; on=pl; } } }
+    if(on){ a.y=bestTop-a.h; if(on.type==='bouncy'){ a.vy=-14; a.onGround=false; } else { a.vy=0; a.onGround=true; } }
+  }
+}
+function updateRoom(dt){
+  const p=Game.player, a=Game.ai, rm=Game.rm; if(!a||!rm) return;
+  const dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2), (p.y+p.h/2)-(a.y+a.h/2));
+  const pMoving = Math.abs(p.vx)>0.5;
+
+  if(Game.roomMode==='hideseek'){
+    if(rm.phase==='hide'){
+      if(Game.t>=rm.hideEndT){ rm.phase='seek'; a.state='search'; a.tx=p.x;
+        if(typeof toast==='function') toast('🔦 The seeker is looking — RUN & re-hide!');
+        if(typeof refreshCamoBar==='function') refreshCamoBar(); }
+      return;   // seeker frozen while you hide
+    }
+    const facingYou = Math.sign((p.x+p.w/2)-(a.x+a.w/2))===a.facing;
+    const visible = dist<360 && facingYou;
+    const disguised = !!rm.disguise;
+    if(a.state==='search'){
+      if(visible && (pMoving || !disguised)) rm.suspicion += pMoving?3.2:1.6;
+      else rm.suspicion = Math.max(0, rm.suspicion-1.4);
+      if(disguised && !pMoving && dist<42 && facingYou && Math.random()<0.02) rm.suspicion=120;  // inspected!
+      if(rm.suspicion>=100){ a.state='chase'; rm.suspicion=100; SFX.hit();
+        if(typeof toast==='function') toast('👀 Spotted! RUN!'); }
+      else {
+        if(Game.t>a._wanderT || Math.abs(a.tx-(a.x+a.w/2))<30){
+          a._wanderT=Game.t+1200+Math.random()*1400;
+          a.tx=120+Math.random()*(Game.world.width-240);
+        }
+        a.ty=null;
+      }
+    }
+    if(a.state==='chase'){
+      a.tx=p.x+p.w/2; a.ty=p.y;
+      if(dist<34){ rm.caught=true; return endRoom(false); }
+      if(dist>470 && disguised && !pMoving){ a.lostT+=dt*1000;
+        if(a.lostT>2200){ a.state='search'; rm.suspicion=0; a.lostT=0;
+          if(typeof toast==='function') toast('🫥 You lost the seeker!'); } }
+      else a.lostT=0;
+    }
+    stepAgent(a);
+    if(Game.t>=rm.endT) return endRoom(true);
+  } else {
+    a.tx=p.x+p.w/2; a.ty=p.y; a.state='chase';
+    stepAgent(a);
+    if(dist<32 && p.invuln<=0){ rm.caught=true; return endRoom(false); }
+    if(Game.t>=rm.endT) return endRoom(true);
+  }
+}
+function endRoom(survived){
+  if(Game.finished) return;
+  Game.finished=true; Game.running=false;
+  if(survived) SFX.win(); else SFX.hit();
+  const reward = survived?60:10;
+  addCoins(reward);
+  if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
+    {room:true, roomMode:Game.roomMode, survived});
+}
+function drawFurni(ctx, pl){
+  ctx.fillStyle='rgba(120,90,150,.12)';
+  ctx.beginPath(); ctx.ellipse(pl.x+pl.w/2, pl.y+pl.h-2, pl.w*0.46, 7, 0,0,Math.PI*2); ctx.fill();
+  if(pl.type==='bouncy'){
+    ctx.fillStyle='#3fcf86'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,12); ctx.fill();
+    ctx.fillStyle='#b6f5c8'; roundRect(ctx,pl.x,pl.y,pl.w,6,12); ctx.fill();
+    return;
+  }
+  ctx.font=`${Math.round(pl.h*1.18)}px serif`; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText(pl.emoji||'📦', pl.x+pl.w/2, pl.y+pl.h+2);
+}
+function drawRoomAgent(ctx){
+  const a=Game.ai; if(!a) return;
+  const cx=a.x+a.w/2, cy=a.y+a.h/2;
+  ctx.fillStyle='rgba(120,90,150,.16)'; ctx.beginPath(); ctx.ellipse(cx, a.y+a.h, 18,6,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ff7a5c'; ctx.beginPath(); ctx.arc(cx,cy,17,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(cx-5*a.facing,cy-3,3.4,0,6.3); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+6*a.facing,cy-3,3.4,0,6.3); ctx.fill();
+  ctx.fillStyle='#3a2a40';
+  ctx.beginPath(); ctx.arc(cx-5*a.facing,cy-3,1.7,0,6.3); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+6*a.facing,cy-3,1.7,0,6.3); ctx.fill();
+  const rm=Game.rm;
+  const mark = Game.roomMode==='tag' ? '😈' : (rm&&rm.phase==='hide'?'🙈':(a.state==='chase'?'❗':'🔦'));
+  ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(mark, cx, a.y-14);
+}
+
 function nextLevel(){
   if(Game.level<TOTAL_LEVELS){
     Game.level++;
@@ -1392,7 +1531,7 @@ function render(){
   drawWorldBackdrop(ctx);
 
   const plats=Game.world.platforms;
-  for(const pl of plats) drawPlatform(ctx,pl);
+  for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else drawPlatform(ctx,pl); }
 
   // floating collectible coins
   for(const c of plats){
@@ -1449,12 +1588,25 @@ function render(){
     }
   }
 
+  // AI seeker / tagger
+  if(Game.room) drawRoomAgent(ctx);
+
   const p=Game.player;
   // visible pet-ability effects + cosmetic trail behind the player
   if(!Game.spectating){ drawAbilityFx(ctx); drawTrail(ctx, p); }
 
+  const disguised = Game.room && Game.roomMode==='hideseek' && Game.rm && Game.rm.disguise;
   // local player (worn pet / team colour; blink while invulnerable after a hit)
-  if(!Game.spectating){
+  if(!Game.spectating && disguised){
+    // render as the furniture you disguised as (a faint ring shows it's you)
+    ctx.save();
+    ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=2; ctx.setLineDash([4,4]);
+    ctx.strokeRect(p.x-3,p.y-3,p.w+6,p.h+6); ctx.setLineDash([]);
+    ctx.font=`${Math.round(p.h*1.5)}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(Game.rm.disguise.emoji, p.x+p.w/2, p.y+p.h/2);
+    ctx.restore();
+    drawNameTag(ctx, p.x+p.w/2, p.y-10, 'You');
+  } else if(!Game.spectating){
     const mySkin = Game.myColor || SAVE.skin;
     const ghosting = Game.t < Game.power.ghostUntil;
     const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
@@ -1797,7 +1949,8 @@ function roundRect(ctx,x,y,w,h,r){
 /* ---------- HUD ---------- */
 function updateHud(){
   const el=document.getElementById('hudLevel');
-  el.textContent = Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
+  el.textContent = Game.room ? (Game.roomMode==='hideseek'?'🙈 Hide & Seek':'🏃 Room Tag')
+                 : Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
                  : Game.heist ? '💰 Gold Heist'
                  : Game.tower ? '🏗️ Tower'
                  : Game.daily ? '🗓️ Daily'
@@ -1805,6 +1958,20 @@ function updateHud(){
 }
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
+  if(Game.room){
+    const rm=Game.rm, cp=document.getElementById('hudCp');
+    const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
+    if(rm && Game.roomMode==='hideseek'){
+      cp.textContent = rm.phase==='hide'
+        ? '🙈 HIDE! '+Math.max(0,Math.ceil((rm.hideEndT-Game.t)/1000))+'s'
+        : '🔦 '+clock(rm.endT-Game.t)+(rm.disguise?(' · '+rm.disguise.emoji):' · ⚠️ no disguise');
+    } else if(rm){
+      cp.textContent = '🏃 RUN! '+clock(rm.endT-Game.t);
+    }
+    document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+    const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
+    return;
+  }
   if(Game.disaster){
     const left=Math.max(0, Math.ceil((Game.disasterPhaseT-Game.t)/1000));
     document.getElementById('hudCp').textContent = (Game.disasterPhase==='build'

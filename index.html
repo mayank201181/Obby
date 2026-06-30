@@ -244,6 +244,8 @@
     </div>
     <button class="btn gold" onclick="startTower()">🏗️ Endless Tower<br><span style="font-size:12px;font-weight:700">climb as high as you can!</span></button>
     <button class="btn blue" onclick="openDisasterPick()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
+    <button class="btn pink" onclick="startHideSeek()">🙈 Hide &amp; Seek<br><span style="font-size:12px;font-weight:700">disguise as furniture!</span></button>
+    <button class="btn blue" onclick="openTagPick()">🏃 Tag<br><span style="font-size:12px;font-weight:700">obby or furniture room!</span></button>
 
     <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
 
@@ -267,6 +269,20 @@
     <h2>🌪️ Pick a Disaster</h2>
     <p class="hint">Choose which disaster to survive — or go Random!</p>
     <div class="scroll" id="disasterPickBody"></div>
+  </div>
+</section>
+
+<!-- ============ TAG PICKER ============ -->
+<section class="screen" id="tagPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🏃 Tag — pick a style</h2>
+    <p class="hint">How do you want to play tag?</p>
+    <button class="btn pink" onclick="startRoomTag()">🛋️ Room Tag<br><span style="font-size:12px;font-weight:700">solo · dodge the tagger, parkour the furniture!</span></button>
+    <button class="btn blue" onclick="startObbyTagFriends()">🧗 Obby Tag<br><span style="font-size:12px;font-weight:700">with a friend · climb &amp; chase in a Team room</span></button>
   </div>
 </section>
 
@@ -346,6 +362,8 @@
       <div class="build-colours" id="buildColours"></div>
       <button class="btn ghost small" id="lavaProofBtn" onclick="toggleLavaProof()">🔥 Lava-proof 🪙20</button>
     </div>
+
+    <div class="camo-bar" id="camoBar" style="display:none"></div>
   </div>
 </section>
 

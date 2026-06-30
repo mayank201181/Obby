@@ -480,6 +480,68 @@ function generateDisaster(seed){
            platforms, checkpoints:[], hazards:[], start, finishY:-1e9, roofY };
 }
 
+/* ===== HIDE & SEEK / ROOM TAG arena =====
+   A big side-view "room" full of furniture you can stand and parkour on.
+   Lots of duplicate furniture so a disguised hider blends into the crowd. */
+const ROOM_FURNI = [
+  {kind:'chair', emoji:'🪑', w:46,  h:54,  camo:true},
+  {kind:'sofa',  emoji:'🛋️', w:108, h:54,  camo:true},
+  {kind:'tv',    emoji:'📺', w:80,  h:60,  camo:true},
+  {kind:'plant', emoji:'🪴', w:52,  h:66,  camo:true},
+  {kind:'books', emoji:'📚', w:66,  h:60,  camo:true},
+  {kind:'bed',   emoji:'🛏️', w:120, h:60,  camo:true},
+  {kind:'lamp',  emoji:'💡', w:44,  h:68,  camo:true},
+  {kind:'box',   emoji:'📦', w:54,  h:54,  camo:true},
+  {kind:'clock', emoji:'🕰️', w:48,  h:58,  camo:true},
+];
+const ROOM_PROPS = [
+  {kind:'tramp', emoji:'🟢', w:92,  h:30,  bouncy:true},
+  {kind:'slide', emoji:'🛝', w:100, h:88},
+  {kind:'swing', emoji:'🪀', w:60,  h:70},
+];
+function roomCamoKinds(){ return ROOM_FURNI.filter(f=>f.camo).map(f=>({kind:f.kind, emoji:f.emoji})); }
+
+function generateRoom(seed){
+  const rnd=mulberry32((seed*1000+4242)|0);
+  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+  const pick=arr=>arr[Math.floor(rnd()*arr.length)];
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const W=2200, H=560, floorTop=H-44;
+  const platforms=[]; let id=0;
+  platforms.push({id:id++, x:0, y:floorTop, w:W, h:H, type:'big', room:true});   // floor
+  const add=(f,x,y)=>{ platforms.push({id:id++, type:f.bouncy?'bouncy':'furni', kind:f.kind, emoji:f.emoji,
+      x:x, y:y, w:f.w, h:f.h, furni:true}); };
+
+  // scatter furniture along the floor — guarantee several copies of every camo kind
+  let x=120;
+  while(x < W-160){
+    const f=pick(ROOM_FURNI);
+    add(f, x, floorTop-f.h);
+    x += f.w + rint(46, 120);
+  }
+  // make sure each camo kind has at least 3 decoys (so disguises blend in)
+  for(const f of ROOM_FURNI){
+    let have=platforms.filter(p=>p.kind===f.kind).length;
+    while(have<3){ const px=clamp(rint(120,W-160), 120, W-120-f.w); add(f, px, floorTop-f.h); have++; }
+  }
+  // a few fun props (trampolines bounce, slide/swing to climb on)
+  add(ROOM_PROPS[0], rint(300,600), floorTop-30);
+  add(ROOM_PROPS[0], rint(W-700,W-360), floorTop-30);
+  add(ROOM_PROPS[1], rint(700,1000), floorTop-88);
+  add(ROOM_PROPS[2], rint(1300,1700), floorTop-70);
+  // raised parkour shelves (boxes/books up high to jump across)
+  for(let i=0;i<7;i++){
+    const f=pick([ROOM_FURNI[4], ROOM_FURNI[7]]);   // books / box
+    const px=clamp(rint(160,W-200),120,W-120-f.w);
+    const py=floorTop - rint(150, 300);
+    add(f, px, py);
+  }
+  const start={x:70, y:floorTop};
+  return { mode:'room', room:true, level:1, seed, width:W, height:H,
+           platforms, checkpoints:[], hazards:[], start, finishY:-1e9,
+           camoKinds:roomCamoKinds() };
+}
+
 /* called each frame in tower mode: keep a couple of floors generated ahead */
 function maybeExtendTower(){
   const w=Game.world;
