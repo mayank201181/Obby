@@ -26,6 +26,7 @@ const ABILITY_INFO = {
   tripleJump: 'Triple jump (jump THREE times in the air!)',
   savefall:   'Rescue! If you fall you pop back on your last platform',
   banana:     'Throw bananas (tap 🍌) at the boss & friends!',
+  highJump:   'Jump much higher!',
   coinmagnet: 'Coins are always pulled to you',
   autoshield: 'Start every level with a shield 🛡️',
 };
@@ -49,6 +50,7 @@ const CREATURES = [
   { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
   { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'raccoon', name:'Raccoon',   emoji:'🦝', rarity:'superRare', abilities:['coinmagnet','speed1'], sell:120 },
+  { id:'hyena',   name:'Hyena',     emoji:'🐆', rarity:'superRare', abilities:['highJump'], sell:120 },
   // legendary — sell 200
   { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
@@ -92,7 +94,8 @@ const foodById = id => FOODS.find(f=>f.id===id);
 const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'cheese', bunny:'carrot',
   fox:'berry', wolf:'corn', tiger:'corn', dragon:'corn', unicorn:'honey', phoenix:'honey',
   eagle:'berry', octopus:'banana', kraken:'carrot', giraffe:'apple', elephant:'peach', chick:'banana',
-  monkey:'banana', raccoon:'berry', turtle:'corn', penguin:'strawberry', hedgehog:'apple', pegasus:'honey' };
+  monkey:'banana', raccoon:'berry', turtle:'corn', penguin:'strawberry', hedgehog:'apple', pegasus:'honey',
+  hyena:'corn' };
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
 function petOkFoods(id){
@@ -399,7 +402,8 @@ function equippedAbilities(){
   const baseFall = set.has('glideStrong')?0.55 : set.has('glide')?0.75 : 1;
   return {
     moveMul: baseMove>1 ? baseMove+lvlBoost : 1,
-    jumpMul: set.has('highJump2')?1.2 : set.has('highJump1')?1.1 : 1,
+    jumpMul: (set.has('highJump')||set.has('highJump2'))? 1.2 + (lvl-1)*0.008 + (shiny?0.03:0)
+           : set.has('highJump1')?1.1 : 1,
     fallMul: baseFall<1 ? Math.max(0.45, baseFall-glideBoost) : 1,
     maxJumps: set.has('tripleJump')?3 : set.has('doubleJump')?2 : 1,
     canPlatform: set.has('platform'),
