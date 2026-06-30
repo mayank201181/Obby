@@ -39,28 +39,38 @@ const CREATURES = [
   { id:'hamster', name:'Hamster',   emoji:'🐹', rarity:'basic', abilities:['speed1'], sell:30 },
   { id:'chick',   name:'Chick',     emoji:'🐤', rarity:'basic', abilities:[],         sell:30 },
   { id:'hedgehog',name:'Hedgehog',  emoji:'🦔', rarity:'basic', abilities:['speed1'], sell:30 },
+  { id:'puppy',   name:'Puppy',     emoji:'🐶', rarity:'basic', abilities:['speed1'], sell:30 },
+  { id:'bee',     name:'Bee',       emoji:'🐝', rarity:'basic', abilities:['glide'],  sell:30 },
   // rare — sell 70
   { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'cat',     name:'Cat',       emoji:'🐱', rarity:'rare', abilities:['glide'],  sell:70 },
   { id:'turtle',  name:'Turtle',    emoji:'🐢', rarity:'rare', abilities:['autoshield'], sell:70 },
   { id:'penguin', name:'Penguin',   emoji:'🐧', rarity:'rare', abilities:['glide','speed1'], sell:70 },
+  { id:'otter',   name:'Otter',     emoji:'🦦', rarity:'rare', abilities:['speed1'], sell:70 },
+  { id:'koala',   name:'Koala',     emoji:'🐨', rarity:'rare', abilities:['glide'],  sell:70 },
   // super rare — sell 120
   { id:'wolf',    name:'Wolf',      emoji:'🐺', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
   { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'raccoon', name:'Raccoon',   emoji:'🦝', rarity:'superRare', abilities:['coinmagnet','speed1'], sell:120 },
   { id:'hyena',   name:'Hyena',     emoji:'🐆', rarity:'superRare', abilities:['highJump'], sell:120 },
+  { id:'kangaroo',name:'Kangaroo',  emoji:'🦘', rarity:'superRare', abilities:['highJump'], sell:120 },
+  { id:'bear',    name:'Bear',      emoji:'🐻', rarity:'superRare', abilities:['speed2'], sell:120 },
   // legendary — sell 200
   { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
   { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['glideStrong'], sell:200 },
   { id:'monkey',  name:'Monkey',    emoji:'🐵', rarity:'legendary', abilities:['banana'], sell:200 },
+  { id:'panda',   name:'Panda',     emoji:'🐼', rarity:'legendary', abilities:['autoshield','speed1'], sell:200 },
+  { id:'rhino',   name:'Rhino',     emoji:'🦏', rarity:'legendary', abilities:['speed2'], sell:200 },
   // mythical — sell 320
   { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['savefall','glideStrong'], sell:320 },
   { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
   { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'], sell:320 },
   { id:'pegasus', name:'Pegasus',   emoji:'🐴', rarity:'mythical', abilities:['doubleJump','speed2'],      sell:320 },
+  { id:'swan',    name:'Swan',      emoji:'🦢', rarity:'mythical', abilities:['glideStrong','doubleJump'], sell:320 },
+  { id:'narwhal', name:'Narwhal',   emoji:'🦭', rarity:'mythical', abilities:['highJump','glide'],         sell:320 },
   // secret — sell 700 (the rarest!)
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['tripleJump','speed2','platform'],     sell:700 },
   { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['tripleJump','platform','glideStrong'],sell:700 },
@@ -69,6 +79,8 @@ const CREATURES = [
   { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['glideStrong','speed1'],  sell:700 },
   { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['glide','platform'],      sell:700 },
   { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['speed2','glide'],        sell:700 },
+  { id:'dino',    name:'Dino',      emoji:'🦕', rarity:'secret', abilities:['tripleJump','speed2'],   sell:700 },
+  { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['highJump','glideStrong'],sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
@@ -95,7 +107,8 @@ const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'ch
   fox:'berry', wolf:'corn', tiger:'corn', dragon:'corn', unicorn:'honey', phoenix:'honey',
   eagle:'berry', octopus:'banana', kraken:'carrot', giraffe:'apple', elephant:'peach', chick:'banana',
   monkey:'banana', raccoon:'berry', turtle:'corn', penguin:'strawberry', hedgehog:'apple', pegasus:'honey',
-  hyena:'corn' };
+  hyena:'corn', puppy:'biscuit', bee:'honey', otter:'berry', koala:'apple', kangaroo:'carrot', bear:'honey',
+  panda:'corn', rhino:'apple', swan:'berry', narwhal:'strawberry', dino:'corn', starlight:'honey' };
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
 function petOkFoods(id){

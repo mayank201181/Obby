@@ -338,28 +338,46 @@ function toggleBuild(){ Game.buildMode=!Game.buildMode; SFX.click(); setupBuildB
 function toggleLavaProof(){ Game.buildLavaProof=!Game.buildLavaProof; SFX.click(); setupBuildBar(); }
 
 /* ---------------- Hide & Seek + Room Tag (solo vs AI) ---------------- */
-function startHideSeek(){
+// role picker: choose to be the runner/hider or the tagger/seeker vs the bot
+let pendingSolo=null;
+function openRolePick(mode, arena){
+  pendingSolo={mode, arena};
+  const isHs = mode==='hideseek';
+  document.getElementById('roleTitle').textContent = isHs ? '🙈 Hide & Seek — pick your side' : '🏃 Pick your side';
+  document.getElementById('roleRunBtn').innerHTML = (isHs?'🙈 You hide':'🏃 You run')+
+    '<br><span style="font-size:12px;font-weight:700">'+(isHs?'disguise &amp; dodge the seeker bot':'dodge &amp; parkour from the tagger bot')+'</span>';
+  document.getElementById('roleTagBtn').innerHTML = (isHs?'🔦 You seek':'😈 You\'re IT')+
+    '<br><span style="font-size:12px;font-weight:700">'+(isHs?'find the hidden bot':'chase &amp; tag the bot')+'</span>';
+  showScreen('rolePickScreen');
+}
+function startWithRole(role){
+  const s=pendingSolo||{mode:'roomtag'};
+  if(s.mode==='hideseek') startHideSeek(role);
+  else if(s.mode==='roomtag') startRoomTag(role);
+  else if(s.mode==='colortag') startColorTag(s.arena||'room', role);
+}
+function startHideSeek(role){
   SFX.click(); closeModal('winModal');
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({mode:'hideseek', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startGame({mode:'hideseek', role:role||'runner', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
 function openTagPick(){ showScreen('tagPickScreen'); }
-function startRoomTag(){
+function startRoomTag(role){
   SFX.click(); closeModal('winModal');
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({mode:'roomtag', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startGame({mode:'roomtag', role:role||'runner', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
 function startObbyTagFriends(){ SFX.click(); toast('🧗 Make a room, then pick 🏃 Tag!'); createTeam(); }
 /* camo bar (Hide & Seek hide phase) */
 function refreshCamoBar(){
   const bar=document.getElementById('camoBar'); if(!bar) return;
-  const amSeeker = Game.multiplayer && typeof MP!=='undefined' && MP.itId===MP.selfId;
+  const amSeeker = (Game.multiplayer && typeof MP!=='undefined' && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');
   const show = Game.room && Game.roomMode==='hideseek' && Game.rm && Game.rm.phase==='hide' && !amSeeker;
   bar.style.display = show ? 'flex' : 'none';
   if(!show) return;
@@ -384,12 +402,12 @@ function refreshColorBar(){
 }
 /* Colour Tag (solo) */
 function openColorTagPick(){ showScreen('colorTagPickScreen'); }
-function startColorTag(arena){
+function startColorTag(arena, role){
   SFX.click(); closeModal('winModal');
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({mode:'colortag', arena:arena||'room', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startGame({mode:'colortag', arena:arena||'room', role:role||'runner', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
 
@@ -639,16 +657,29 @@ function onLevelComplete(level, earned, isFinal, res){
   }
   const isRoom=!!res.room;
   const hsRoom = res.roomMode==='hideseek';
+  const isTagger = res.role==='tagger';
   if(isRoom){
-    waitMsg = res.survived
-      ? `<p class="timer-big">${hsRoom?'🎉 You stayed hidden!':'🎉 You survived!'}</p><p class="muted">${hsRoom?'The seeker never found you! 🙈':'You dodged the tagger the whole round! 🏃'}</p>`
-      : `<p class="timer-big">${hsRoom?'🔦 Caught!':'😈 Tagged!'}</p><p class="muted">Better luck next round!</p>`;
+    if(isTagger){
+      waitMsg = res.survived
+        ? `<p class="timer-big">${hsRoom?'🎉 Found the bot!':'🎉 You tagged it!'}</p><p class="muted">${hsRoom?'You spotted the hidden bot! 🔦':'You caught the runner! 😈'}</p>`
+        : `<p class="timer-big">🫥 It got away!</p><p class="muted">${hsRoom?'You ran out of time finding it.':'The bot dodged you the whole round!'}</p>`;
+    } else {
+      waitMsg = res.survived
+        ? `<p class="timer-big">${hsRoom?'🎉 You stayed hidden!':'🎉 You survived!'}</p><p class="muted">${hsRoom?'The seeker never found you! 🙈':'You dodged the tagger the whole round! 🏃'}</p>`
+        : `<p class="timer-big">${hsRoom?'🔦 Caught!':'😈 Tagged!'}</p><p class="muted">Better luck next round!</p>`;
+    }
   }
   const isColorTag=!!res.colortag;
   if(isColorTag){
-    waitMsg = res.survived
-      ? `<p class="timer-big">🌈 You made it!</p><p class="muted">You stayed on the right colours! 🎨</p>`
-      : `<p class="timer-big">😈 Tagged off-colour!</p><p class="muted">Get on the called colour next time!</p>`;
+    if(isTagger){
+      waitMsg = res.survived
+        ? `<p class="timer-big">🌈 Great tagging!</p><p class="muted">You caught the bot off-colour enough times! 😈</p>`
+        : `<p class="timer-big">😅 Not enough!</p><p class="muted">The bot kept reaching the colour in time.</p>`;
+    } else {
+      waitMsg = res.survived
+        ? `<p class="timer-big">🌈 You made it!</p><p class="muted">You stayed on the right colours! 🎨</p>`
+        : `<p class="timer-big">😈 Tagged off-colour!</p><p class="muted">Get on the called colour next time!</p>`;
+    }
   }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
@@ -660,10 +691,10 @@ function onLevelComplete(level, earned, isFinal, res){
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
     : (isColorTag
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-                  : `<button class="btn gold" onclick="startColorTag('${res.arena||'room'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
+                  : `<button class="btn gold" onclick="startColorTag('${res.arena||'room'}','${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isRoom
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-                  : `<button class="btn gold" onclick="${hsRoom?'startHideSeek()':'startRoomTag()'}">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
+                  : `<button class="btn gold" onclick="${hsRoom?`startHideSeek('${res.role||'runner'}')`:`startRoomTag('${res.role||'runner'}')`}">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isDisaster
         ? `<button class="btn gold" onclick="startDisaster()">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isHeist
@@ -1363,13 +1394,14 @@ let lastMusicMode='lobby';
 function playPickedMusic(){
   if(SAVE.musicOn===false) return;
   SFX.resume();
+  if(SAVE.musicTrack==='rushe'){ SAVE.musicTrack='chill'; persist(); }   // Rush E removed
   const id=SAVE.musicTrack||'chill';
   if(id==='ambient') SFX.startMusic(lastMusicMode);
   else SFX.playSong(id);
 }
 function startMusicIfOn(mode){ if(mode) lastMusicMode=mode; if(SAVE.musicOn!==false){ playPickedMusic(); } }
 
-const MUSIC_PICKS=['rushe','entertainer','tarantella','muppets','chill'];
+const MUSIC_PICKS=['entertainer','tarantella','muppets','minor','chill'];
 function openMusicPicker(){ SFX.init(); SFX.resume(); showScreen('musicScreen'); renderMusicPicker(); }
 function renderMusicPicker(){
   const body=document.getElementById('musicBody'); if(!body) return;

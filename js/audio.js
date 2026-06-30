@@ -45,6 +45,18 @@ const SFX = {
     this._pianoWave=this.ctx.createPeriodicWave(real, imag, {disableNormalization:false});
     return this._pianoWave;
   },
+  _musicBus:null,
+  _getBus(){                          // soft echo/reverb so the piano sounds fuller & prettier
+    if(this._musicBus) return this._musicBus;
+    const ctx=this.ctx, inGain=ctx.createGain();
+    const delay=ctx.createDelay(); delay.delayTime.value=0.17;
+    const fb=ctx.createGain(); fb.gain.value=0.24;
+    const wet=ctx.createGain(); wet.gain.value=0.45;
+    inGain.connect(ctx.destination);                                  // dry
+    inGain.connect(delay); delay.connect(fb); fb.connect(delay);
+    delay.connect(wet); wet.connect(ctx.destination);                 // wet echo tail
+    this._musicBus=inGain; return inGain;
+  },
   note(freq, dur, vol){
     if(!this.ctx) return;
     const t=this.ctx.currentTime, wave=this._getPianoWave();
@@ -61,7 +73,7 @@ const SFX = {
     g.gain.exponentialRampToValueAtTime(vol, t+0.006);
     g.gain.exponentialRampToValueAtTime(vol*0.32, t+Math.min(dur,0.22));
     g.gain.exponentialRampToValueAtTime(0.0006, t+dur+0.18);
-    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this.ctx.destination);
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(this._getBus());
     o.start(t); o2.start(t); o.stop(t+dur+0.25); o2.stop(t+dur+0.25);
   },
   startMusic(mode){
@@ -112,13 +124,11 @@ const SFX = {
       ['C5',1,'A2'],['C5',1],['B4',1],['C5',1],['A4',2,'A2'],['E5',2,'E3'],
       ['A5',2,'A2'],['G5',1],['F5',1],['E5',2,'E3'],['A4',2,'A2'],[null,2],
     ]},
-    // "Rush E" vibe — original frantic E-minor piano run (instrumental, no melody copied)
-    rushe:{ name:'⚡ Rush E', beat:95, vol:0.045, mel:[
-      ['E5',1,'E2'],['E5',1],['E5',1],['E5',1],['E5',1],['E5',1],['E5',1],['E5',1],
-      ['E5',1,'E2'],['G5',1],['B5',1],['E6',1],['B5',1],['G5',1],['E5',1],['G5',1],
-      ['D5',1,'D3'],['D5',1],['D5',1],['D5',1],['F5',1],['A5',1],['D6',1],['A5',1],
-      ['C5',1,'C3'],['C5',1],['C5',1],['C5',1],['E5',1],['G5',1],['C6',1],['G5',1],
-      ['B4',1,'B2'],['B4',1],['B4',1],['B4',1],['E5',1,'E2'],['E5',1],['E5',1],['E5',1],
+    // a gentle, melancholic A-minor melody
+    minor:{ name:'🌧️ Minor Melody', beat:240, vol:0.05, mel:[
+      ['A4',2,'A2'],['C5',2],['E5',2,'A2'],['A5',2],['G5',2,'E3'],['E5',2],['F5',4,'F2'],
+      ['E5',2,'E3'],['D5',2],['C5',2,'A2'],['E5',2],['D5',2,'D3'],['B4',2],['A4',4,'A2'],[null,2],
+      ['C5',2,'F2'],['E5',2],['A5',2,'A2'],['G5',2],['F5',2,'D3'],['D5',2],['E5',4,'E3'],[null,2],
     ]},
     // "The Muppet Show" vibe — original bouncy vaudeville piano (instrumental, no theme copied)
     muppets:{ name:'🐸 Muppets-style', beat:140, vol:0.05, mel:[

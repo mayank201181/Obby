@@ -244,7 +244,7 @@
     </div>
     <button class="btn gold" onclick="startTower()">🏗️ Endless Tower<br><span style="font-size:12px;font-weight:700">climb as high as you can!</span></button>
     <button class="btn blue" onclick="openDisasterPick()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
-    <button class="btn pink" onclick="startHideSeek()">🙈 Hide &amp; Seek<br><span style="font-size:12px;font-weight:700">disguise as furniture!</span></button>
+    <button class="btn pink" onclick="openRolePick('hideseek')">🙈 Hide &amp; Seek<br><span style="font-size:12px;font-weight:700">disguise as furniture!</span></button>
     <button class="btn blue" onclick="openTagPick()">🏃 Tag<br><span style="font-size:12px;font-weight:700">obby or furniture room!</span></button>
     <button class="btn gold" onclick="openColorTagPick()">🌈 Colour Tag<br><span style="font-size:12px;font-weight:700">stand on the called colour!</span></button>
 
@@ -282,8 +282,22 @@
   <div class="card">
     <h2>🏃 Tag — pick a style</h2>
     <p class="hint">How do you want to play tag?</p>
-    <button class="btn pink" onclick="startRoomTag()">🛋️ Room Tag<br><span style="font-size:12px;font-weight:700">solo · dodge the tagger, parkour the furniture!</span></button>
+    <button class="btn pink" onclick="openRolePick('roomtag')">🛋️ Room Tag<br><span style="font-size:12px;font-weight:700">solo · furniture room, pick your side!</span></button>
     <button class="btn blue" onclick="startObbyTagFriends()">🧗 Obby Tag<br><span style="font-size:12px;font-weight:700">with a friend · climb &amp; chase in a Team room</span></button>
+  </div>
+</section>
+
+<!-- ============ ROLE PICKER (solo runner vs tagger) ============ -->
+<section class="screen" id="rolePickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2 id="roleTitle">Pick your side</h2>
+    <p class="hint">Play against a bot — which side do you want to be?</p>
+    <button class="btn pink" id="roleRunBtn" onclick="startWithRole('runner')">🏃 You run</button>
+    <button class="btn blue" id="roleTagBtn" onclick="startWithRole('tagger')">😈 You're IT</button>
   </div>
 </section>
 
@@ -296,8 +310,8 @@
   <div class="card">
     <h2>🌈 Colour Tag</h2>
     <p class="hint">The tagger calls a rainbow colour — stand on it before you get tagged! Pick a style:</p>
-    <button class="btn pink" onclick="startColorTag('room')">🛋️ Side-scrolling<br><span style="font-size:12px;font-weight:700">wide room, colour pads on the floor</span></button>
-    <button class="btn blue" onclick="startColorTag('obby')">🧗 Obby<br><span style="font-size:12px;font-weight:700">climb between colour platforms</span></button>
+    <button class="btn pink" onclick="openRolePick('colortag','room')">🛋️ Side-scrolling<br><span style="font-size:12px;font-weight:700">wide room, colour pads on the floor</span></button>
+    <button class="btn blue" onclick="openRolePick('colortag','obby')">🧗 Obby<br><span style="font-size:12px;font-weight:700">climb between colour platforms</span></button>
     <p class="hint" style="margin-top:10px">Want to play with friends? Make a Team room and pick 🌈 Colour Tag!</p>
   </div>
 </section>

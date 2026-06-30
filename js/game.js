@@ -49,6 +49,7 @@ const Game = {
   deaths:0, runStartT:0, runCoins:0,   // per-run timer / deaths / coins collected
   room:false, roomMode:null,           // Hide&Seek / Room Tag arena ('hideseek'|'tag')
   roomSolo:false,                      // true = solo vs an AI agent (else multiplayer PvP)
+  soloRole:'runner',                   // solo role: 'runner' (you dodge) or 'tagger' (you chase the bot)
   tagArena:'obby',                     // Tag/Colour-Tag layout: 'obby' | 'room'
   colorTag:false, colorArena:null, ct:null,  // Colour Tag state
   ai:null,                             // the AI seeker / tagger agent
@@ -142,6 +143,7 @@ function startGame(opts){
   Game.roomMode = opts.mode==='hideseek' ? 'hideseek' : (opts.mode==='roomtag' ? 'tag' : null);
   // solo-vs-AI only for the single-player room modes; MP uses real players
   Game.roomSolo = !Game.multiplayer && (opts.mode==='hideseek' || opts.mode==='roomtag' || opts.mode==='colortag');
+  Game.soloRole = opts.role==='tagger' ? 'tagger' : 'runner';
   if(Game.room || Game.colorTag) Game.difficulty='easy';   // no cannons in these arenas
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
@@ -1302,10 +1304,10 @@ function checkDisasterButtons(){
 function updateDisaster(dt){
   const p=Game.player, W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
   checkDisasterButtons();
-  const prog=Math.min(1, Math.max(0,(Game.t-(dz.startT||Game.t))/(dz.dur||DISASTER_SEG_MS)));   // 0..1 within this disaster
+  const prog=Math.min(1, Math.max(0,(Game.t-(dz.startT!=null?dz.startT:Game.t))/(dz.dur||DISASTER_SEG_MS)));   // 0..1 within this disaster
   if(t==='lava'){
-    // lava rises fast — reaches the top in ~14s now
-    dz.lavaY = H+40 - Math.min(1, prog*2.8)*(H-220);
+    // lava rises at a steadier pace (a bit slower than before)
+    dz.lavaY = H+40 - Math.min(1, prog*2.2)*(H-220);
     const inLava = (p.y+p.h) > dz.lavaY && !disasterStandingProof();
     if(inLava && p.invuln<=0) disasterHit(true);
   }
@@ -1418,17 +1420,24 @@ function drawDisaster(ctx){
 /* ===================== HIDE & SEEK / ROOM TAG ===================== */
 function initRoom(){
   const W=Game.world.width, H=Game.world.height, floorTop=H-44;
-  Game.ai={ x:W-90, y:floorTop-34, vx:0, vy:0, w:34, h:34, facing:-1,
+  const tagger = Game.soloRole==='tagger';
+  Game.ai={ x: tagger?160:W-90, y:floorTop-34, vx:0, vy:0, w:34, h:34, facing: tagger?1:-1,
             onGround:false, speed:3.6, tx:W-90, ty:null, jumpCdUntil:0, _stuck:0,
             _wanderT:0, state:'search', lostT:0 };
   if(Game.roomMode==='hideseek'){
     Game.rm={ phase:'hide', hideEndT:Game.t+20000, endT:Game.t+20000+120000,
               disguise:null, suspicion:0, caught:false };
-    if(typeof toast==='function') toast('🙈 HIDE! Pick a disguise at the bottom — 20s!');
+    if(tagger){
+      const kinds=Game.world.camoKinds||[];
+      Game.ai.disg = kinds[Math.floor(Math.random()*kinds.length)];   // the bot hides as furniture
+      Game.ai.x = 220+Math.random()*(W-440);
+      if(typeof toast==='function') toast('🙈 Eyes closed! The bot is hiding — find it after 20s!');
+    } else if(typeof toast==='function') toast('🙈 HIDE! Pick a disguise at the bottom — 20s!');
   } else {
-    Game.rm={ phase:'run', endT:Game.t+90000, caught:false };
-    Game.ai.speed=3.9; Game.ai.state='chase';
-    if(typeof toast==='function') toast("🏃 RUN! Don't get tagged — parkour on the furniture!");
+    Game.rm={ phase:'run', endT:Game.t + (tagger?60000:90000), caught:false };
+    Game.ai.speed=3.9; Game.ai.state = tagger?'flee':'chase';
+    if(typeof toast==='function') toast(tagger ? '🏃 Chase the bot — tag it before time runs out!'
+                                              : "🏃 RUN! Don't get tagged — parkour on the furniture!");
   }
   if(typeof refreshCamoBar==='function') refreshCamoBar();
 }
@@ -1466,6 +1475,31 @@ function updateRoom(dt){
   const p=Game.player, a=Game.ai, rm=Game.rm; if(!a||!rm) return;
   const dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2), (p.y+p.h/2)-(a.y+a.h/2));
   const pMoving = Math.abs(p.vx)>0.5;
+
+  // ---- YOU are the tagger/seeker; the BOT runs/hides ----
+  if(Game.soloRole==='tagger'){
+    if(Game.roomMode==='hideseek'){
+      if(rm.phase==='hide'){ Game.moveLock=true;
+        if(Game.t>=rm.hideEndT){ rm.phase='seek'; Game.moveLock=false;
+          if(typeof toast==='function') toast('🔦 GO! Find the hidden bot!'); }
+        return; }
+      // bot stays mostly still (blending in), shuffles occasionally
+      if(Game.t>a._wanderT){ a._wanderT=Game.t+2200+Math.random()*2600;
+        a.tx = Math.random()<0.5 ? a.x : 120+Math.random()*(Game.world.width-240); }
+      a.ty=null; stepAgent(a);
+      if(dist<34){ return endRoom(true); }              // you found & tagged it!
+      if(Game.t>=rm.endT) return endRoom(false);        // ran out of time
+    } else {
+      // ROOM TAG: bot flees, you chase
+      const away = (a.x < p.x) ? -1 : 1;
+      a.tx = Math.max(60, Math.min(Game.world.width-60, a.x + away*340));
+      a.ty = (p.y < a.y-30) ? a.y-120 : null;           // hop up if you're above it
+      stepAgent(a);
+      if(dist<32){ return endRoom(true); }              // tagged the bot — you win!
+      if(Game.t>=rm.endT) return endRoom(false);        // it got away
+    }
+    return;
+  }
 
   if(Game.roomMode==='hideseek'){
     if(rm.phase==='hide'){
@@ -1515,7 +1549,7 @@ function endRoom(survived){
   const reward = survived?60:10;
   addCoins(reward);
   if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
-    {room:true, roomMode:Game.roomMode, survived});
+    {room:true, roomMode:Game.roomMode, survived, role:Game.soloRole});
 }
 function drawFurni(ctx, pl){
   // ground shadow
@@ -1537,6 +1571,12 @@ function drawFurni(ctx, pl){
 }
 function drawRoomAgent(ctx){
   const a=Game.ai; if(!a) return;
+  // Hide & Seek where YOU seek: the bot is disguised as furniture (hidden during the 20s)
+  if(Game.roomMode==='hideseek' && Game.soloRole==='tagger'){
+    if(Game.rm && Game.rm.phase==='hide') return;       // can't see it while it hides
+    if(a.disg){ ctx.font='51px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(a.disg.emoji, a.x+a.w/2, a.y+a.h/2); return; }
+  }
   const cx=a.x+a.w/2, cy=a.y+a.h/2;
   ctx.fillStyle='rgba(120,90,150,.16)'; ctx.beginPath(); ctx.ellipse(cx, a.y+a.h, 18,6,0,0,Math.PI*2); ctx.fill();
   ctx.fillStyle='#ff7a5c'; ctx.beginPath(); ctx.arc(cx,cy,17,0,Math.PI*2); ctx.fill();
@@ -1631,12 +1671,22 @@ function initColorTag(){
   if(Game.multiplayer){
     if(MP.isHost) setTimeout(()=>{ mpSendIt(MP.selfId); ctCallColor(); }, 500);
   } else {
-    Game.ai={ x:W-90, y:floorTop-34, vx:0,vy:0,w:34,h:34,facing:-1,onGround:false,
-              speed:3.3, tx:W-90, ty:null, jumpCdUntil:0, _stuck:0, _wanderT:0, state:'chase' };
+    const tagger = Game.soloRole==='tagger';
+    Game.ct.score=0; Game.ct.target=5;
+    Game.ai={ x: tagger?(W/2):(W-90), y:floorTop-34, vx:0,vy:0,w:34,h:34,facing:-1,onGround:false,
+              speed: tagger?3.5:3.3, tx:W/2, ty:null, jumpCdUntil:0, _stuck:0, _wanderT:0, state:'chase' };
     ctCallColor();
   }
-  if(typeof toast==='function') toast('🌈 Colour Tag! Stand on the colour the tagger calls!');
+  if(typeof toast==='function') toast(Game.soloRole==='tagger'
+      ? '🌈 You call the colours — tag the bot when it\'s off-colour! (5 to win)'
+      : '🌈 Colour Tag! Stand on the colour the tagger calls!');
   if(typeof refreshColorBar==='function') refreshColorBar();
+}
+function nearestColorPad(x, color){
+  let best=null, bd=1e9;
+  for(const pl of Game.world.platforms){ if(pl.type!=='cpad' || pl.colorName!==color) continue;
+    const d=Math.abs((pl.x+pl.w/2)-x); if(d<bd){ bd=d; best=pl; } }
+  return best;
 }
 function updateColorTag(dt){
   const p=Game.player, ct=Game.ct; if(!ct) return;
@@ -1658,8 +1708,26 @@ function updateColorTag(dt){
     if(Game.t>=ct.endT) return endColorTag(MP.itId!==MP.selfId);
     return;
   }
-  // ---- solo vs AI tagger ----
+  // ---- solo ----
   const a=Game.ai; if(!a) return;
+  if(Game.soloRole==='tagger'){
+    // YOU call colours & chase; the bot tries to reach the called colour
+    const pad=nearestColorPad(a.x+a.w/2, ct.color);
+    a.tx = pad? pad.x+pad.w/2 : a.x; a.ty = pad? pad.y : null;
+    stepAgent(a);
+    const distT=Math.hypot((p.x+p.w/2)-(a.x+a.w/2),(p.y+p.h/2)-(a.y+a.h/2));
+    const botSafe = onColorPad(a.x,a.y,34,34, ct.color);
+    if(hunting && distT<32 && Game.t>ct.tagCd && !botSafe){
+      ct.tagCd=Game.t+1200; ct.score=(ct.score||0)+1; SFX.win(); addShake(4);
+      if(typeof toast==='function') toast('🌈 Tagged the bot! ('+ct.score+'/'+ct.target+')');
+      if(ct.score>=ct.target) return endColorTag(true);
+      ctCallColor();
+    }
+    if(Game.t>ct.nextCallT) ctCallColor();
+    if(Game.t>=ct.endT) return endColorTag((ct.score||0) >= Math.ceil(ct.target/2));
+    return;
+  }
+  // ---- solo: you dodge, AI tagger chases ----
   a.tx=p.x+p.w/2; a.ty=p.y;
   if(hunting) stepAgent(a); // during grace the tagger waits, then hunts
   const dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2),(p.y+p.h/2)-(a.y+a.h/2));
@@ -1683,7 +1751,7 @@ function endColorTag(won){
   const reward = won?55:10; addCoins(reward);
   if(Game.multiplayer) mpSendFinish();
   if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
-    {colortag:true, survived:won, mp:Game.multiplayer});
+    {colortag:true, survived:won, mp:Game.multiplayer, role:Game.soloRole, arena:Game.colorArena});
 }
 function drawColorPads(ctx){
   for(const pl of Game.world.platforms){ if(pl.type!=='cpad') continue;
@@ -2173,9 +2241,13 @@ function updateHudLive(){
   const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
   if(Game.colorTag){
     const ct=Game.ct, cp=document.getElementById('hudCp');
-    const amIt = Game.multiplayer && MP.itId===MP.selfId;
-    if(ct){ cp.textContent = (amIt?'🌈 You are IT! ':(ct.color?('🎨 '+ct.color.toUpperCase()+'! '):''))
-        + clock(ct.endT-Game.t) + (!Game.multiplayer?(' · ❤️'+Math.max(0,ct.lives)):''); }
+    const amIt = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');
+    if(ct){
+      const suffix = Game.multiplayer ? '' : (Game.soloRole==='tagger'
+        ? ' · 🎯'+(ct.score||0)+'/'+ct.target : ' · ❤️'+Math.max(0,ct.lives));
+      const lead = amIt ? '🌈 Call '+(ct.color?ct.color.toUpperCase():'…')+'! ' : (ct.color?'🎨 '+ct.color.toUpperCase()+'! ':'');
+      cp.textContent = lead + clock(ct.endT-Game.t) + suffix;
+    }
     document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
     const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
     return;
@@ -2183,7 +2255,7 @@ function updateHudLive(){
   if(Game.room){
     const rm=Game.rm, cp=document.getElementById('hudCp');
     if(rm && Game.roomMode==='hideseek'){
-      const amSeeker = Game.multiplayer && MP.itId===MP.selfId;
+      const amSeeker = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');
       const disg = (rm.disguise&&rm.disguise.emoji) || (Game.myDisguise&&Game.myDisguise.emoji);
       cp.textContent = rm.phase==='hide'
         ? (amSeeker?'🙈 Eyes closed… ':'🙈 HIDE! ')+Math.max(0,Math.ceil((rm.hideEndT-Game.t)/1000))+'s'
