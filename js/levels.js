@@ -541,27 +541,85 @@ function generateRoom(seed){
     const f=ROOM_PROPS[prop];
     for(let t=0;t<8;t++){ const px=rint(lo,hi); if(tryPlace(f, clamp(px,46,W-46-f.w), floorTop-f.h)) break; }
   }
-  // 4) reachable parkour clusters: short staircases that step UP and stay CLOSE
+  // 4) reachable parkour clusters: staircases that step UP and stay CLOSE
   //    horizontally, so each higher piece is an easy hop from the one below.
+  //    Some go all the way to the top of the room so you can climb up there.
   const climbers=[ROOM_FURNI[7], ROOM_FURNI[4], ROOM_FURNI[0], ROOM_FURNI[2]]; // box, books, chair, tv
-  for(let c=0; c<6; c++){
-    let px=rint(320, W-440), top=floorTop, lean=rnd()<0.5?1:-1;
-    const steps=rint(2,3);
+  const buildStair=(px, lean, steps)=>{
+    let top=floorTop;
     for(let s=0; s<steps; s++){
       const f=pick(climbers);
-      const rise=rint(86, 112);              // <= jump height, so each step is reachable
-      top -= rise;
-      let nx=clamp(px + lean*rint(46, 104), 46, W-46-f.w);
+      top -= rint(86, 110);                  // <= jump height, so each step is reachable
+      if(top - f.h < 24) break;              // reached the ceiling
+      let nx=clamp(px + lean*rint(46, 100), 46, W-46-f.w);
       let ok=tryPlace(f, nx, top-f.h);
-      if(!ok){ nx=clamp(px - lean*rint(46, 104), 46, W-46-f.w); ok=tryPlace(f, nx, top-f.h); }
-      if(!ok) break;                          // no room — stop this staircase
+      if(!ok){ nx=clamp(px - lean*rint(46, 100), 46, W-46-f.w); ok=tryPlace(f, nx, top-f.h); }
+      if(!ok){ // nudge and retry once more so tall towers don't stall early
+        nx=clamp(px + lean*rint(110,150), 46, W-46-f.w); ok=tryPlace(f, nx, top-f.h); }
+      if(!ok) break;
       px=nx;
     }
-  }
+  };
+  // a few short clusters spread around…
+  for(let c=0; c<6; c++) buildStair(rint(300, W-360), rnd()<0.5?1:-1, rint(2,3));
+  // …and three tall towers that climb most of the way to the top
+  for(let c=0; c<3; c++) buildStair(rint(420, W-460), rnd()<0.5?1:-1, 5);
   const start={x:64, y:floorTop};
   return { mode:'room', room:true, level:1, seed, width:W, height:H,
            platforms, checkpoints:[], hazards:[], start, finishY:-1e9,
            camoKinds:roomCamoKinds() };
+}
+
+/* ===== COLOUR TAG arena =====
+   Rainbow safe pads (incl. pink). The "it" calls a colour; stand on that
+   colour or get tagged. Obby (climb) or Room (wide flat) layouts. */
+const COLORS_TAG = [
+  {name:'red',    hex:'#ff6b6b'},
+  {name:'orange', hex:'#ff9f43'},
+  {name:'yellow', hex:'#ffd93d'},
+  {name:'green',  hex:'#6dd36d'},
+  {name:'blue',   hex:'#5aa9ff'},
+  {name:'purple', hex:'#b06bff'},
+  {name:'pink',   hex:'#ff8ad1'},
+];
+function colorTagColors(){ return COLORS_TAG.map(c=>({name:c.name, hex:c.hex})); }
+function generateColorArena(seed, style){
+  const rnd=mulberry32((seed*1000+909)|0);
+  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const platforms=[]; let id=0;
+  const pad=(x,y,w,h,col)=>platforms.push({id:id++, x,y,w,h, type:'cpad', colorName:col.name, fill:col.hex});
+  if(style==='obby'){
+    const W=760, H=1500, floorTop=H-40;
+    platforms.push({id:id++, x:0, y:floorTop, w:W, h:60, type:'big'});
+    // a wide pad of every colour along the bottom so any colour is quick to reach
+    for(let k=0;k<COLORS_TAG.length;k++)
+      pad(clamp(30+k*((W-60)/COLORS_TAG.length),20,W-130), floorTop-26-rint(0,30), 100, 24, COLORS_TAG[k]);
+    // climb a zigzag of colour pads to the top (cycled so all colours appear up high)
+    let y=floorTop-20, prevX=W/2, ci=rint(0,6);
+    for(let i=0;i<28;i++){
+      y -= rint(84, 102);
+      const w=rint(120,148);
+      let dir=rnd()<0.5?-1:1, nx=prevX+dir*rint(50, 108);
+      if(nx<70||nx>W-70) nx=prevX-dir*rint(50,108);
+      nx=clamp(nx,60,W-60-w);
+      pad(nx, y, w, 24, COLORS_TAG[ci%COLORS_TAG.length]); ci++;
+      prevX=nx+w/2;
+    }
+    return { mode:'colortag', colortag:true, room:false, level:1, seed, width:W, height:H,
+             platforms, checkpoints:[], hazards:[], start:{x:W/2, y:floorTop}, finishY:-1e9, colors:colorTagColors() };
+  }
+  // 'room' — wide flat arena, big colour pads spread out
+  const W=2200, H=560, floorTop=H-40;
+  platforms.push({id:id++, x:0, y:floorTop, w:W, h:H, type:'big', room:true});
+  const order=[]; for(let r=0;r<2;r++) for(const c of COLORS_TAG) order.push(c);
+  for(let i=order.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=order[i];order[i]=order[j];order[j]=t; }
+  let x=150;
+  for(const c of order){ const w=rint(120,150); pad(x, floorTop-28, w, 28, c); x += w + rint(46, 96); if(x>W-180) break; }
+  for(let i=0;i<8;i++){ const c=COLORS_TAG[rint(0,COLORS_TAG.length-1)]; const w=rint(110,140);
+    pad(clamp(rint(170,W-220),60,W-60-w), floorTop-rint(118,300), w, 24, c); }
+  return { mode:'colortag', colortag:true, room:false, level:1, seed, width:W, height:H,
+           platforms, checkpoints:[], hazards:[], start:{x:60, y:floorTop}, finishY:-1e9, colors:colorTagColors() };
 }
 
 /* called each frame in tower mode: keep a couple of floors generated ahead */

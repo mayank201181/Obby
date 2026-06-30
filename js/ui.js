@@ -359,15 +359,39 @@ function startObbyTagFriends(){ SFX.click(); toast('🧗 Make a room, then pick 
 /* camo bar (Hide & Seek hide phase) */
 function refreshCamoBar(){
   const bar=document.getElementById('camoBar'); if(!bar) return;
-  const show = Game.room && Game.roomMode==='hideseek' && Game.rm && Game.rm.phase==='hide';
+  const amSeeker = Game.multiplayer && typeof MP!=='undefined' && MP.itId===MP.selfId;
+  const show = Game.room && Game.roomMode==='hideseek' && Game.rm && Game.rm.phase==='hide' && !amSeeker;
   bar.style.display = show ? 'flex' : 'none';
   if(!show) return;
-  const cur = Game.rm.disguise ? Game.rm.disguise.kind : null;
+  const cur = (Game.rm && Game.rm.disguise && Game.rm.disguise.kind) || (Game.myDisguise && Game.myDisguise.kind) || null;
   const kinds = (Game.world && Game.world.camoKinds) || [];
   bar.innerHTML = '<span class="camo-label">🫥 Disguise:</span>' +
     kinds.map(k=>`<button class="camo-pick${cur===k.kind?' sel':''}" onclick="pickCamo('${k.kind}')">${k.emoji}</button>`).join('');
 }
-function pickCamo(kind){ if(typeof setDisguise==='function') setDisguise(kind); }
+function pickCamo(kind){
+  if(Game.multiplayer){ if(typeof setDisguiseMP==='function') setDisguiseMP(kind); }
+  else if(typeof setDisguise==='function') setDisguise(kind);
+}
+/* colour legend (Colour Tag) — highlights the called colour */
+function refreshColorBar(){
+  const bar=document.getElementById('colorBar'); if(!bar) return;
+  const show = Game.colorTag && Game.ct;
+  bar.style.display = show ? 'flex' : 'none';
+  if(!show) return;
+  const cols=(Game.world && Game.world.colors)||[], called=Game.ct.color;
+  bar.innerHTML = cols.map(c=>`<span class="col-dot${called===c.name?' called':''}" style="background:${c.hex}"></span>`).join('')
+    + (called?`<span class="col-now">${called.toUpperCase()}</span>`:'<span class="col-now">…</span>');
+}
+/* Colour Tag (solo) */
+function openColorTagPick(){ showScreen('colorTagPickScreen'); }
+function startColorTag(arena){
+  SFX.click(); closeModal('winModal');
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'colortag', arena:arena||'room', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
+}
 
 /* ---------------- Daily Challenge ---------------- */
 function dailyKey(){ const d=new Date(); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); }
@@ -461,17 +485,20 @@ function setRoomHostControls(isHost){
   document.getElementById('hostControls').style.display=isHost?'block':'none';
   document.getElementById('guestWait').style.display=isHost?'none':'block';
 }
+const ROOM_MODE_DESC = {
+  coop:    'Team-up: stand on both pads together to make bridges appear for 10s!',
+  race:    'Race: same obby, separate climbs — first to the top wins! 🏁',
+  tag:     'Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃',
+  roomtag: '🛋️ Room Tag: tag in a big furniture room — jump on the furniture to escape the tagger!',
+  hideseek:'🙈 Hide & Seek: the host seeks (eyes closed 20s) while everyone hides & disguises as furniture!',
+  colortag:'🌈 Colour Tag: the IT calls a rainbow colour — stand on it or get tagged (then YOU are IT)!',
+  disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
+};
 function selectRoomMode(m){
   pendingRoomMode=m;
   document.querySelectorAll('#modeBtns .btn').forEach(b=>b.classList.toggle('blue',b.dataset.mode===m));
   const d=document.getElementById('modeDesc');
-  if(d) d.textContent = m==='coop'
-    ? 'Team-up: stand on both pads together to make bridges appear for 10s!'
-    : m==='tag'
-      ? "Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃"
-      : m==='disaster'
-        ? '🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)'
-        : 'Race: same obby, separate climbs — first to the top wins! 🏁';
+  if(d) d.textContent = ROOM_MODE_DESC[m] || ROOM_MODE_DESC.race;
 }
 function wireRoomCallbacks(){
   MP.onRosterChange=refreshRoster;
@@ -479,7 +506,7 @@ function wireRoomCallbacks(){
   MP.onStart=(config)=>{
     Game.onLevelComplete=onLevelComplete;
     Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-    startGame({level:config.level, seed:config.seed, mode:config.mode, disasterType:config.disasterType,
+    startGame({level:config.level, seed:config.seed, mode:config.mode, arena:config.arena, disasterType:config.disasterType,
                multiplayer:true, difficulty:config.difficulty||'hard'});
     startMusicIfOn('game');
     if(MP.isHost && (config.mode==='tag' || config.disasterType==='killer')) setTimeout(()=>mpSendIt(MP.selfId), 600);  // host starts as "it"
@@ -555,7 +582,10 @@ function hostStart(){
   const seed=Math.floor(Math.random()*1e6);
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  const cfg={level:1, seed, mode:pendingRoomMode, difficulty:pendingRoomDiff};
+  // 'roomtag' is just Tag on the furniture-room arena
+  const cfg={level:1, seed, difficulty:pendingRoomDiff,
+             mode: pendingRoomMode==='roomtag' ? 'tag' : pendingRoomMode,
+             arena: pendingRoomMode==='roomtag' ? 'room' : (pendingRoomMode==='colortag' ? 'room' : 'obby')};
   if(pendingRoomMode==='disaster'){
     // host picks the disaster so everyone gets the same one; 'killer' tag only with 2+ players
     const pool = (mpPlayerCount()>1) ? DISASTERS.concat(['killer']) : DISASTERS;
@@ -614,15 +644,26 @@ function onLevelComplete(level, earned, isFinal, res){
       ? `<p class="timer-big">${hsRoom?'🎉 You stayed hidden!':'🎉 You survived!'}</p><p class="muted">${hsRoom?'The seeker never found you! 🙈':'You dodged the tagger the whole round! 🏃'}</p>`
       : `<p class="timer-big">${hsRoom?'🔦 Caught!':'😈 Tagged!'}</p><p class="muted">Better luck next round!</p>`;
   }
+  const isColorTag=!!res.colortag;
+  if(isColorTag){
+    waitMsg = res.survived
+      ? `<p class="timer-big">🌈 You made it!</p><p class="muted">You stayed on the right colours! 🎨</p>`
+      : `<p class="timer-big">😈 Tagged off-colour!</p><p class="muted">Get on the called colour next time!</p>`;
+  }
+  const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-    : (isRoom
-        ? `<button class="btn gold" onclick="${hsRoom?'startHideSeek()':'startRoomTag()'}">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+    : (isColorTag
+        ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+                  : `<button class="btn gold" onclick="startColorTag('${res.arena||'room'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
+        : (isRoom
+        ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+                  : `<button class="btn gold" onclick="${hsRoom?'startHideSeek()':'startRoomTag()'}">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isDisaster
         ? `<button class="btn gold" onclick="startDisaster()">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isHeist
@@ -631,14 +672,15 @@ function onLevelComplete(level, earned, isFinal, res){
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)))));
-  const heading = isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))))));
+  const heading = isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
+                : isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
                 : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;

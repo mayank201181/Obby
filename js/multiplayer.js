@@ -185,6 +185,16 @@ function mpOnMessage(conn,msg){
       if(msg.target===MP.selfId && typeof onStunned==='function') onStunned(msg.from);
       break;
     }
+    case 'caught': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(typeof onCaughtNet==='function') onCaughtNet(msg.target);
+      break;
+    }
+    case 'tcol': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(typeof onTagColor==='function') onTagColor(msg.color);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -276,6 +286,10 @@ function mpSendBoost(){ mpSend({t:'boost', id:MP.selfId}); }
 function mpSendIt(id){ MP.itId=id; mpSend({t:'it', id}); }
 /* Monkey banana: tell a specific friend they got splatted (they freeze 3s) */
 function mpSendStun(targetId){ mpSend({t:'stun', from:MP.selfId, target:targetId}); }
+/* Hide & Seek: seeker announces a hider has been caught */
+function mpSendCaught(targetId){ mpSend({t:'caught', from:MP.selfId, target:targetId}); }
+/* Colour Tag: the "it" announces the colour everyone must stand on */
+function mpSendTagColor(color){ mpSend({t:'tcol', from:MP.selfId, color}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 

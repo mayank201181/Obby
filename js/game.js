@@ -48,8 +48,14 @@ const Game = {
   trailPoints:[],               // recent positions for the cosmetic trail
   deaths:0, runStartT:0, runCoins:0,   // per-run timer / deaths / coins collected
   room:false, roomMode:null,           // Hide&Seek / Room Tag arena ('hideseek'|'tag')
+  roomSolo:false,                      // true = solo vs an AI agent (else multiplayer PvP)
+  tagArena:'obby',                     // Tag/Colour-Tag layout: 'obby' | 'room'
+  colorTag:false, colorArena:null, ct:null,  // Colour Tag state
   ai:null,                             // the AI seeker / tagger agent
   rm:null,                             // room-mode state (phase, timers, disguise, suspicion…)
+  myDisguise:null,                     // my hide&seek disguise (synced in MP)
+  caughtIds:null,                      // set of caught hider ids (MP hide&seek)
+  moveLock:false,                      // input frozen (seeker during the hide phase)
 };
 
 function applyEquippedPet(){
@@ -129,9 +135,14 @@ function startGame(opts){
   Game.daily = !!opts.daily;
   Game.heist = opts.mode==='heist';
   Game.disaster = opts.mode==='disaster';
-  Game.room = (opts.mode==='hideseek' || opts.mode==='roomtag');
+  Game.tagArena = opts.arena || 'obby';
+  Game.colorTag = (opts.mode==='colortag');
+  Game.colorArena = Game.colorTag ? (opts.arena||'room') : null;
+  Game.room = (opts.mode==='hideseek' || opts.mode==='roomtag' || (opts.mode==='tag' && Game.tagArena==='room'));
   Game.roomMode = opts.mode==='hideseek' ? 'hideseek' : (opts.mode==='roomtag' ? 'tag' : null);
-  if(Game.room) Game.difficulty='easy';     // no cannons in the room arena
+  // solo-vs-AI only for the single-player room modes; MP uses real players
+  Game.roomSolo = !Game.multiplayer && (opts.mode==='hideseek' || opts.mode==='roomtag' || opts.mode==='colortag');
+  if(Game.room || Game.colorTag) Game.difficulty='easy';   // no cannons in these arenas
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
@@ -154,6 +165,7 @@ function startGame(opts){
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
   const bbar=document.getElementById('buildBar'); if(bbar){ bbar.style.display = Game.disaster ? 'flex':'none'; if(Game.disaster && typeof setupBuildBar==='function') setupBuildBar(); }
   if(typeof refreshCamoBar==='function') refreshCamoBar();
+  if(typeof refreshColorBar==='function') refreshColorBar();
   if(typeof setSpectateChrome==='function') setSpectateChrome(false);
   Game.running=true; Game.finished=false; Game.last=performance.now(); Game.acc=0;
   cancelAnimationFrame(Game.raf);
@@ -161,7 +173,8 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.room ? generateRoom(Game.seed)
+  Game.world = Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
+             : Game.room ? generateRoom(Game.seed)
              : Game.disaster ? generateDisaster(Game.seed)
              : Game.heist ? generateHeist(Game.seed)
              : Game.tower ? generateTower(Game.seed)
@@ -183,7 +196,7 @@ function loadLevel(level){
     onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
-  Game.bananas=[]; Game.lastSafe=null; Game.stunUntil=0;
+  Game.bananas=[]; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
@@ -196,7 +209,9 @@ function loadLevel(level){
   Game.bullets=[];
   Game.player.invuln = 1200;        // brief grace at the start of a level
   Game.cam.x=st.x; Game.cam.y=st.y-200;
-  if(Game.room) initRoom();
+  if(Game.room && Game.roomSolo) initRoom();
+  else if(Game.room && Game.multiplayer) initRoomMP();
+  if(Game.colorTag) initColorTag();
   updateHud();
 }
 
@@ -301,7 +316,7 @@ function update(dt){
 
   if(p.onGround) p.jumps=0;              // reset jump count when grounded
 
-  const stunned = Game.t < (Game.stunUntil||0);     // frozen by a friend's banana
+  const stunned = Game.t < (Game.stunUntil||0) || Game.moveLock;   // banana stun or seeker-blind
   const dir = stunned ? 0 : Math.max(-1,Math.min(1,readInput()));
   // horizontal (pet speed boost) — ice makes you slip (low grip, slow stop)
   const dashing = Game.t < Game.power.dashUntil;
@@ -354,11 +369,14 @@ function update(dt){
     if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT) startDisasterActive(); }
     else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT) nextDisaster(); }
   }
-  if(Game.room && !Game.finished) updateRoom(dt);
+  if(Game.room && Game.roomSolo && !Game.finished) updateRoom(dt);
+  else if(Game.room && Game.multiplayer && !Game.finished) updateRoomMP(dt);
+  if(Game.colorTag && !Game.finished) updateColorTag(dt);
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
-  const camTX=p.x, camTY=Game.room ? Game.world.height/2 - 20 : p.y-40;
+  const flatArena = Game.room || (Game.colorTag && Game.colorArena==='room');
+  const camTX=p.x, camTY=flatArena ? Game.world.height/2 - 20 : p.y-40;
   Game.cam.x += (camTX-Game.cam.x)*0.12;
   Game.cam.y += (camTY-Game.cam.y)*0.12;
   // clamp camera horizontally to world
@@ -387,7 +405,8 @@ function update(dt){
       Game.netTimer=0;
       mpSendPos({x:Math.round(p.x),y:Math.round(p.y),facing:p.facing,
                  skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
-                 name:SAVE.name,cp:p.cp,finished:Game.finished});
+                 name:SAVE.name,cp:p.cp,finished:Game.finished,
+                 disg:(Game.myDisguise&&Game.myDisguise.emoji)||null});
     }
   }
 }
@@ -1023,12 +1042,30 @@ function sendBoost(){
 function onItChange(id){
   if(id===MP.selfId){
     Game.tagCdUntil=Game.t+2500;              // grace so you can't instantly tag back
-    if(typeof toast==='function') toast("🏃 You're IT! Catch a friend!");
+    if(Game.colorTag){                        // Colour Tag: the new "it" calls a colour
+      if(typeof toast==='function') toast("🌈 You're IT! Call a colour!");
+      if(Game.ct){ Game.ct.tagCd=Game.t+2500; if(typeof ctCallColor==='function') ctCallColor(); }
+    } else if(typeof toast==='function') toast("🏃 You're IT! Catch a friend!");
     SFX.hit();
   } else if(typeof toast==='function'){
     const r=MP.remote[id];
-    toast('🏃 '+((r&&r.name)||'A friend')+' is IT!');
+    toast((Game.colorTag?'🌈 ':'🏃 ')+((r&&r.name)||'A friend')+' is IT!');
   }
+}
+/* a hider got caught (announced by the seeker) */
+function onCaughtNet(targetId){
+  if(!Game.caughtIds) Game.caughtIds=new Set();
+  Game.caughtIds.add(targetId);
+  if(targetId===MP.selfId && typeof onCaughtMe==='function') onCaughtMe();
+}
+/* Colour Tag: the "it" called a colour everyone must reach */
+function onTagColor(color){
+  if(!Game.ct) return;
+  const c=(Game.world.colors||[]).find(k=>k.name===color);
+  Game.ct.color=color; Game.ct.colorHex=c?c.hex:null; Game.ct.graceUntil=Game.t+4500;
+  SFX.checkpoint();
+  if(typeof toast==='function') toast('🎨 Get on '+color.toUpperCase()+'!');
+  if(typeof refreshColorBar==='function') refreshColorBar();
 }
 
 /* visible pet-ability effects: speed = dust puffs, glide = floaty sparkles */
@@ -1510,8 +1547,153 @@ function drawRoomAgent(ctx){
   ctx.beginPath(); ctx.arc(cx-5*a.facing,cy-3,1.7,0,6.3); ctx.fill();
   ctx.beginPath(); ctx.arc(cx+6*a.facing,cy-3,1.7,0,6.3); ctx.fill();
   const rm=Game.rm;
-  const mark = Game.roomMode==='tag' ? '😈' : (rm&&rm.phase==='hide'?'🙈':(a.state==='chase'?'❗':'🔦'));
+  const mark = Game.colorTag ? '🌈' : Game.roomMode==='tag' ? '😈' : (rm&&rm.phase==='hide'?'🙈':(a.state==='chase'?'❗':'🔦'));
   ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(mark, cx, a.y-14);
+}
+
+/* ---------- Multiplayer Hide & Seek / Room Tag (real players) ---------- */
+function initRoomMP(){
+  Game.rm={ phase:(Game.roomMode==='hideseek'?'hide':'run'),
+            hideEndT:Game.t+20000,
+            endT:Game.t + (Game.roomMode==='hideseek' ? 20000+120000 : 120000) };
+  Game.myDisguise=null; Game.caughtIds=new Set(); Game.moveLock=false;
+  if(Game.roomMode==='hideseek'){
+    if(MP.isHost) setTimeout(()=>mpSendIt(MP.selfId), 500);   // host = the seeker
+    if(typeof refreshCamoBar==='function') refreshCamoBar();
+    if(typeof toast==='function') toast('🙈 Hide & Seek! The seeker covers its eyes for 20s — hide & disguise!');
+  } else {
+    if(MP.isHost) setTimeout(()=>mpSendIt(MP.selfId), 500);
+    if(typeof toast==='function') toast('🏃 Room Tag! Whoever is IT chases — touch a friend to pass it on!');
+  }
+}
+function setDisguiseMP(kind){
+  const f=(Game.world.camoKinds||[]).find(k=>k.kind===kind); if(!f) return;
+  Game.myDisguise={kind:f.kind, emoji:f.emoji}; SFX.click();
+  if(typeof refreshCamoBar==='function') refreshCamoBar();
+}
+function updateRoomMP(dt){
+  const p=Game.player, rm=Game.rm; if(!rm) return;
+  const amIt = MP.itId===MP.selfId;
+  if(Game.roomMode==='hideseek'){
+    if(rm.phase==='hide' && Game.t>=rm.hideEndT){ rm.phase='seek';
+      if(typeof refreshCamoBar==='function') refreshCamoBar();
+      if(typeof toast==='function') toast(amIt?'🔦 GO! Find the hiders!':'🔦 The seeker is looking — keep hidden!'); }
+    Game.moveLock = (amIt && rm.phase==='hide');     // seeker frozen while hiders hide
+    if(amIt && rm.phase==='seek'){
+      for(const r of mpRemoteList()){ if(typeof r.x!=='number' || Game.caughtIds.has(r.id)) continue;
+        if(rectsOverlap(p.x,p.y,p.w,p.h, r.x,r.y,34,34)){
+          Game.caughtIds.add(r.id); if(typeof mpSendCaught==='function') mpSendCaught(r.id); SFX.win();
+          if(typeof toast==='function') toast('🔦 Caught '+(r.name||'a hider')+'!'); } }
+      const hiders=mpRemoteList().filter(r=>typeof r.x==='number');
+      if(hiders.length && hiders.every(r=>Game.caughtIds.has(r.id))) return endRoomMP(true);
+    }
+    if(Game.t>=rm.endT) return endRoomMP(amIt ? false : true);   // hiders win at timeout
+  } else {
+    Game.moveLock=false;
+    if(Game.t>=rm.endT) return endRoomMP(!amIt);                 // not-it survives the round
+  }
+}
+function onCaughtMe(){           // a hider I control got tagged by the seeker
+  if(Game.finished || !Game.room || Game.roomMode!=='hideseek') return;
+  endRoomMP(false);
+}
+function endRoomMP(won){
+  if(Game.finished) return;
+  Game.finished=true; Game.running=false;
+  if(won) SFX.win(); else SFX.hit();
+  const reward = won?50:10; addCoins(reward);
+  if(Game.multiplayer) mpSendFinish();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
+    {room:true, roomMode:Game.roomMode||'tag', survived:won, mp:true});
+}
+
+/* ---------------- Colour Tag (solo AI + multiplayer) ---------------- */
+function onColorPad(x,y,w,h,colorName){
+  for(const pl of Game.world.platforms){ if(pl.type!=='cpad' || pl.colorName!==colorName) continue;
+    if(!(x<pl.x+pl.w && x+w>pl.x)) continue;          // horizontally over the pad
+    const feet=y+h;
+    if(feet>=pl.y-6 && feet<=pl.y+pl.h+5) return true; // standing on it (or overlapping it)
+  }
+  return false;
+}
+function ctCallColor(){
+  const cols=Game.world.colors||[]; if(!cols.length) return;
+  const c=cols[Math.floor(Math.random()*cols.length)];
+  Game.ct.color=c.name; Game.ct.colorHex=c.hex;
+  Game.ct.graceUntil=Game.t+4500; Game.ct.nextCallT=Game.t+8500; SFX.checkpoint();
+  if(typeof toast==='function') toast('🎨 Get on '+c.name.toUpperCase()+'!');
+  if(Game.multiplayer && MP.itId===MP.selfId && typeof mpSendTagColor==='function') mpSendTagColor(c.name);
+  if(typeof refreshColorBar==='function') refreshColorBar();
+}
+function initColorTag(){
+  const W=Game.world.width, H=Game.world.height, floorTop=H-40;
+  Game.ct={ color:null, colorHex:null, graceUntil:0, nextCallT:0, lives:3, endT:Game.t+100000, tagCd:0 };
+  if(Game.multiplayer){
+    if(MP.isHost) setTimeout(()=>{ mpSendIt(MP.selfId); ctCallColor(); }, 500);
+  } else {
+    Game.ai={ x:W-90, y:floorTop-34, vx:0,vy:0,w:34,h:34,facing:-1,onGround:false,
+              speed:3.3, tx:W-90, ty:null, jumpCdUntil:0, _stuck:0, _wanderT:0, state:'chase' };
+    ctCallColor();
+  }
+  if(typeof toast==='function') toast('🌈 Colour Tag! Stand on the colour the tagger calls!');
+  if(typeof refreshColorBar==='function') refreshColorBar();
+}
+function updateColorTag(dt){
+  const p=Game.player, ct=Game.ct; if(!ct) return;
+  const safe = ct.color && onColorPad(p.x,p.y,p.w,p.h, ct.color);
+  const hunting = Game.t > ct.graceUntil;
+  if(Game.multiplayer){
+    const amIt = MP.itId===MP.selfId;
+    if(amIt){
+      // chase the nearest hider; tag whoever is NOT on the called colour -> they become it
+      let target=null, best=1e9;
+      for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        const d=Math.hypot((p.x)-(r.x),(p.y)-(r.y)); if(d<best){best=d;target=r;} }
+      if(hunting && target && Game.t>ct.tagCd && rectsOverlap(p.x,p.y,p.w,p.h, target.x,target.y,34,34)){
+        const tsafe = onColorPad(target.x,target.y,34,34, ct.color);
+        if(!tsafe){ ct.tagCd=Game.t+1500; mpSendIt(target.id); SFX.win();
+          if(typeof toast==='function') toast('🌈 Tagged '+(target.name||'a friend')+'! They\'re IT'); } }
+      if(Game.t>ct.nextCallT) ctCallColor();   // call a fresh colour each cycle
+    }
+    if(Game.t>=ct.endT) return endColorTag(MP.itId!==MP.selfId);
+    return;
+  }
+  // ---- solo vs AI tagger ----
+  const a=Game.ai; if(!a) return;
+  a.tx=p.x+p.w/2; a.ty=p.y;
+  if(hunting) stepAgent(a); // during grace the tagger waits, then hunts
+  const dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2),(p.y+p.h/2)-(a.y+a.h/2));
+  if(hunting && dist<32 && Game.t>ct.tagCd){
+    if(!safe){ ct.tagCd=Game.t+1500; ct.lives--; SFX.hit(); addShake(6); p.vx=(p.x>a.x?1:-1)*9; p.vy=-9;
+      if(typeof toast==='function') toast('💥 Off-colour! ❤️ '+Math.max(0,ct.lives)+' left');
+      if(ct.lives<=0) return endColorTag(false);
+      ctCallColor();                       // new round after a hit
+    } else { // you're safe — tagger backs off and calls a new colour
+      ct.tagCd=Game.t+800;
+      if(Game.t>ct.nextCallT-2000) ctCallColor();
+    }
+  }
+  if(Game.t>ct.nextCallT) ctCallColor();
+  if(Game.t>=ct.endT) return endColorTag(true);   // survived the whole game
+}
+function endColorTag(won){
+  if(Game.finished) return;
+  Game.finished=true; Game.running=false;
+  if(won) SFX.win(); else SFX.hit();
+  const reward = won?55:10; addCoins(reward);
+  if(Game.multiplayer) mpSendFinish();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
+    {colortag:true, survived:won, mp:Game.multiplayer});
+}
+function drawColorPads(ctx){
+  for(const pl of Game.world.platforms){ if(pl.type!=='cpad') continue;
+    const called = Game.ct && Game.ct.color===pl.colorName;
+    ctx.globalAlpha = called ? 1 : 0.78;
+    ctx.fillStyle=pl.fill; roundRect(ctx, pl.x, pl.y, pl.w, pl.h, 9); ctx.fill();
+    if(called){ ctx.globalAlpha=0.5+0.5*Math.abs(Math.sin(Game.t/200));
+      ctx.strokeStyle='#fff'; ctx.lineWidth=3; roundRect(ctx, pl.x, pl.y, pl.w, pl.h, 9); ctx.stroke(); }
+    ctx.globalAlpha=1;
+  }
 }
 
 function nextLevel(){
@@ -1538,7 +1720,8 @@ function render(){
   drawWorldBackdrop(ctx);
 
   const plats=Game.world.platforms;
-  for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else drawPlatform(ctx,pl); }
+  for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else drawPlatform(ctx,pl); }
+  if(Game.colorTag) drawColorPads(ctx);
 
   // floating collectible coins
   for(const c of plats){
@@ -1584,33 +1767,49 @@ function render(){
 
   // remote players (in Team mode they show their team colour)
   if(Game.multiplayer){
+    const showIt = Game.mode==='tag' || Game.disasterType==='killer' || Game.colorTag || (Game.room && Game.roomMode!=='hideseek');
+    const hsSeek = Game.room && Game.roomMode==='hideseek';
     for(const r of mpRemoteList()){
       if(typeof r.x!=='number') continue;
-      const rskin = Game.partnerColor || r.skin;
-      drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t,
-                    petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
-      drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
+      const caught = Game.caughtIds && Game.caughtIds.has(r.id);
+      const isSeeker = hsSeek && MP.itId===r.id;
+      if(r.disg && hsSeek && !isSeeker && !caught){
+        // a hidden friend disguised as furniture
+        ctx.font='51px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(r.disg, r.x+17, r.y+17);
+      } else {
+        const rskin = Game.partnerColor || r.skin;
+        ctx.save(); if(caught) ctx.globalAlpha=0.5;
+        drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t,
+                      petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
+        ctx.restore();
+        drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
+      }
       if(r.emote && nowMs()-r.emoteAt < 2200) drawEmoteBubble(ctx, r.x+17, r.y-22, r.emote);
-      if((Game.mode==='tag'||Game.disasterType==='killer') && MP.itId===r.id) drawItMarker(ctx, r.x+17, r.y);
+      if(isSeeker){ ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🔦', r.x+17, r.y-22); }
+      else if(showIt && MP.itId===r.id) drawItMarker(ctx, r.x+17, r.y);
+      if(caught){ ctx.font='18px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('😵', r.x+17, r.y-22); }
     }
   }
 
   // AI seeker / tagger
-  if(Game.room) drawRoomAgent(ctx);
+  if((Game.room||Game.colorTag) && Game.roomSolo) drawRoomAgent(ctx);
 
   const p=Game.player;
   // visible pet-ability effects + cosmetic trail behind the player
   if(!Game.spectating){ drawAbilityFx(ctx); drawTrail(ctx, p); }
 
-  const disguised = Game.room && Game.roomMode==='hideseek' && Game.rm && Game.rm.disguise;
+  const myDisg = Game.room && Game.roomMode==='hideseek'
+    ? ((Game.rm && Game.rm.disguise && Game.rm.disguise.emoji) || (Game.myDisguise && Game.myDisguise.emoji))
+    : null;
   // local player (worn pet / team colour; blink while invulnerable after a hit)
-  if(!Game.spectating && disguised){
+  if(!Game.spectating && myDisg){
     // render as the furniture you disguised as (a faint ring shows it's you)
     ctx.save();
     ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=2; ctx.setLineDash([4,4]);
     ctx.strokeRect(p.x-3,p.y-3,p.w+6,p.h+6); ctx.setLineDash([]);
     ctx.font=`${Math.round(p.h*1.5)}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(Game.rm.disguise.emoji, p.x+p.w/2, p.y+p.h/2);
+    ctx.fillText(myDisg, p.x+p.w/2, p.y+p.h/2);
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-10, 'You');
   } else if(!Game.spectating){
@@ -1630,7 +1829,12 @@ function render(){
       ctx.fillText('😵', p.x+p.w/2+sp, p.y-26);
     }
     if(Game.myEmote && Game.t-Game.myEmoteAt < 2200) drawEmoteBubble(ctx, p.x+p.w/2, p.y-22, Game.myEmote);
-    if((Game.mode==='tag'||Game.disasterType==='killer') && MP.itId===MP.selfId) drawItMarker(ctx, p.x+p.w/2, p.y);
+    const meIt = MP.itId===MP.selfId;
+    if(Game.multiplayer && meIt && Game.room && Game.roomMode==='hideseek'){
+      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🔦', p.x+p.w/2, p.y-26);
+    } else if(meIt && (Game.mode==='tag'||Game.disasterType==='killer'||Game.colorTag||(Game.room&&Game.roomMode!=='hideseek'))) {
+      drawItMarker(ctx, p.x+p.w/2, p.y);
+    }
   }
 
   ctx.restore();
@@ -1956,7 +2160,8 @@ function roundRect(ctx,x,y,w,h,r){
 /* ---------- HUD ---------- */
 function updateHud(){
   const el=document.getElementById('hudLevel');
-  el.textContent = Game.room ? (Game.roomMode==='hideseek'?'🙈 Hide & Seek':'🏃 Room Tag')
+  el.textContent = Game.colorTag ? '🌈 Colour Tag'
+                 : Game.room ? (Game.roomMode==='hideseek'?'🙈 Hide & Seek':'🏃 Room Tag')
                  : Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
                  : Game.heist ? '💰 Gold Heist'
                  : Game.tower ? '🏗️ Tower'
@@ -1965,13 +2170,24 @@ function updateHud(){
 }
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
+  const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
+  if(Game.colorTag){
+    const ct=Game.ct, cp=document.getElementById('hudCp');
+    const amIt = Game.multiplayer && MP.itId===MP.selfId;
+    if(ct){ cp.textContent = (amIt?'🌈 You are IT! ':(ct.color?('🎨 '+ct.color.toUpperCase()+'! '):''))
+        + clock(ct.endT-Game.t) + (!Game.multiplayer?(' · ❤️'+Math.max(0,ct.lives)):''); }
+    document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+    const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
+    return;
+  }
   if(Game.room){
     const rm=Game.rm, cp=document.getElementById('hudCp');
-    const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
     if(rm && Game.roomMode==='hideseek'){
+      const amSeeker = Game.multiplayer && MP.itId===MP.selfId;
+      const disg = (rm.disguise&&rm.disguise.emoji) || (Game.myDisguise&&Game.myDisguise.emoji);
       cp.textContent = rm.phase==='hide'
-        ? '🙈 HIDE! '+Math.max(0,Math.ceil((rm.hideEndT-Game.t)/1000))+'s'
-        : '🔦 '+clock(rm.endT-Game.t)+(rm.disguise?(' · '+rm.disguise.emoji):' · ⚠️ no disguise');
+        ? (amSeeker?'🙈 Eyes closed… ':'🙈 HIDE! ')+Math.max(0,Math.ceil((rm.hideEndT-Game.t)/1000))+'s'
+        : (amSeeker?'🔦 FIND them! ':'🔦 ')+clock(rm.endT-Game.t)+(!amSeeker?(disg?(' · '+disg):' · ⚠️ no disguise'):'');
     } else if(rm){
       cp.textContent = '🏃 RUN! '+clock(rm.endT-Game.t);
     }

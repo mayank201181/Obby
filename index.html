@@ -246,6 +246,7 @@
     <button class="btn blue" onclick="openDisasterPick()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
     <button class="btn pink" onclick="startHideSeek()">🙈 Hide &amp; Seek<br><span style="font-size:12px;font-weight:700">disguise as furniture!</span></button>
     <button class="btn blue" onclick="openTagPick()">🏃 Tag<br><span style="font-size:12px;font-weight:700">obby or furniture room!</span></button>
+    <button class="btn gold" onclick="openColorTagPick()">🌈 Colour Tag<br><span style="font-size:12px;font-weight:700">stand on the called colour!</span></button>
 
     <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
 
@@ -286,6 +287,21 @@
   </div>
 </section>
 
+<!-- ============ COLOUR TAG PICKER ============ -->
+<section class="screen" id="colorTagPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🌈 Colour Tag</h2>
+    <p class="hint">The tagger calls a rainbow colour — stand on it before you get tagged! Pick a style:</p>
+    <button class="btn pink" onclick="startColorTag('room')">🛋️ Side-scrolling<br><span style="font-size:12px;font-weight:700">wide room, colour pads on the floor</span></button>
+    <button class="btn blue" onclick="startColorTag('obby')">🧗 Obby<br><span style="font-size:12px;font-weight:700">climb between colour platforms</span></button>
+    <p class="hint" style="margin-top:10px">Want to play with friends? Make a Team room and pick 🌈 Colour Tag!</p>
+  </div>
+</section>
+
 <!-- ============ ROOM LOBBY ============ -->
 <section class="screen" id="roomScreen">
   <div class="topbar">
@@ -302,10 +318,13 @@
 
     <div id="hostControls" style="display:none">
       <p class="hint">Pick a mode:</p>
-      <div class="row" id="modeBtns">
+      <div class="row" id="modeBtns" style="flex-wrap:wrap">
         <button class="btn ghost small" data-mode="coop" onclick="selectRoomMode('coop')">🤝 Team-up</button>
         <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
         <button class="btn ghost small" data-mode="tag" onclick="selectRoomMode('tag')">🏃 Tag</button>
+        <button class="btn ghost small" data-mode="roomtag" onclick="selectRoomMode('roomtag')">🛋️ Room Tag</button>
+        <button class="btn ghost small" data-mode="hideseek" onclick="selectRoomMode('hideseek')">🙈 Hide &amp; Seek</button>
+        <button class="btn ghost small" data-mode="colortag" onclick="selectRoomMode('colortag')">🌈 Colour Tag</button>
         <button class="btn ghost small" data-mode="disaster" onclick="selectRoomMode('disaster')">🌪️ Disaster</button>
       </div>
       <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
@@ -364,6 +383,7 @@
     </div>
 
     <div class="camo-bar" id="camoBar" style="display:none"></div>
+    <div class="color-bar" id="colorBar" style="display:none"></div>
   </div>
 </section>
 
