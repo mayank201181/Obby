@@ -323,7 +323,7 @@ function update(dt){
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
   if(Game.disaster && !Game.finished){
     if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT) startDisasterActive(); }
-    else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT) endDisaster(true); }
+    else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT) nextDisaster(); }
   }
 
   // conveyor push handled in collision (sets p.vx target)
@@ -1148,18 +1148,44 @@ function disasterStandingProof(){          // true if the player is on a lava-pr
     if(p.x<pl.x+pl.w && p.x+p.w>pl.x && Math.abs((p.y+p.h)-pl.y)<6) return true; }
   return false;
 }
+const DISASTER_SEG_MS = 17000;   // how long each disaster lasts before the next one hits
+function shuffledDisasters(){
+  const a=DISASTERS.slice();
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
 function startDisasterActive(){
-  Game.disasterPhase='active'; Game.disasterPhaseT=Game.t+35000;
   Game.buildMode=false;
-  const H=Game.world.height, W=Game.world.width;
-  Game.dz={ lavaY:H+40, meteors:[],
+  // disasters never stop — they cycle one after another until you press all 10 buttons
+  const chosen=Game.disasterType;
+  Game.disasterCycle = shuffledDisasters();
+  if(chosen && Game.disasterCycle.includes(chosen))   // start with the player's pick
+    Game.disasterCycle = [chosen, ...Game.disasterCycle.filter(d=>d!==chosen)];
+  Game.disasterIdx = 0;
+  Game.disasterType = Game.disasterCycle[0];
+  beginDisasterSegment();
+}
+function beginDisasterSegment(){
+  Game.disasterPhase='active';
+  Game.disasterPhaseT = Game.t + DISASTER_SEG_MS;
+  const H=Game.world.height, W=Game.world.width, t=Game.disasterType;
+  Game.dz={ startT:Game.t, dur:DISASTER_SEG_MS, lavaY:H+40, meteors:[],
     waveBX:W/2, waveBY:200, wtx:W/2, wty:200, wr:140,   // roaming tsunami orb (big)
     zombies:[], lastSpawn:0 };
-  const t=Game.disasterType;
   if(t==='zombies'){ Game.dz.maxChasers = 2+Math.floor(Math.random()*2);   // only 2-3 ever chase you
     for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:i<Game.dz.maxChasers, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
   if(typeof toast==='function') toast(DISASTER_INFO[t].name+' — '+DISASTER_INFO[t].tip);
-  SFX.hit();
+  SFX.hit(); addShake(6);
+}
+function nextDisaster(){
+  const last=Game.disasterType;
+  Game.disasterIdx++;
+  if(Game.disasterIdx>=Game.disasterCycle.length){   // looped — reshuffle for variety
+    Game.disasterCycle = shuffledDisasters(); Game.disasterIdx=0;
+    if(Game.disasterCycle[0]===last && Game.disasterCycle.length>1) Game.disasterCycle.push(Game.disasterCycle.shift());
+  }
+  Game.disasterType = Game.disasterCycle[Game.disasterIdx];
+  beginDisasterSegment();
 }
 function disasterHit(knockUp){
   const p=Game.player; if(p.invuln>0) return;
@@ -1182,7 +1208,7 @@ function checkDisasterButtons(){
 function updateDisaster(dt){
   const p=Game.player, W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
   checkDisasterButtons();
-  const prog=1-Math.max(0,(Game.disasterPhaseT-Game.t)/35000);   // 0..1
+  const prog=Math.min(1, Math.max(0,(Game.t-(dz.startT||Game.t))/(dz.dur||DISASTER_SEG_MS)));   // 0..1 within this disaster
   if(t==='lava'){
     // lava rises fast — reaches the top in ~14s now
     dz.lavaY = H+40 - Math.min(1, prog*2.8)*(H-220);
@@ -1726,7 +1752,9 @@ function updateHudLive(){
   const done=Game.hitCheckpoints.size;
   if(Game.disaster){
     const left=Math.max(0, Math.ceil((Game.disasterPhaseT-Game.t)/1000));
-    document.getElementById('hudCp').textContent = (Game.disasterPhase==='build'?'🏗️ '+left+'s':'⏱ '+left+'s')+' · 🔘'+Game.disasterButtons+'/10';
+    document.getElementById('hudCp').textContent = (Game.disasterPhase==='build'
+        ? '🏗️ '+left+'s'
+        : '🔘 '+Game.disasterButtons+'/10 — press them all!');
     const hp=document.getElementById('hudPower');
     if(hp){ hp.style.display='block'; hp.textContent='❤️ '+Math.max(0,Game.disasterLives); }
   } else if(Game.heist){
