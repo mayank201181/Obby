@@ -509,34 +509,56 @@ function generateRoom(seed){
   const W=2200, H=560, floorTop=H-44;
   const platforms=[]; let id=0;
   platforms.push({id:id++, x:0, y:floorTop, w:W, h:H, type:'big', room:true});   // floor
+  // occupancy so nothing overlaps (keeps a little breathing room between pieces)
+  const placed=[]; const PAD=14;
+  const fits=(x,y,w,h)=>{
+    if(x<46 || x+w>W-46) return false;
+    for(const r of placed){
+      if(x < r.x+r.w+PAD && x+w+PAD > r.x && y < r.y+r.h+PAD && y+h+PAD > r.y) return false;
+    }
+    return true;
+  };
   const add=(f,x,y)=>{ platforms.push({id:id++, type:f.bouncy?'bouncy':'furni', kind:f.kind, emoji:f.emoji,
-      x:x, y:y, w:f.w, h:f.h, furni:true}); };
+      x:x, y:y, w:f.w, h:f.h, furni:true}); placed.push({x,y,w:f.w,h:f.h}); };
+  const tryPlace=(f,x,y)=>{ if(!fits(x,y,f.w,f.h)) return false; add(f,x,y); return true; };
 
-  // scatter furniture along the floor — guarantee several copies of every camo kind
-  let x=120;
-  while(x < W-160){
+  // 1) scatter furniture along the floor, left to right, with clear gaps
+  let x=170;
+  while(x < W-180){
     const f=pick(ROOM_FURNI);
-    add(f, x, floorTop-f.h);
-    x += f.w + rint(46, 120);
+    if(tryPlace(f, x, floorTop-f.h)) x += f.w + rint(70, 150);
+    else x += 60;
   }
-  // make sure each camo kind has at least 3 decoys (so disguises blend in)
+  // 2) guarantee at least 3 decoys of every camo kind (so disguises blend in)
   for(const f of ROOM_FURNI){
-    let have=platforms.filter(p=>p.kind===f.kind).length;
-    while(have<3){ const px=clamp(rint(120,W-160), 120, W-120-f.w); add(f, px, floorTop-f.h); have++; }
+    let have=platforms.filter(p=>p.kind===f.kind).length, tries=0;
+    while(have<3 && tries<80){ tries++;
+      if(tryPlace(f, rint(170, W-180-f.w), floorTop-f.h)) have++;
+    }
   }
-  // a few fun props (trampolines bounce, slide/swing to climb on)
-  add(ROOM_PROPS[0], rint(300,600), floorTop-30);
-  add(ROOM_PROPS[0], rint(W-700,W-360), floorTop-30);
-  add(ROOM_PROPS[1], rint(700,1000), floorTop-88);
-  add(ROOM_PROPS[2], rint(1300,1700), floorTop-70);
-  // raised parkour shelves (boxes/books up high to jump across)
-  for(let i=0;i<7;i++){
-    const f=pick([ROOM_FURNI[4], ROOM_FURNI[7]]);   // books / box
-    const px=clamp(rint(160,W-200),120,W-120-f.w);
-    const py=floorTop - rint(150, 300);
-    add(f, px, py);
+  // 3) fun props — trampolines bounce, slide/swing to climb on
+  for(const [prop, lo, hi] of [[0,260,640],[0,W-720,W-360],[1,760,1040],[2,1320,1700]]){
+    const f=ROOM_PROPS[prop];
+    for(let t=0;t<8;t++){ const px=rint(lo,hi); if(tryPlace(f, clamp(px,46,W-46-f.w), floorTop-f.h)) break; }
   }
-  const start={x:70, y:floorTop};
+  // 4) reachable parkour clusters: short staircases that step UP and stay CLOSE
+  //    horizontally, so each higher piece is an easy hop from the one below.
+  const climbers=[ROOM_FURNI[7], ROOM_FURNI[4], ROOM_FURNI[0], ROOM_FURNI[2]]; // box, books, chair, tv
+  for(let c=0; c<6; c++){
+    let px=rint(320, W-440), top=floorTop, lean=rnd()<0.5?1:-1;
+    const steps=rint(2,3);
+    for(let s=0; s<steps; s++){
+      const f=pick(climbers);
+      const rise=rint(86, 112);              // <= jump height, so each step is reachable
+      top -= rise;
+      let nx=clamp(px + lean*rint(46, 104), 46, W-46-f.w);
+      let ok=tryPlace(f, nx, top-f.h);
+      if(!ok){ nx=clamp(px - lean*rint(46, 104), 46, W-46-f.w); ok=tryPlace(f, nx, top-f.h); }
+      if(!ok) break;                          // no room — stop this staircase
+      px=nx;
+    }
+  }
+  const start={x:64, y:floorTop};
   return { mode:'room', room:true, level:1, seed, width:W, height:H,
            platforms, checkpoints:[], hazards:[], start, finishY:-1e9,
            camoKinds:roomCamoKinds() };

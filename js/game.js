@@ -1481,15 +1481,22 @@ function endRoom(survived){
     {room:true, roomMode:Game.roomMode, survived});
 }
 function drawFurni(ctx, pl){
-  ctx.fillStyle='rgba(120,90,150,.12)';
-  ctx.beginPath(); ctx.ellipse(pl.x+pl.w/2, pl.y+pl.h-2, pl.w*0.46, 7, 0,0,Math.PI*2); ctx.fill();
+  // ground shadow
+  ctx.fillStyle='rgba(120,90,150,.14)';
+  ctx.beginPath(); ctx.ellipse(pl.x+pl.w/2, pl.y+pl.h-1, pl.w*0.46, 7, 0,0,Math.PI*2); ctx.fill();
   if(pl.type==='bouncy'){
     ctx.fillStyle='#3fcf86'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,12); ctx.fill();
     ctx.fillStyle='#b6f5c8'; roundRect(ctx,pl.x,pl.y,pl.w,6,12); ctx.fill();
     return;
   }
-  ctx.font=`${Math.round(pl.h*1.18)}px serif`; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-  ctx.fillText(pl.emoji||'📦', pl.x+pl.w/2, pl.y+pl.h+2);
+  // a soft pedestal so the standable top edge reads clearly
+  ctx.fillStyle='rgba(255,255,255,.5)';
+  roundRect(ctx, pl.x, pl.y, pl.w, pl.h, 10); ctx.fill();
+  ctx.fillStyle='rgba(155,123,232,.55)';
+  roundRect(ctx, pl.x, pl.y, pl.w, 6, 6); ctx.fill();
+  // the furniture itself
+  ctx.font=`${Math.round(pl.h*1.02)}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(pl.emoji||'📦', pl.x+pl.w/2, pl.y+pl.h/2);
 }
 function drawRoomAgent(ctx){
   const a=Game.ai; if(!a) return;
