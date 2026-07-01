@@ -582,30 +582,6 @@ function generateRoom(seed){
            camoKinds:roomCamoKinds() };
 }
 
-/* ===== COLOUR HIDE & SEEK arena =====
-   A wide room walled with rainbow colour panels. The hider turns a colour
-   and stands in front of a matching panel to vanish against it. */
-function generateColorHide(seed){
-  const rnd=mulberry32((seed*1000+2323)|0);
-  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
-  const W=2100, H=560, floorTop=H-44;
-  const platforms=[]; let id=0;
-  platforms.push({id:id++, x:0, y:floorTop, w:W, h:H, type:'big', room:true});
-  const cols=[
-    {name:'red',hex:'#ff6b6b'},{name:'orange',hex:'#ff9f43'},{name:'yellow',hex:'#ffd93d'},
-    {name:'green',hex:'#6dd36d'},{name:'blue',hex:'#5aa9ff'},{name:'purple',hex:'#b06bff'},{name:'pink',hex:'#ff8ad1'},
-  ];
-  const order=[]; for(let r=0;r<3;r++) for(const c of cols) order.push(c);
-  for(let i=order.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=order[i];order[i]=order[j];order[j]=t; }
-  let x=90;
-  for(const c of order){ const w=rint(90,120), ph=rint(190,300);
-    platforms.push({id:id++, type:'cwall', colorName:c.name, fill:c.hex, x, y:floorTop-ph, w, h:ph});
-    x += w + rint(8, 34); if(x>W-130) break; }
-  return { mode:'colorhide', room:true, colorHide:true, level:1, seed, width:W, height:H,
-           platforms, checkpoints:[], hazards:[], start:{x:60,y:floorTop}, finishY:-1e9,
-           colors:cols };
-}
-
 /* ===== COLOUR TAG arena =====
    Rainbow safe pads (incl. pink). The "it" calls a colour; stand on that
    colour or get tagged. Obby (climb) or Room (wide flat) layouts. */
