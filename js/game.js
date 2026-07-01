@@ -171,6 +171,7 @@ function startGame(opts){
   Game.tagArena = opts.arena || 'obby';
   Game.colorTag = (opts.mode==='colortag');
   Game.colorArena = Game.colorTag ? (opts.arena||'room') : null;
+  Game.towerResume = opts.resumeFloor || 0;
   Game.room = (opts.mode==='hideseek' || opts.mode==='roomtag' || (opts.mode==='tag' && Game.tagArena==='room'));
   Game.roomMode = opts.mode==='hideseek' ? 'hideseek' : (opts.mode==='roomtag' ? 'tag' : null);
   // solo-vs-AI only for the single-player room modes; MP uses real players
@@ -213,6 +214,7 @@ function loadLevel(level){
              : Game.heist ? generateHeist(Game.seed)
              : Game.tower ? generateTower(Game.seed)
              : generateLevel(level, Game.seed, Game.mode);
+  if(Game.tower && Game.towerResume>0 && typeof advanceTowerTo==='function') advanceTowerTo(Game.world, Game.towerResume);
   if(Game.disaster){
     Game.disasterPhase='build'; Game.disasterPhaseT=Game.t+2000;
     Game.disasterButtons=0; Game.disasterLives=3;
@@ -222,6 +224,7 @@ function loadLevel(level){
   Game.heistLoot=0; Game.heistEndT=Game.t+20000;   // 20-second heist clock
   Game.disappear={};
   Game.hitCheckpoints=new Set();
+  if(Game.tower && Game.towerResume>0){ for(let i=1;i<=Game.towerResume;i++) Game.hitCheckpoints.add(i); }
   Game.coinsThisRun=0;
   Game.padReport={};
   const st=Game.world.start;
@@ -418,10 +421,10 @@ function applyMorph(target, animalIdx, keepPower){
   const animal = MORPH_ANIMALS[animalIdx]; if(!animal) return;
   const grant = keepPower ? animal.power : 'none';
   if(target.kind==='boss'){
-    if(Game.activeBoss){ Game.activeBoss.morph = animal.emoji;
-      if(grant==='none'){ Game.activeBoss.tamed = true; }   // a powerless boss stops attacking
-    }
-    if(typeof toast==='function') toast('👽 Turned the boss into a '+animal.name+(grant==='none'?' with no power!':'!'));
+    // a morphed boss is just a harmless animal — it stops dropping blocks entirely
+    if(Game.activeBoss){ Game.activeBoss.morph = animal.emoji; Game.activeBoss.tamed = true; }
+    Game.bossShots=[];                     // clear any blocks already falling
+    if(typeof toast==='function') toast('👽 Turned the boss into a harmless '+animal.name+'!');
   } else if(target.kind==='player'){
     if(Game.multiplayer && typeof mpSendMorph==='function') mpSendMorph(target.id, animal.emoji, grant);
     const r=MP.remote[target.id]; if(r){ r.morph=animal.emoji; }
@@ -1118,8 +1121,10 @@ function onStand(p, pl, now){
     if(Game.onCheckpoint)Game.onCheckpoint(pl.cpIndex);
     if(Game.multiplayer) mpSendCheckpoint(pl.cpIndex);
     if(Game.tower){
-      // tower floor reached — track your best height
-      if(pl.cpIndex > (SAVE.towerBest||0)){ SAVE.towerBest=pl.cpIndex; persist(); }
+      // tower floor reached — track your best height + save progress to resume later
+      if(pl.cpIndex > (SAVE.towerBest||0)){ SAVE.towerBest=pl.cpIndex; }
+      if(!Game.multiplayer && pl.cpIndex > (SAVE.towerFloor||0)){ SAVE.towerFloor=pl.cpIndex; SAVE.towerSeed=Game.seed; }
+      persist();
       if(pl.cpIndex>=10) unlockAchievement('tower');
       if(typeof questEvent==='function') questEvent('towerFloor', pl.cpIndex);
       // boss arena cleared!

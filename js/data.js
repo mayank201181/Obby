@@ -217,6 +217,8 @@ function defaultSave(){
     achievements:[],       // unlocked achievement ids
     lvlCoinsCollected:0,    // total floating coins collected in levels
     towerBest:0,           // highest floor reached in endless Tower mode
+    towerFloor:0,          // saved Tower progress (resume from this floor)
+    towerSeed:null,        // seed of the saved Tower run
     daily:{key:'',best:0,done:false},  // daily challenge progress for the current day
     petXp:{},              // creatureId -> experience points (drives pet level)
     shinies:{},            // creatureId -> count of shiny (golden) copies owned

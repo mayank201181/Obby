@@ -297,15 +297,21 @@ function startSoloLevel(level){
 }
 
 /* ---------------- Endless Tower ---------------- */
-function startTower(){
+function startTower(resumeChoice){
   SFX.click();
   Game.multiplayer=false; Game.daily=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  // resume from your saved floor if you have progress (unless you chose 'fresh')
+  const canResume = (SAVE.towerFloor>0 && SAVE.towerSeed!=null);
+  const resume = canResume && resumeChoice!=='fresh';
+  const seed = resume ? SAVE.towerSeed : Math.floor(Math.random()*1e6);
+  if(!resume){ SAVE.towerFloor=0; SAVE.towerSeed=seed; persist(); }
   // Tower has no shooting cannons — the endless ramp + crumbly/ice/wind blocks
   // are the challenge.
-  startGame({mode:'tower', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startGame({mode:'tower', seed, resumeFloor: resume?SAVE.towerFloor:0, multiplayer:false, difficulty:'easy'});
   startMusicIfOn('tower');
+  if(resume && typeof toast==='function') toast('🏗️ Continuing from floor '+SAVE.towerFloor+'!');
 }
 
 /* ---------------- Natural Disaster Survival ---------------- */

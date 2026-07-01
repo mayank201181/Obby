@@ -303,6 +303,17 @@ function generateTower(seed){
   return world;
 }
 
+/* resume an endless-tower run: pre-build up to `floor` and start there */
+function advanceTowerTo(world, floor){
+  let guard=0;
+  while(world._floor < floor+3 && guard++<600) towerFloor(world);
+  const cp = world.platforms.find(p=>p.type==='checkpoint' && p.cpIndex===floor);
+  if(cp) world.start = {x: cp.x+cp.w/2, y: cp.y};
+  for(const b of world.bosses){ if(b.floorNo<=floor) b.defeated=true; }  // already-passed bosses
+  world._resumedAt=floor;
+  return world;
+}
+
 /* build the next floor of the tower (≈5-7 steps then a checkpoint) */
 function towerFloor(world){
   const f = world._floor;
