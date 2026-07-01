@@ -477,7 +477,8 @@ function generateDisaster(seed){
     platforms.push({id:id++, type:'dbutton', bId:i, x:L.x+L.w/2-15, y:L.y-30, w:30, h:18});
   }
   return { mode:'disaster', disaster:true, level:1, seed, width:W, height:H,
-           platforms, checkpoints:[], hazards:[], start, finishY:-1e9, roofY };
+           platforms, checkpoints:[], hazards:[], start, finishY:-1e9, roofY,
+           lavaTopY: y };   // lava stops at the top path platform (leaving the roof above safe)
 }
 
 /* ===== HIDE & SEEK / ROOM TAG arena =====

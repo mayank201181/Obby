@@ -1499,8 +1499,9 @@ function updateDisaster(dt){
   const prog=Math.min(1, Math.max(0,(Game.t-(dz.startT!=null?dz.startT:Game.t))/(dz.dur||DISASTER_SEG_MS)));   // 0..1 within this disaster
   const escale=(typeof powerScale==='function')?powerScale():1;   // 🧊 freeze / 🌟 slow hazards
   if(t==='lava'){
-    // lava rises at a steadier pace (a bit slower than before)
-    dz.lavaY = H+40 - Math.min(1, prog*2.2)*(H-220);
+    // lava rises slowly and STOPS at the top path platform (roof stays safe above)
+    const cap = (Game.world.lavaTopY!=null) ? Game.world.lavaTopY : 220;
+    dz.lavaY = Math.max(cap, H+40 - Math.min(1, prog*1.7)*(H-220));
     const inLava = (p.y+p.h) > dz.lavaY && !disasterStandingProof();
     if(inLava && p.invuln<=0) disasterHit(true);
   }
