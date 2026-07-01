@@ -414,3 +414,12 @@ select.text{appearance:none;background:#fff;}
   box-shadow:0 2px 5px rgba(0,0,0,.2);cursor:pointer;padding:0;}
 .color-bar .col-pick.called{outline:3px solid var(--ink);outline-offset:2px;transform:scale(1.12);}
 .color-bar .col-pick:active{transform:scale(.9);}
+
+/* ---- Alien morph picker ---- */
+.morph-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0;}
+.morph-pick{display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 2px;
+  border:2px solid #efe7fb;border-radius:14px;background:#fff;cursor:pointer;box-shadow:0 3px 0 #e7defa;}
+.morph-pick:active{transform:translateY(2px);box-shadow:0 1px 0 #e7defa;}
+.morph-pick .mp-e{font-size:30px;line-height:1.1;}
+.morph-pick .mp-n{font-size:12px;font-weight:800;color:var(--ink);}
+.morph-pick .mp-p{font-size:9px;font-weight:700;color:var(--ink-soft);}

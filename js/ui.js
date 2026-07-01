@@ -408,6 +408,34 @@ function refreshColorBar(){
   }
 }
 function ctPickColor(name){ if(typeof ctSetColor==='function') ctSetColor(name); }
+
+/* ---------------- Alien morph picker ---------------- */
+let pendingMorph=null, morphKeepPower=true;
+function openMorphPicker(target){
+  pendingMorph=target; morphKeepPower=true;
+  Game.moveLock=true;                 // hold still while you choose
+  renderMorphPicker(); openModal('morphModal');
+}
+function setMorphPower(keep){ morphKeepPower=!!keep; renderMorphPicker(); }
+function renderMorphPicker(){
+  const body=document.getElementById('morphModalBody'); if(!body) return;
+  const tName = pendingMorph && pendingMorph.kind==='boss' ? 'the BOSS 👹' : ('your friend '+((pendingMorph&&pendingMorph.name)||''));
+  const grid = (typeof MORPH_ANIMALS!=='undefined'?MORPH_ANIMALS:[]).map((a,i)=>
+    `<button class="morph-pick" onclick="chooseMorph(${i})"><span class="mp-e">${a.emoji}</span><span class="mp-n">${a.name}</span><span class="mp-p">${a.power==='none'?'no power':'⚡'+a.power}</span></button>`).join('');
+  body.innerHTML = `<h2 style="margin:2px 0">👽 Morph ${tName}</h2>
+    <p class="hint">Pick an animal — and choose if they keep its power!</p>
+    <div class="row" style="justify-content:center">
+      <button class="btn ${morphKeepPower?'pink':'ghost'} small" onclick="setMorphPower(true)">✨ With power</button>
+      <button class="btn ${!morphKeepPower?'pink':'ghost'} small" onclick="setMorphPower(false)">🚫 No power</button>
+    </div>
+    <div class="morph-grid">${grid}</div>
+    <button class="btn ghost" onclick="closeMorphPicker()">Cancel</button>`;
+}
+function chooseMorph(i){
+  if(pendingMorph && typeof applyMorph==='function') applyMorph(pendingMorph, i, morphKeepPower);
+  closeMorphPicker();
+}
+function closeMorphPicker(){ pendingMorph=null; Game.moveLock=false; closeModal('morphModal'); }
 /* Colour Tag (solo) */
 function openColorTagPick(){ showScreen('colorTagPickScreen'); }
 function startColorTag(arena, role){

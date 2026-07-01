@@ -195,6 +195,17 @@ function mpOnMessage(conn,msg){
       if(typeof onTagColor==='function') onTagColor(msg.color);
       break;
     }
+    case 'freeze': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onFreezeNet==='function') onFreezeNet();
+      break;
+    }
+    case 'morph': {
+      if(MP.isHost) mpRelay(conn,msg);
+      const rr=MP.remote[msg.target]; if(rr) rr.morph=msg.emoji;
+      if(msg.target===MP.selfId && typeof onMorphedMe==='function') onMorphedMe(msg.emoji, msg.grant);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -290,6 +301,10 @@ function mpSendStun(targetId){ mpSend({t:'stun', from:MP.selfId, target:targetId
 function mpSendCaught(targetId){ mpSend({t:'caught', from:MP.selfId, target:targetId}); }
 /* Colour Tag: the "it" announces the colour everyone must stand on */
 function mpSendTagColor(color){ mpSend({t:'tcol', from:MP.selfId, color}); }
+/* Yeti: freeze every other player */
+function mpSendFreeze(){ mpSend({t:'freeze', from:MP.selfId}); }
+/* Alien: morph a specific friend into an animal (with/without its power) */
+function mpSendMorph(targetId, emoji, grant){ mpSend({t:'morph', from:MP.selfId, target:targetId, emoji, grant}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 

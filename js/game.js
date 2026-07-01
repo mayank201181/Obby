@@ -57,7 +57,36 @@ const Game = {
   myDisguise:null,                     // my hide&seek disguise (synced in MP)
   caughtIds:null,                      // set of caught hider ids (MP hide&seek)
   moveLock:false,                      // input frozen (seeker during the hide phase)
+  petPower:null, powerCdUntil:0,       // equipped SECRET pet signature power + its cooldown
+  flyUntil:0, phaseUntil:0,            // Unicorn flight / Ghost phase timers
+  freezeEnemiesUntil:0, slowWorldUntil:0,  // Yeti freeze / Starlight slow-time timers
+  fire:[],                             // Dragon fire-breath projectiles
+  morph:null, morphPower:'none', morphUntil:0,   // my own transformed animal (set by an Alien)
+  morphMoveMul:1, morphJumpMul:1, morphFly:false,
 };
+// SECRET pet signature powers — button emoji/label + cooldown (ms)
+const POWER_META = {
+  polymorph: {emoji:'👽', label:'MORPH',  cd:6000},
+  firebreath:{emoji:'🔥', label:'FIRE',   cd:2600},
+  freeze:    {emoji:'🧊', label:'FREEZE',  cd:9000},
+  phase:     {emoji:'👻', label:'PHASE',  cd:9000},
+  teleport:  {emoji:'🌈', label:'BLINK',  cd:1600},
+  grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
+  flight:    {emoji:'🦄', label:'FLY',    cd:11000},
+  stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
+  slowtime:  {emoji:'🌟', label:'SLOW',   cd:10000},
+};
+// animals the Alien can morph a target into (with the power it grants)
+const MORPH_ANIMALS = [
+  {emoji:'🦁', name:'Lion',    power:'speed'},
+  {emoji:'🐰', name:'Bunny',   power:'jump'},
+  {emoji:'🦅', name:'Eagle',   power:'fly'},
+  {emoji:'🐢', name:'Turtle',  power:'shield'},
+  {emoji:'🐤', name:'Chick',   power:'none'},
+  {emoji:'🐸', name:'Frog',    power:'jump'},
+  {emoji:'🐆', name:'Cheetah', power:'speed'},
+  {emoji:'🐷', name:'Pig',     power:'none'},
+];
 
 function applyEquippedPet(){
   let a = (typeof equippedAbilities==='function') ? equippedAbilities()
@@ -71,10 +100,13 @@ function applyEquippedPet(){
   Game.petMaxJumps=a.maxJumps; Game.petCanPlatform=a.canPlatform;
   Game.petSaveFall=!!a.canSaveFall; Game.petBanana=!!a.canBanana;
   Game.petMagnet=!!a.canMagnet; Game.petAutoShield=!!a.canShield;
+  Game.petPower = a.power || null;
   const btn=document.getElementById('abilityBtn');
   if(btn){
-    btn.style.display = (a.canPlatform || a.canBanana) ? 'flex' : 'none';
-    btn.innerHTML = a.canBanana ? '🍌<br><span style="font-size:10px">THROW</span>'
+    const pm = Game.petPower && POWER_META[Game.petPower];
+    btn.style.display = (a.canPlatform || a.canBanana || pm) ? 'flex' : 'none';
+    btn.innerHTML = pm ? `${pm.emoji}<br><span style="font-size:10px">${pm.label}</span>`
+                  : a.canBanana ? '🍌<br><span style="font-size:10px">THROW</span>'
                                 : '✨<br><span style="font-size:10px">PLATFORM</span>';
   }
 }
@@ -199,6 +231,9 @@ function loadLevel(level){
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
   Game.bananas=[]; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
+  Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.freezeEnemiesUntil=0;
+  Game.slowWorldUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
+  Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
@@ -270,6 +305,7 @@ function readInput(){
 /* pet ability button (next to JUMP): drop a platform OR throw a banana */
 function triggerAbility(){
   if(!Game.running) return;
+  if(Game.petPower){ usePower(Game.petPower); return; }   // SECRET pet signature power
   if(Game.t < Game.platformCdUntil) return;        // shared cooldown
   const p=Game.player;
   if(Game.petBanana){                              // Monkey: lob a banana forward
@@ -304,6 +340,143 @@ function throwBananaAt(screenX, screenY){
   SFX.jump();
 }
 
+/* ==================== SECRET pet signature powers ==================== */
+function usePower(power){
+  const meta=POWER_META[power]; if(!meta) return;
+  if(Game.t < Game.powerCdUntil) return;                 // still cooling down
+  const p=Game.player; if(!p) return;
+  Game.powerCdUntil = Game.t + meta.cd;
+  switch(power){
+    case 'teleport': {                                    // 🌈 blink forward through walls
+      p.x = Math.max(0, Math.min(Game.world.width-p.w, p.x + p.facing*230));
+      p.y -= 90; p.vy = Math.min(p.vy, 0); p.invuln=Math.max(p.invuln,300);
+      for(let i=0;i<8;i++) Game.abilityFx.push({kind:'spark', x:p.x+p.w/2+(Math.random()*24-12), y:p.y+p.h/2+(Math.random()*24-12), vx:0, vy:0.3, life:1, born:Game.t});
+      SFX.jump(); if(typeof toast==='function') toast('🌈 Blink!'); break;
+    }
+    case 'grapple': {                                     // 🦑 reel yourself way up
+      p.vy = -19; p.onGround=false; p.jumps=0; p.squash=-1.2; addShake(3);
+      SFX.jump(); if(typeof toast==='function') toast('🦑 Tentacle pull!'); break;
+    }
+    case 'flight': {                                      // 🦄 fly + invincible
+      Game.flyUntil = Game.t + 5000; p.invuln = Math.max(p.invuln, 5000);
+      SFX.rare(); if(typeof toast==='function') toast('🦄 Rainbow Flight! Hold JUMP to soar!'); break;
+    }
+    case 'phase': {                                       // 👻 intangible to hazards
+      Game.phaseUntil = Game.t + 4500; p.invuln = Math.max(p.invuln, 4500);
+      SFX.chest(); if(typeof toast==='function') toast('👻 Ghost Phase — nothing can touch you!'); break;
+    }
+    case 'freeze': {                                      // 🧊 freeze the world's enemies
+      Game.freezeEnemiesUntil = Game.t + 4500;
+      if(Game.multiplayer && typeof mpSendFreeze==='function') mpSendFreeze();
+      addShake(4); SFX.hit(); if(typeof toast==='function') toast('🧊 Deep Freeze!'); break;
+    }
+    case 'slowtime': {                                    // 🌟 slow everything else
+      Game.slowWorldUntil = Game.t + 4500;
+      SFX.rare(); if(typeof toast==='function') toast('🌟 Star Time — the world slows down!'); break;
+    }
+    case 'firebreath': {                                  // 🐉 fire jet forward
+      for(let i=0;i<5;i++) Game.fire.push({ x:p.x+p.w/2, y:p.y+p.h/2, vx:p.facing*(9+i*0.6), vy:(Math.random()*2-1)*1.4, r:15, born:Game.t+i*40 });
+      addShake(3); SFX.hit(); if(typeof toast==='function') toast('🐉 Fire Breath!'); break;
+    }
+    case 'stomp': {                                       // 🦕 shockwave stun around you
+      addShake(9); SFX.hit();
+      const cx=p.x+p.w/2, cy=p.y+p.h, R=170;
+      if(Game.disaster && Game.dz && Game.dz.zombies){    // knock out nearby zombies
+        for(let i=Game.dz.zombies.length-1;i>=0;i--){ const z=Game.dz.zombies[i];
+          if(Math.hypot((z.x+z.w/2)-cx,(z.y+z.h/2)-cy)<R){ z.flash=Game.t; Game.dz.zombies.splice(i,1); } } }
+      if(Game.multiplayer){                               // shove & stun nearby friends
+        for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+          if(Math.hypot((r.x+17)-cx,(r.y+17)-cy)<R+30 && typeof mpSendStun==='function') mpSendStun(r.id); } }
+      for(let i=0;i<14;i++){ const a=i/14*Math.PI*2; Game.abilityFx.push({kind:'dust', x:cx+Math.cos(a)*24, y:cy, vx:Math.cos(a)*3, vy:-Math.random()*1.5, life:1, born:Game.t}); }
+      if(typeof toast==='function') toast('🦕 MEGA STOMP!'); break;
+    }
+    case 'polymorph': {                                   // 👽 morph a friend or the boss
+      const target = pickMorphTarget();
+      if(!target){ Game.powerCdUntil = Game.t + 400;      // nothing near — refund most of the cd
+        if(typeof toast==='function') toast('👽 Get closer to a friend or the boss to morph them!'); return; }
+      if(typeof openMorphPicker==='function') openMorphPicker(target);
+      else Game.powerCdUntil = Game.t + 400;
+      break;
+    }
+  }
+}
+// nearest morphable target (a multiplayer friend or a Tower boss) within reach
+function pickMorphTarget(){
+  const p=Game.player, cx=p.x+p.w/2, cy=p.y+p.h/2; let best=null, bd=110;
+  if(Game.multiplayer){
+    for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+      const d=Math.hypot((r.x+17)-cx,(r.y+17)-cy); if(d<bd){ bd=d; best={kind:'player', id:r.id, name:r.name}; } }
+  }
+  if(Game.activeBoss && !Game.activeBoss.defeated){
+    const bx=Game.world.width/2, by=Game.activeBoss.topY-110;
+    if(Math.hypot(bx-cx,by-cy)<220){ if(!best){ best={kind:'boss'}; } }
+  }
+  return best;
+}
+// apply a chosen morph (called by the picker). animal={emoji,name,power}; keepPower=bool
+function applyMorph(target, animalIdx, keepPower){
+  const animal = MORPH_ANIMALS[animalIdx]; if(!animal) return;
+  const grant = keepPower ? animal.power : 'none';
+  if(target.kind==='boss'){
+    if(Game.activeBoss){ Game.activeBoss.morph = animal.emoji;
+      if(grant==='none'){ Game.activeBoss.tamed = true; }   // a powerless boss stops attacking
+    }
+    if(typeof toast==='function') toast('👽 Turned the boss into a '+animal.name+(grant==='none'?' with no power!':'!'));
+  } else if(target.kind==='player'){
+    if(Game.multiplayer && typeof mpSendMorph==='function') mpSendMorph(target.id, animal.emoji, grant);
+    const r=MP.remote[target.id]; if(r){ r.morph=animal.emoji; }
+    if(typeof toast==='function') toast('👽 Morphed '+((target.name)||'your friend')+' into a '+animal.name+'!');
+  }
+  SFX.rare();
+}
+// a friend morphed ME (multiplayer): change how I look + optionally my power
+function onMorphedMe(emoji, grant){
+  Game.morph = emoji;
+  Game.morphPower = grant;                 // 'speed'|'jump'|'fly'|'shield'|'none'
+  Game.morphUntil = Game.t + 15000;        // lasts 15s
+  applyMorphPower(grant);
+  if(typeof toast==='function') toast('✨ You were morphed into '+emoji+'!');
+}
+function applyMorphPower(grant){
+  // temporary stat tweaks from being morphed
+  Game.morphMoveMul = grant==='speed'?1.5 : 1;
+  Game.morphJumpMul = grant==='jump'?1.25 : 1;
+  Game.morphFly = grant==='fly';
+  if(grant==='shield') Game.power.shield=true;
+  if(grant==='fly') Game.flyUntil = Game.t + 15000;
+}
+// how fast enemies move right now: 0 = frozen (🧊), 0.35 = slowed (🌟), 1 = normal
+function powerScale(){
+  if(Game.t < (Game.freezeEnemiesUntil||0)) return 0;
+  if(Game.t < (Game.slowWorldUntil||0)) return 0.35;
+  return 1;
+}
+function updatePowers(dt){
+  // a morph wears off after a while
+  if(Game.morph && Game.t>Game.morphUntil){
+    Game.morph=null; Game.morphPower='none'; Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
+  }
+  if(!Game.fire.length) return;
+  const W=Game.world.width;
+  for(let i=Game.fire.length-1;i>=0;i--){ const f=Game.fire[i];
+    if(Game.t<f.born) continue;
+    f.x+=f.vx; f.y+=f.vy; f.vy+=0.05; f.r*=0.986;
+    if(f.r<5 || Game.t-f.born>1000 || f.x<-40 || f.x>W+40){ Game.fire.splice(i,1); continue; }
+    const boss=Game.activeBoss;
+    if(boss && !boss.defeated){ const bx=W/2, by=boss.topY-110;
+      if(Math.abs(bx-f.x)<72 && Math.abs(by-f.y)<72){ boss.hits=(boss.hits||0)+1; boss._flash=Game.t; addShake(2);
+        if(boss.hits>=5){ boss.defeated=true; Game.bossShots=[]; bossReward(boss.floorNo); }
+        Game.fire.splice(i,1); continue; } }
+    let done=false;
+    if(Game.disaster && Game.dz && Game.dz.zombies){
+      for(let k=Game.dz.zombies.length-1;k>=0;k--){ const z=Game.dz.zombies[k];
+        if(f.x>z.x-f.r && f.x<z.x+z.w+f.r && f.y>z.y-f.r && f.y<z.y+z.h+f.r){ Game.dz.zombies.splice(k,1); done=true; break; } } }
+    if(done){ Game.fire.splice(i,1); continue; }
+    for(let k=Game.bossShots.length-1;k>=0;k--){ const s=Game.bossShots[k];
+      if(Math.abs(s.x-f.x)<s.r+f.r && Math.abs(s.y-f.y)<s.r+f.r){ Game.bossShots.splice(k,1); } }
+  }
+}
+
 function update(dt){
   if(Game.spectating){ spectateUpdate(); return; }
   const p=Game.player; if(!p) return;
@@ -322,7 +495,8 @@ function update(dt){
   const dir = stunned ? 0 : Math.max(-1,Math.min(1,readInput()));
   // horizontal (pet speed boost) — ice makes you slip (low grip, slow stop)
   const dashing = Game.t < Game.power.dashUntil;
-  const move = MOVE*Game.petMoveMul*(dashing?1.5:1);
+  const flying = Game.t < (Game.flyUntil||0);            // 🦄 rainbow flight / morphed eagle
+  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1);
   const target=dir*move;
   const grip = p.onIce ? 0.09 : 0.35;
   p.vx += (target-p.vx)*grip;
@@ -330,17 +504,23 @@ function update(dt){
   if(dir>0.05)p.facing=1; if(dir<-0.05)p.facing=-1;
   p.onIce=false;                          // re-set by onStand if still on ice
 
-  // jump (pet: higher jump + double jump)
+  // jump (pet: higher jump + double jump; flight = thrust up)
   if(Game.input.jump && !stunned){
-    const jv = JUMP*Game.petJumpMul;
-    if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; SFX.jump(); }
-    else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; SFX.jump(); }
+    if(flying){ p.vy=-9; p.onGround=false; p.squash=-1; SFX.jump(); }
+    else {
+      const jv = JUMP*Game.petJumpMul*(Game.morphJumpMul||1);
+      if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; SFX.jump(); }
+      else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; SFX.jump(); }
+    }
   }
   Game.input.jump=false;
+  // hold UP to keep soaring while flying
+  if(flying && !stunned && (Game.keys['ArrowUp']||Game.keys[' ']||Game.keys['w'])) p.vy=Math.min(p.vy,-4);
 
-  // gravity (pet glide = slower fall)
-  const g = (p.vy>0) ? GRAV*Game.petFallMul : GRAV;
+  // gravity (pet glide = slower fall; flight = gentle float)
+  const g = flying ? 0.14 : (p.vy>0) ? GRAV*Game.petFallMul : GRAV;
   p.vy+=g; if(p.vy>MAXFALL)p.vy=MAXFALL;
+  if(flying && p.vy>4) p.vy=4;
 
   // integrate + collide
   const wasGround=p.onGround;
@@ -364,6 +544,7 @@ function update(dt){
   updateLasers();
   updateSoloHazards();                  // pendulums / spikes / laser gates (Hard)
   collectCoins(p);
+  updatePowers(dt);                     // secret-pet powers (fire, morph timers)
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
   if(Game.bananas.length) updateBananas();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
@@ -408,7 +589,7 @@ function update(dt){
       mpSendPos({x:Math.round(p.x),y:Math.round(p.y),facing:p.facing,
                  skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
                  name:SAVE.name,cp:p.cp,finished:Game.finished,
-                 disg:(Game.myDisguise&&Game.myDisguise.emoji)||null});
+                 disg:(Game.myDisguise&&Game.myDisguise.emoji)||null, morph:Game.morph||null});
     }
   }
 }
@@ -425,6 +606,8 @@ function updateBoss(){
   }
   if(Game.freezeHazards) return;          // tests: no projectiles
   const b=Game.activeBoss;
+  if(b && b.tamed) return;                // morphed into a powerless animal — no attacks
+  if(Game.t < (Game.freezeEnemiesUntil||0)) return;   // 🧊 boss frozen
   const W=Game.world.width, topY=b?b.topY-70:0;
   if(b){
     if(!b.lastThrow) b.lastThrow=Game.t;
@@ -1119,6 +1302,12 @@ function onBoostFrom(senderId){
   }
 }
 
+/* a Yeti froze me solid */
+function onFreezeNet(){
+  if(!Game.running) return;
+  Game.stunUntil = Math.max(Game.stunUntil||0, Game.t+2500);
+  SFX.hit(); if(typeof toast==='function') toast('🧊 Frozen solid!');
+}
 /* a friend's banana splatted me -> freeze for 3 seconds */
 function onStunned(senderId){
   const p=Game.player; if(!p || !Game.running) return;
@@ -1308,6 +1497,7 @@ function updateDisaster(dt){
   const p=Game.player, W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
   checkDisasterButtons();
   const prog=Math.min(1, Math.max(0,(Game.t-(dz.startT!=null?dz.startT:Game.t))/(dz.dur||DISASTER_SEG_MS)));   // 0..1 within this disaster
+  const escale=(typeof powerScale==='function')?powerScale():1;   // 🧊 freeze / 🌟 slow hazards
   if(t==='lava'){
     // lava rises at a steadier pace (a bit slower than before)
     dz.lavaY = H+40 - Math.min(1, prog*2.2)*(H-220);
@@ -1317,7 +1507,7 @@ function updateDisaster(dt){
   if(t==='meteor'){
     if(Game.t-dz.lastSpawn>520){ dz.lastSpawn=Game.t; const n=1+Math.floor(prog*2);
       for(let k=0;k<n;k++) dz.meteors.push({x:40+Math.random()*(W-80), y:p.y-520-Math.random()*200, vy:5+Math.random()*3, r:16}); }
-    for(let i=dz.meteors.length-1;i>=0;i--){ const m=dz.meteors[i]; m.vy=Math.min(15,m.vy+0.3); m.y+=m.vy;
+    for(let i=dz.meteors.length-1;i>=0;i--){ const m=dz.meteors[i]; m.vy=Math.min(15,m.vy+0.3); m.y+=m.vy*escale;
       if(m.y>p.y+700){ dz.meteors.splice(i,1); continue; }
       if(p.invuln<=0 && p.x<m.x+m.r && p.x+p.w>m.x-m.r && p.y<m.y+m.r && p.y+p.h>m.y-m.r){ dz.meteors.splice(i,1); disasterHit(true); } }
   }
@@ -1327,7 +1517,7 @@ function updateDisaster(dt){
     const viewW=(Game.W/2)/s, viewH=(Game.H/2)/s;   // half the visible area (world units)
     const sp = 3.0 + prog*3.2;
     const dx = dz.wtx - dz.waveBX, dy = dz.wty - dz.waveBY, d = Math.hypot(dx,dy)||1;
-    dz.waveBX += dx/d*Math.min(sp,d); dz.waveBY += dy/d*Math.min(sp,d);
+    dz.waveBX += dx/d*Math.min(sp,d)*escale; dz.waveBY += dy/d*Math.min(sp,d)*escale;
     if(d < sp+6){   // reached the target → dart to a new spot, kept close to the player
       const px=p.x+p.w/2, py=p.y+p.h/2;
       dz.wtx = Math.max(70, Math.min(W-70, px + (Math.random()*2-1)*Math.min(viewW*0.5, 360)));
@@ -1345,8 +1535,9 @@ function updateDisaster(dt){
       dz.zombies.push({x:Math.random()<0.5?40:W-40, y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:chasers<maxCh, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
     // tag-pace: chasers stay right on your heels but a little slower than your run (4.8),
     // so you can shake them with good movement & jumps
-    const ZSPEED=3.5+prog*0.7;
+    const ZSPEED=(3.5+prog*0.7)*escale;   // frozen/slowed by Yeti/Starlight powers
     for(const z of dz.zombies){
+      if(escale===0){ continue; }         // 🧊 zombies frozen solid
       let dir;
       if(z.chase){
         // not a perfect mirror — they react with a delay and sometimes guess wrong / juke
@@ -1414,9 +1605,10 @@ function drawDisaster(ctx){
     ctx.font='66px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText('🌊', dz.waveBX, dz.waveBY); }
   if(t==='zombies'){ ctx.font='34px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    const frozen = Game.t < (Game.freezeEnemiesUntil||0);
     for(const z of dz.zombies){
       const flashing = z.flash && Game.t-z.flash<160;
-      ctx.fillText(flashing?'💥':'🧟', z.x+z.w/2, z.y+z.h/2);
+      ctx.fillText(flashing?'💥':(frozen?'🧊':'🧟'), z.x+z.w/2, z.y+z.h/2);
     } }
 }
 
@@ -1454,6 +1646,9 @@ function setDisguise(kind){
 // move the AI agent toward (tx,ty) with gravity + one-way landing (like the player)
 function stepAgent(a){
   const GRAV=0.86, MAXFALL=18;
+  const sc=(typeof powerScale==='function')?powerScale():1;
+  if(sc===0){ a.frozen=true; return; }   // 🧊 the bot is frozen solid
+  a.frozen=false; a.speedScale=sc;
   const dx = (a.tx!=null?a.tx:a.x) - (a.x+a.w/2);
   const desired = Math.abs(dx)<6 ? 0 : (dx>0?1:-1);
   if(desired) a.facing=desired;
@@ -1464,8 +1659,8 @@ function stepAgent(a){
     if((wantUp || a._stuck>6) && Game.t>a.jumpCdUntil){ a.vy=-13.4; a.onGround=false; a.jumpCdUntil=Game.t+420; a._stuck=0; }
   }
   a.vy+=GRAV; if(a.vy>MAXFALL)a.vy=MAXFALL;
-  a.x+=a.vx; if(a.x<0)a.x=0; if(a.x+a.w>Game.world.width)a.x=Game.world.width-a.w;
-  const prevB=a.y+a.h; a.y+=a.vy; const newB=a.y+a.h;
+  a.x+=a.vx*sc; if(a.x<0)a.x=0; if(a.x+a.w>Game.world.width)a.x=Game.world.width-a.w;
+  const prevB=a.y+a.h; a.y+=a.vy*sc; const newB=a.y+a.h;
   a.onGround=false;
   if(a.vy>=0){ let bestTop=Infinity, on=null;
     for(const pl of Game.world.platforms){ if(!solidNow(pl)||pl.type==='coin'||pl.type==='powerup') continue;
@@ -1553,6 +1748,11 @@ function endRoom(survived){
   addCoins(reward);
   if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
     {room:true, roomMode:Game.roomMode, survived, role:Game.soloRole});
+}
+function drawFire(ctx){
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const f of Game.fire){ if(Game.t<f.born) continue;
+    ctx.font=`${Math.round(f.r*2.2)}px serif`; ctx.fillText('🔥', f.x, f.y); }
 }
 function drawFurni(ctx, pl){
   // ground shadow
@@ -1842,6 +2042,7 @@ function render(){
   // solo dodge hazards (pendulums / spikes / laser gates)
   drawSoloHazards(ctx);
   if(Game.bananas.length) drawBananas(ctx);
+  if(Game.fire.length) drawFire(ctx);
   if(Game.disaster) drawDisaster(ctx);
 
   // pet-placed platforms (fading sparkle footholds)
@@ -1863,7 +2064,12 @@ function render(){
       if(typeof r.x!=='number') continue;
       const caught = Game.caughtIds && Game.caughtIds.has(r.id);
       const isSeeker = hsSeek && MP.itId===r.id;
-      if(r.disg && hsSeek && !isSeeker && !caught){
+      if(r.morph){
+        // a friend the Alien turned into an animal
+        ctx.font='46px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(r.morph, r.x+17, r.y+17);
+        drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
+      } else if(r.disg && hsSeek && !isSeeker && !caught){
         // a hidden friend disguised as furniture
         ctx.font='51px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(r.disg, r.x+17, r.y+17);
@@ -1889,9 +2095,14 @@ function render(){
   // visible pet-ability effects + cosmetic trail behind the player
   if(!Game.spectating){ drawAbilityFx(ctx); drawTrail(ctx, p); }
 
-  const myDisg = Game.room && Game.roomMode==='hideseek'
+  const myDisg = Game.morph || (Game.room && Game.roomMode==='hideseek'
     ? ((Game.rm && Game.rm.disguise && Game.rm.disguise.emoji) || (Game.myDisguise && Game.myDisguise.emoji))
-    : null;
+    : null);
+  // rainbow aura while flying
+  if(!Game.spectating && Game.t < (Game.flyUntil||0)){
+    ctx.font='18px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('🌈', p.x+p.w/2, p.y-24);
+  }
   // local player (worn pet / team colour; blink while invulnerable after a hit)
   if(!Game.spectating && myDisg){
     // render as the furniture you disguised as (a faint ring shows it's you)
@@ -2006,6 +2217,12 @@ function drawTrail(ctx, p){
 /* a menacing boss blob hovering above its arena checkpoint */
 function drawBoss(ctx,b){
   const cx=Game.world.width/2, cy=b.topY-110 + Math.sin(Game.t/300)*8;
+  if(b.morph){   // an Alien turned the boss into a harmless-looking animal
+    ctx.font='96px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(b.morph, cx, cy);
+    if(b.tamed){ ctx.font='20px serif'; ctx.fillText('😴', cx+40, cy-40); }
+    return;
+  }
   const R=52, active=Game.activeBoss===b;
   ctx.save();
   // glow

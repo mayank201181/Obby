@@ -27,6 +27,16 @@ const ABILITY_INFO = {
   savefall:   'Rescue! If you fall you pop back on your last platform',
   banana:     'Throw bananas (tap 🍌) at the boss & friends!',
   highJump:   'Jump much higher!',
+  // ===== SECRET pet signature powers (one each, no repeats) =====
+  polymorph:  '👽 Morph! Touch a friend or boss and turn them into ANY animal — with or without its power!',
+  firebreath: '🐉 Fire Breath! Blast a jet of fire that torches blocks & hammers the boss',
+  freeze:     '🧊 Deep Freeze! Freeze every enemy, hazard & rival solid for a few seconds',
+  phase:      '👻 Ghost Phase! Go invincible & drift through all hazards for a few seconds',
+  teleport:   '🌈 Blink! Instantly teleport forward through walls',
+  grapple:    '🦑 Tentacle! Fling up and reel yourself onto a high ledge',
+  flight:     '🦄 Rainbow Flight! Soar wherever you want, invincible, for a few seconds',
+  stomp:      '🦕 Mega Stomp! Crash down with a shockwave that stuns everyone near you',
+  slowtime:   '🌟 Star Time! Slow the whole world to a crawl while you zoom around',
   coinmagnet: 'Coins are always pulled to you',
   autoshield: 'Start every level with a shield 🛡️',
 };
@@ -72,15 +82,15 @@ const CREATURES = [
   { id:'swan',    name:'Swan',      emoji:'🦢', rarity:'mythical', abilities:['glideStrong','doubleJump'], sell:320 },
   { id:'narwhal', name:'Narwhal',   emoji:'🦭', rarity:'mythical', abilities:['highJump','glide'],         sell:320 },
   // secret — sell 700 (the rarest!)
-  { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['tripleJump','speed2','platform'],     sell:700 },
-  { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['tripleJump','platform','glideStrong'],sell:700 },
-  { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['speed2','glideStrong'],  sell:700 },
-  { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['platform','speed2'],     sell:700 },
-  { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['glideStrong','speed1'],  sell:700 },
-  { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['glide','platform'],      sell:700 },
-  { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['speed2','glide'],        sell:700 },
-  { id:'dino',    name:'Dino',      emoji:'🦕', rarity:'secret', abilities:['tripleJump','speed2'],   sell:700 },
-  { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['highJump','glideStrong'],sell:700 },
+  { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['flight','tripleJump'],   sell:700 },
+  { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['firebreath','tripleJump'],sell:700 },
+  { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['teleport','speed2'],     sell:700 },
+  { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['grapple','speed2'],      sell:700 },
+  { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['freeze','glideStrong'],  sell:700 },
+  { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['phase','glide'],         sell:700 },
+  { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['polymorph','glide'],     sell:700 },
+  { id:'dino',    name:'Dino',      emoji:'🦕', rarity:'secret', abilities:['stomp','speed2'],        sell:700 },
+  { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['slowtime','highJump'],   sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
@@ -424,6 +434,7 @@ function equippedAbilities(){
     canBanana:   set.has('banana'),
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
+    power: ['polymorph','firebreath','freeze','phase','teleport','grapple','flight','stomp','slowtime'].find(pw=>set.has(pw)) || null,
   };
 }
 
