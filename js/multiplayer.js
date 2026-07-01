@@ -215,6 +215,16 @@ function mpOnMessage(conn,msg){
       if(msg.from!==MP.selfId && typeof onPoopNet==='function') onPoopNet(msg.d);
       break;
     }
+    case 'abduct': {   // a friend was beamed into the alien ship — everyone gets pulled in
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onAbductNet==='function') onAbductNet();
+      break;
+    }
+    case 'shipfree': {  // someone tapped a trapped friend — free everyone in the ship
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onShipFreeNet==='function') onShipFreeNet();
+      break;
+    }
     case 'dbtn': {
       if(MP.isHost) mpRelay(conn,msg);
       if(msg.from!==MP.selfId && typeof onButtonNet==='function') onButtonNet(msg.bId);
@@ -332,6 +342,9 @@ function mpSendMorph(targetId, d){ mpSend({t:'morph', from:MP.selfId, target:tar
   emoji:d.emoji, grant:d.grant, face:d.face, acc:d.acc, kind:d.kind}); }
 /* Hyena: broadcast a dropped poop pile */
 function mpSendPoop(d){ mpSend({t:'poop', from:MP.selfId, d}); }
+/* Alien ship co-op: I got fully abducted; free everyone in the ship */
+function mpSendAbduct(){ mpSend({t:'abduct', from:MP.selfId}); }
+function mpSendShipFree(){ mpSend({t:'shipfree', from:MP.selfId}); }
 /* Disaster: a button I pressed is shared with everyone */
 function mpSendButton(bId){ mpSend({t:'dbtn', from:MP.selfId, bId}); }
 /* Disaster: a platform I built is shared so friends can hide under it */

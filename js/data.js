@@ -36,6 +36,11 @@ const ACCESSORIES = [
 const FACES = [
   { id:'classic', label:'Classic', price:0 },
   { id:'wink',    label:'Wink',    price:0 },
+  { id:'shades',  label:'Sunnies', price:600 },
+  { id:'derp',    label:'Derp',    price:700 },
+  { id:'moustache',label:'Tache',  price:700 },
+  { id:'silly',   label:'Silly',   price:900 },
+  { id:'mrbean',  label:'Mr Bean', price:1200 },
   { id:'cheeky',  label:'Cheeky',  price:2000 },
   { id:'star',    label:'Starry',  price:-1, special:true },
   { id:'cool',    label:'Cool',    price:-1, special:true },

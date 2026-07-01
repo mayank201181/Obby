@@ -145,7 +145,9 @@ function gameInit(){
   Game.canvas.addEventListener('pointerdown', e=>{
     const r=Game.canvas.getBoundingClientRect();
     const sx=e.clientX-r.left, sy=e.clientY-r.top;
+    if(Game.ship){ shipTap(sx,sy); return; }                 // tap a trapped friend to free you both
     if(Game.disaster && Game.buildMode){ disasterBuildAt(sx,sy); return; }
+    if(Game.petPower==='polymorph' && Game.running){ alienTapMorph(sx,sy); return; }  // 👽 tap a friend/boss
     if(Game.petBanana && Game.running) throwBananaAt(sx,sy);
   });
   setupTouchControls();
@@ -350,16 +352,38 @@ function throwBananaAt(screenX, screenY){
   const wy=(screenY-Game.H/2)/s + Game.cam.y;
   const ox=p.x+p.w/2, oy=p.y+p.h/2;
   const dx=wx-ox, dy=wy-oy, dist=Math.hypot(dx,dy)||1;
-  // ballistic throw: pick a flight time from the distance, then solve for the
-  // launch velocity so the banana ARCS through the air and lands on the tap.
-  const g=0.5;                                        // matches the banana gravity
-  const N=Math.max(22, Math.min(78, Math.round(dist/7)));   // flight time (frames)
+  // ballistic throw: pick a flight time from the distance, then solve EXACTLY for
+  // the launch velocity so the banana arcs through the air and lands right on the
+  // tapped spot. updateBananas applies gravity before moving, so after N frames:
+  //   x = x0 + N*vx ; y = y0 + N*vy0 + g*N*(N+1)/2  →  solve for vx, vy0.
+  const g=0.5;
+  const N=Math.max(20, Math.min(78, Math.round(dist/7)));   // flight time (frames)
   const vx=dx/N;
-  const vy=dy/N - 0.5*g*N;                            // rises, then falls onto the target
-  Game.bananas.push({ x:ox, y:oy, vx, vy, r:11, born:Game.t, g });
+  const vy=dy/N - g*(N+1)/2;                          // rises, then lands exactly on the tap
+  Game.bananas.push({ x:ox, y:oy, vx, vy, r:11, born:Game.t, g, tx:wx, ty:wy, splatAt:Game.t+N*(1000/60) });
   p.facing = dx>=0?1:-1;
   Game.platformCdUntil = Game.t + 3000;      // Monkey banana — 3s cooldown
   SFX.jump();
+}
+/* Alien: tap directly on a friend (or the boss) to morph THAT one — then pick what into */
+function alienTapMorph(screenX, screenY){
+  if(!Game.running) return;
+  if(Game.t < Game.powerCdUntil){ if(typeof toast==='function') toast('👽 Morph is recharging…'); return; }
+  const s=(typeof gameScale==='function')?gameScale():1;
+  const wx=(screenX-Game.W/2)/s + Game.cam.x;
+  const wy=(screenY-Game.H/2)/s + Game.cam.y;
+  let target=null, bd=90;                       // must tap fairly close to someone
+  if(Game.multiplayer){
+    for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+      const d=Math.hypot((r.x+17)-wx,(r.y+17)-wy); if(d<bd){ bd=d; target={kind:'player', id:r.id, name:r.name}; } }
+  }
+  if(!target && Game.activeBoss && !Game.activeBoss.defeated){
+    const bx=Game.world.width/2, by=Game.activeBoss.topY-110;
+    if(Math.hypot(bx-wx,by-wy)<170) target={kind:'boss'};
+  }
+  if(!target){ if(typeof toast==='function') toast('👽 Tap right on a friend or the boss to morph them!'); return; }
+  Game.powerCdUntil = Game.t + (POWER_META.polymorph?POWER_META.polymorph.cd:6000);
+  if(typeof openMorphPicker==='function') openMorphPicker(target);
 }
 /* Hyena: drop a poop pile at your feet; anyone who steps in it freezes 3s */
 function dropPoop(){
@@ -706,7 +730,7 @@ function update(dt){
       Game.netTimer=0;
       mpSendPos({x:Math.round(p.x),y:Math.round(p.y),facing:p.facing,
                  skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
-                 name:SAVE.name,cp:p.cp,finished:Game.finished,
+                 name:SAVE.name,cp:p.cp,finished:Game.finished, inShip:false,
                  disg:(Game.myDisguise&&Game.myDisguise.emoji)||null, morph:Game.morph||null});
     }
   }
@@ -1785,8 +1809,10 @@ function updateDisaster(dt){
             if(typeof toast==='function') toast('🤝 A friend knocked you free!'); break; } }
       }
       if(dz.levit<=0){ dz.beamed=false; p.vy=8; if(typeof toast==='function') toast('🛸 Broke free!'); }
-      else if(dz.levit>=1){ dz.beamed=false; dz.levit=0; abductToShip();
-        if(typeof toast==='function') toast('👽 Beamed into the ship — sneak to the back door!'); }
+      else if(dz.levit>=1){ dz.beamed=false; dz.levit=0;
+        if(Game.multiplayer && typeof mpSendAbduct==='function') mpSendAbduct();   // pull my friends in too
+        abductToShip();
+        if(typeof toast==='function') toast(Game.multiplayer?'👽 Beamed into the ship — a friend must tap you to escape!':'👽 Beamed into the ship — sneak to the back door!'); }
     }
   }
   if(t==='sandstorm'){
@@ -1823,12 +1849,43 @@ function abductToShip(){
   for(let i=0;i<5;i++) aliens.push({ x:150+Math.random()*(W-360), y:floorY-34, w:30, h:34,
       vx:(Math.random()<0.5?-1:1)*(1.4+Math.random()*1.1), face:1, alert:0 });
   Game.ship={ p:{x:50, y:floorY-34, w:30, h:34, vx:0, vy:0, onGround:false, facing:1},
-    floorY, plats, aliens, doorX:W-64, spotted:false, hitCd:0 };
+    floorY, plats, aliens, doorX:W-64, spotted:false, hitCd:0, coop:!!Game.multiplayer, netT:0 };
   const bb=document.getElementById('buildBar'); if(bb) bb.style.display='none';
   SFX.hit(); addShake(6);
 }
+/* a friend was abducted (multiplayer): I get sucked into the same ship too */
+function onAbductNet(){
+  if(Game.ship || !Game.disaster || Game.finished) return;
+  if(Game.dz){ Game.dz.beamed=false; Game.dz.levit=0; }
+  abductToShip();
+  if(typeof toast==='function') toast('👽 Your friend was abducted — you got pulled in too! Find each other & tap to escape!');
+}
+/* a friend tapped someone in the ship — we all break out together */
+function onShipFreeNet(){ if(Game.ship) escapeShip(); }
+/* tap a trapped friend inside the ship to free BOTH of you */
+function shipTap(screenX, screenY){
+  const s=Game.ship; if(!s) return;
+  // in a co-op ship the tap coords are already in overlay/screen space (no camera)
+  let hit=false;
+  if(Game.multiplayer){
+    for(const r of mpRemoteList()){ if(!r.inShip || typeof r.shipX!=='number') continue;
+      if(Math.hypot((r.shipX+15)-screenX,(r.shipY+17)-screenY)<48){ hit=true; break; } }
+  }
+  if(hit){
+    if(typeof mpSendShipFree==='function') mpSendShipFree();
+    if(typeof toast==='function') toast('🤝 You tapped your friend — escaping together!');
+    escapeShip();
+  } else if(s.coop && typeof toast==='function'){
+    toast('👽 Tap right on your friend to free you both!');
+  }
+}
 function updateShip(dt){
   const s=Game.ship, p=s.p, W=Game.W;
+  // co-op: broadcast my position inside the ship so friends can see & tap me
+  if(Game.multiplayer && typeof mpSendPos==='function'){
+    s.netT=(s.netT||0)+dt;
+    if(s.netT>0.06){ s.netT=0; mpSendPos({inShip:true, shipX:Math.round(p.x), shipY:Math.round(p.y), name:SAVE.name, skin:SAVE.skin, finished:false}); }
+  }
   const dir=(typeof readInput==='function')?readInput():0;
   const MOVE=4.6, GRAV=0.9;
   p.vx += (dir*MOVE - p.vx)*0.35;
@@ -1863,6 +1920,7 @@ function escapeShip(){
   Game.ship=null;
   const bb=document.getElementById('buildBar'); if(bb && Game.disaster) bb.style.display='flex';
   const p=Game.player; if(p){ p.invuln=1500; p.vy=6; }
+  if(Game.multiplayer && typeof mpSendPos==='function') mpSendPos({inShip:false, x:Math.round(p?p.x:0), y:Math.round(p?p.y:0)});  // clear my ship marker
   if(typeof toast==='function') toast('🚪 Escaped the ship! Dropped back down.');
   SFX.win();
 }
@@ -1885,9 +1943,21 @@ function drawShipOverlay(ctx){
       ctx.lineTo(a.x+a.w/2+a.face*155, a.y-28); ctx.lineTo(a.x+a.w/2+a.face*155, a.y+a.h+28); ctx.closePath(); ctx.fill(); }
     ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(a.alert>=1?'😡':'👽', a.x+a.w/2, a.y+a.h/2);
   }
-  ctx.font='28px serif'; ctx.fillText('🧑‍🚀', s.p.x+s.p.w/2, s.p.y+s.p.h/2);
+  // co-op: draw trapped friends + a "tap me!" prompt so you can free each other
+  let friendInShip=false;
+  if(Game.multiplayer){
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(const r of mpRemoteList()){ if(!r.inShip || typeof r.shipX!=='number') continue;
+      friendInShip=true;
+      ctx.font='28px serif'; ctx.fillText('🧑‍🚀', r.shipX+15, r.shipY+17);
+      ctx.font='16px serif'; ctx.fillText('🆘', r.shipX+15, r.shipY-14);
+      ctx.fillStyle='#ffe08a'; ctx.font='bold 12px Nunito'; ctx.fillText('tap me!', r.shipX+15, r.shipY-28);
+    }
+  }
+  ctx.font='28px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🧑‍🚀', s.p.x+s.p.w/2, s.p.y+s.p.h/2);
   ctx.fillStyle='#dfeaff'; ctx.font='bold 17px Nunito'; ctx.textAlign='left';
-  ctx.fillText('🛸 Sneak to the 🚪 back door!   ❤️ '+Math.max(0,Game.disasterLives), 14, 28);
+  const tip = s.coop ? (friendInShip?'🤝 Tap your friend to escape together!':'🛸 Reach the 🚪 door — or tap a trapped friend!') : '🛸 Sneak to the 🚪 back door!';
+  ctx.fillText(tip+'   ❤️ '+Math.max(0,Game.disasterLives), 14, 28);
   if(s.spotted){ ctx.fillStyle='rgba(255,70,70,.95)'; ctx.textAlign='center'; ctx.font='bold 20px Nunito'; ctx.fillText('❗ SPOTTED — RUN!', W/2, 30); }
 }
 

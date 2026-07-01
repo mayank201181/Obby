@@ -58,6 +58,8 @@ const CREATURES = [
   { id:'hedgehog',name:'Hedgehog',  emoji:'🦔', rarity:'basic', abilities:['speed1'], sell:30 },
   { id:'puppy',   name:'Puppy',     emoji:'🐶', rarity:'basic', abilities:['speed1'], sell:30 },
   { id:'bee',     name:'Bee',       emoji:'🐝', rarity:'basic', abilities:['glide'],  sell:30 },
+  { id:'duck',    name:'Duck',      emoji:'🦆', rarity:'basic', abilities:['glide'],  sell:30 },
+  { id:'ladybug', name:'Ladybug',   emoji:'🐞', rarity:'basic', abilities:['speed1'], sell:30 },
   // rare — sell 70
   { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['hop','speed1'], sell:70 },
   { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'], sell:70 },
@@ -66,6 +68,8 @@ const CREATURES = [
   { id:'penguin', name:'Penguin',   emoji:'🐧', rarity:'rare', abilities:['glide','speed1'], sell:70 },
   { id:'otter',   name:'Otter',     emoji:'🦦', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'koala',   name:'Koala',     emoji:'🐨', rarity:'rare', abilities:['glide'],  sell:70 },
+  { id:'squirrel',name:'Squirrel',  emoji:'🐿️', rarity:'rare', abilities:['speed1'], sell:70 },
+  { id:'crab',    name:'Crab',      emoji:'🦀', rarity:'rare', abilities:['autoshield'], sell:70 },
   // super rare — sell 120
   { id:'wolf',    name:'Wolf',      emoji:'🐺', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
@@ -74,6 +78,8 @@ const CREATURES = [
   { id:'hyena',   name:'Hyena',     emoji:'🐆', rarity:'superRare', abilities:['poop','highJump'], group:'troll', sell:120 },
   { id:'kangaroo',name:'Kangaroo',  emoji:'🦘', rarity:'superRare', abilities:['highJump'], sell:120 },
   { id:'bear',    name:'Bear',      emoji:'🐻', rarity:'superRare', abilities:['speed2'], sell:120 },
+  { id:'peacock', name:'Peacock',   emoji:'🦚', rarity:'superRare', abilities:['glide','speed1'], sell:120 },
+  { id:'boar',    name:'Boar',      emoji:'🐗', rarity:'superRare', abilities:['speed2'], sell:120 },
   // legendary — sell 200
   { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
@@ -81,6 +87,8 @@ const CREATURES = [
   { id:'monkey',  name:'Monkey',    emoji:'🐵', rarity:'legendary', abilities:['banana'], group:'troll', sell:200 },
   { id:'panda',   name:'Panda',     emoji:'🐼', rarity:'legendary', abilities:['autoshield','speed1'], sell:200 },
   { id:'rhino',   name:'Rhino',     emoji:'🦏', rarity:'legendary', abilities:['speed2'], sell:200 },
+  { id:'gorilla', name:'Gorilla',   emoji:'🦍', rarity:'legendary', abilities:['speed2','highJump'], sell:200 },
+  { id:'zebra',   name:'Zebra',     emoji:'🦓', rarity:'legendary', abilities:['highJump','speed1'], sell:200 },
   // mythical — sell 320
   { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['savefall','glideStrong'], sell:320 },
   { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
@@ -88,6 +96,7 @@ const CREATURES = [
   { id:'pegasus', name:'Pegasus',   emoji:'🐴', rarity:'mythical', abilities:['cloudjump','doubleJump'],   sell:320 },
   { id:'swan',    name:'Swan',      emoji:'🦢', rarity:'mythical', abilities:['glideStrong','doubleJump'], sell:320 },
   { id:'narwhal', name:'Narwhal',   emoji:'🦭', rarity:'mythical', abilities:['highJump','glide'],         sell:320 },
+  { id:'whale',   name:'Whale',     emoji:'🐋', rarity:'mythical', abilities:['glideStrong','highJump'],   sell:320 },
   // secret — sell 700 (the rarest!)
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['flight','tripleJump'],   sell:700 },
   { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['firebreath','tripleJump'],sell:700 },
@@ -336,7 +345,7 @@ function sellDuplicate(id){
 }
 
 function equipPet(id){
-  if(!ownsPet(id)) return false;
+  if(!ownsPet(id) && !isShiny(id)) return false;   // a shiny-only copy counts too
   SAVE.equippedPet = (SAVE.equippedPet===id) ? null : id;  // tap again to unequip
   persist();
   return true;

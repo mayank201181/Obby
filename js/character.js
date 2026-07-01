@@ -151,6 +151,53 @@ function drawFace(ctx,w,h,face,facing){
     // wide cheeky closed-mouth grin
     ctx.lineWidth=Math.max(2.5,w*0.04);ctx.strokeStyle='#3a3050';
     ctx.beginPath();ctx.arc(0,h*0.0,w*0.27,Math.PI*0.13,Math.PI*0.87);ctx.stroke();
+  }else if(face==='shades'){
+    // round retro sunglasses + big grin
+    ctx.fillStyle='#20203a';
+    ctx.beginPath();ctx.arc(-ex,ey,er*1.05,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc( ex,ey,er*1.05,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#20203a';ctx.lineWidth=Math.max(2,w*0.035);
+    ctx.beginPath();ctx.moveTo(-ex+er*1.0,ey);ctx.lineTo(ex-er*1.0,ey);ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    ctx.beginPath();ctx.arc(-ex-er*0.3,ey-er*0.3,er*0.24,0,6.28);ctx.fill();
+    ctx.beginPath();ctx.arc( ex-er*0.3,ey-er*0.3,er*0.24,0,6.28);ctx.fill();
+    smile(ctx,w,h,true);
+  }else if(face==='derp'){
+    // googly, uneven eyes looking different ways + tongue poking out
+    ctx.fillStyle='#fff';ctx.strokeStyle='#3a3050';ctx.lineWidth=Math.max(1.5,w*0.02);
+    ctx.beginPath();ctx.arc(-ex,ey,er*1.25,0,6.28);ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.arc( ex,ey-er*0.25,er*0.95,0,6.28);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#3a3050';
+    ctx.beginPath();ctx.arc(-ex+er*0.55,ey+er*0.5,er*0.45,0,6.28);ctx.fill();
+    ctx.beginPath();ctx.arc( ex-er*0.4,ey-er*0.6,er*0.4,0,6.28);ctx.fill();
+    ctx.fillStyle='#ff8fae';
+    ctx.beginPath();ctx.roundRect(-w*0.06,h*0.09,w*0.12,h*0.13,w*0.05);ctx.fill();
+  }else if(face==='moustache'){
+    eye(ctx,-ex,ey,er,pup);eye(ctx,ex,ey,er,pup);
+    ctx.fillStyle='#5a4636';
+    ctx.beginPath();
+    ctx.moveTo(0,h*0.10);
+    ctx.quadraticCurveTo(-w*0.16,h*0.02,-w*0.22,h*0.13);
+    ctx.quadraticCurveTo(-w*0.12,h*0.10,0,h*0.14);
+    ctx.quadraticCurveTo( w*0.12,h*0.10, w*0.22,h*0.13);
+    ctx.quadraticCurveTo( w*0.16,h*0.02,0,h*0.10);
+    ctx.fill();
+    smile(ctx,w,h);
+  }else if(face==='mrbean'){
+    // wonky raised eyebrows + suspicious side-eye + small pursed mouth
+    ctx.lineWidth=Math.max(2,w*0.03);ctx.strokeStyle='#3a3050';ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(-ex,ey-er*1.8,er*0.85,Math.PI*1.12,Math.PI*1.95);ctx.stroke();  // higher brow
+    ctx.beginPath();ctx.arc( ex,ey-er*1.25,er*0.85,Math.PI*1.08,Math.PI*1.9);ctx.stroke();   // lower brow
+    eye(ctx,-ex,ey,er*0.95,er*0.45);eye(ctx,ex,ey,er*0.95,er*0.45);                          // both peer sideways
+    ctx.lineWidth=Math.max(2,w*0.032);
+    ctx.beginPath();ctx.moveTo(-w*0.09,h*0.13);ctx.quadraticCurveTo(0,h*0.17,w*0.09,h*0.13);ctx.stroke();
+  }else if(face==='silly'){
+    // crossed-eyes + big goofy open grin + tongue
+    eye(ctx,-ex,ey,er*1.1,er*0.5);eye(ctx,ex,ey,er*1.1,-er*0.5);   // pupils cross toward the nose
+    ctx.fillStyle='#3a3050';
+    ctx.beginPath();ctx.arc(0,h*0.09,w*0.14,0,Math.PI);ctx.fill();  // open mouth
+    ctx.fillStyle='#ff8fae';
+    ctx.beginPath();ctx.arc(0,h*0.16,w*0.07,0,Math.PI);ctx.fill();  // tongue
   }else{
     eye(ctx,-ex,ey,er,pup);eye(ctx,ex,ey,er,pup);smile(ctx,w,h);
   }
