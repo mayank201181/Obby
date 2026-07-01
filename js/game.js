@@ -79,6 +79,7 @@ const POWER_META = {
   stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
   supernova: {emoji:'🌟', label:'SUPERNOVA', cd:9000},   // Starlight signature
   cloudjump: {emoji:'☁️', label:'CLOUD',  cd:4000},       // Pegasus (mythical)
+  hop:       {emoji:'🥕', label:'HOP',    cd:2200},       // Bunny (rare)
 };
 // animals the Alien can morph a target into (with the power it grants)
 const MORPH_ANIMALS = [
@@ -468,6 +469,11 @@ function usePower(power){
       p.invuln = Math.max(p.invuln, 300);
       for(let i=0;i<8;i++) Game.abilityFx.push({kind:'dust', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h, vx:(Math.random()*2-1)*2, vy:Math.random()*1.5, life:1, born:Game.t});
       SFX.jump(); if(typeof toast==='function') toast('☁️ Cloud Leap!'); break;
+    }
+    case 'hop': {                                         // 🥕 Bunny — springy mega hop + refill jumps
+      p.vy = -18.5; p.onGround=false; p.jumps=0; p.squash=-1.2;
+      for(let i=0;i<6;i++) Game.abilityFx.push({kind:'dust', x:p.x+p.w/2+(Math.random()*26-13), y:p.y+p.h, vx:(Math.random()*2-1)*1.8, vy:Math.random()*1.2, life:1, born:Game.t});
+      SFX.jump(); if(typeof toast==='function') toast('🐰 Mega Hop!'); break;
     }
     case 'polymorph': {                                   // 👽 morph a friend or the boss
       const target = pickMorphTarget();

@@ -27,6 +27,7 @@ const ABILITY_INFO = {
   savefall:   'Rescue! If you fall you pop back on your last platform',
   banana:     'Throw bananas (tap 🍌) at the boss & friends!',
   highJump:   'Jump much higher!',
+  hop:        '🐰 Mega Hop! Tap 🥕 to spring high into the air and refill your jumps',
   // ===== SECRET pet signature powers (one each, no repeats) =====
   polymorph:  '👽 Morph! Touch a friend or boss — turn them into ANY animal, face or accessory you own for the whole round!',
   firebreath: '🐉 Fire Breath! Blast a huge jet of fire that torches blocks & hammers the boss',
@@ -58,7 +59,7 @@ const CREATURES = [
   { id:'puppy',   name:'Puppy',     emoji:'🐶', rarity:'basic', abilities:['speed1'], sell:30 },
   { id:'bee',     name:'Bee',       emoji:'🐝', rarity:'basic', abilities:['glide'],  sell:30 },
   // rare — sell 70
-  { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['speed1'], sell:70 },
+  { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['hop','speed1'], sell:70 },
   { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'cat',     name:'Cat',       emoji:'🐱', rarity:'rare', abilities:['glide'],  sell:70 },
   { id:'turtle',  name:'Turtle',    emoji:'🐢', rarity:'rare', abilities:['autoshield'], sell:70 },
@@ -442,7 +443,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','phase','teleport','grapple','flight','stomp','supernova','cloudjump'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','phase','teleport','grapple','flight','stomp','supernova','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)
