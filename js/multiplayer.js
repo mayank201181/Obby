@@ -206,6 +206,11 @@ function mpOnMessage(conn,msg){
       if(msg.target===MP.selfId && typeof onMorphedMe==='function') onMorphedMe(msg.emoji, msg.grant);
       break;
     }
+    case 'dbtn': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onButtonNet==='function') onButtonNet(msg.bId);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -305,6 +310,8 @@ function mpSendTagColor(color){ mpSend({t:'tcol', from:MP.selfId, color}); }
 function mpSendFreeze(){ mpSend({t:'freeze', from:MP.selfId}); }
 /* Alien: morph a specific friend into an animal (with/without its power) */
 function mpSendMorph(targetId, emoji, grant){ mpSend({t:'morph', from:MP.selfId, target:targetId, emoji, grant}); }
+/* Disaster: a button I pressed is shared with everyone */
+function mpSendButton(bId){ mpSend({t:'dbtn', from:MP.selfId, bId}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 

@@ -494,8 +494,9 @@ function update(dt){
 
   if(p.onGround) p.jumps=0;              // reset jump count when grounded
 
+  const beamed = Game.disaster && Game.dz && Game.dz.beamed;   // caught in an alien tractor beam
   const stunned = Game.t < (Game.stunUntil||0) || Game.moveLock;   // banana stun or seeker-blind
-  const dir = stunned ? 0 : Math.max(-1,Math.min(1,readInput()));
+  const dir = (stunned||beamed) ? 0 : Math.max(-1,Math.min(1,readInput()));
   // horizontal (pet speed boost) — ice makes you slip (low grip, slow stop)
   const dashing = Game.t < Game.power.dashUntil;
   const flying = Game.t < (Game.flyUntil||0);            // 🦄 rainbow flight / morphed eagle
@@ -520,10 +521,18 @@ function update(dt){
   // hold UP to keep soaring while flying
   if(flying && !stunned && (Game.keys['ArrowUp']||Game.keys[' ']||Game.keys['w'])) p.vy=Math.min(p.vy,-4);
 
-  // gravity (pet glide = slower fall; flight = gentle float)
-  const g = flying ? 0.14 : (p.vy>0) ? GRAV*Game.petFallMul : GRAV;
-  p.vy+=g; if(p.vy>MAXFALL)p.vy=MAXFALL;
-  if(flying && p.vy>4) p.vy=4;
+  if(beamed){
+    // pulled up under the UFO's beam (mash ◀▶ to fight it — handled in updateDisaster)
+    const a=Game.dz.beamAlien, bx=a?a.beamX:(p.x+p.w/2);
+    p.vx=(bx-(p.x+p.w/2))*0.22;
+    p.vy=-(2.6 + (Game.dz.levit||0)*5);
+    p.onGround=false;
+  } else {
+    // gravity (pet glide = slower fall; flight = gentle float)
+    const g = flying ? 0.14 : (p.vy>0) ? GRAV*Game.petFallMul : GRAV;
+    p.vy+=g; if(p.vy>MAXFALL)p.vy=MAXFALL;
+    if(flying && p.vy>4) p.vy=4;
+  }
 
   // integrate + collide
   const wasGround=p.onGround;
@@ -1417,12 +1426,13 @@ function endHeist(){
 }
 
 /* ===== NATURAL DISASTER SURVIVAL ===== */
-const DISASTERS = ['lava','meteor','tsunami','zombies'];
+const DISASTERS = ['lava','meteor','tsunami','zombies','aliens'];
 const DISASTER_INFO = {
   lava:    {name:'🌋 LAVA RISING', tip:'Get to high ground!'},
   meteor:  {name:'☄️ METEOR SHOWER', tip:'Dodge the meteors!'},
   tsunami: {name:'🌊 TSUNAMI', tip:'The wave roams everywhere — dodge it!'},
   zombies: {name:'🧟 ZOMBIES', tip:"It's tag — don't get caught!"},
+  aliens:  {name:'👽 ALIEN INVASION', tip:'Dodge the beams — mash ◀▶ to break free!'},
 };
 /* place a built platform at a world position (during disaster mode) */
 function placeBuild(wx, wy){
@@ -1464,9 +1474,11 @@ function beginDisasterSegment(){
   const H=Game.world.height, W=Game.world.width, t=Game.disasterType;
   Game.dz={ startT:Game.t, dur:DISASTER_SEG_MS, lavaY:H+40, meteors:[],
     waveBX:W/2, waveBY:200, wtx:W/2, wty:200, wr:140,   // roaming tsunami orb (big)
-    zombies:[], lastSpawn:0 };
+    zombies:[], aliens:[], beamed:false, levit:0, lastInputDir:0, lastSpawn:0 };
   if(t==='zombies'){ Game.dz.maxChasers = 2+Math.floor(Math.random()*2);   // only 2-3 ever chase you
     for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:i<Game.dz.maxChasers, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
+  if(t==='aliens'){   // lots of UFOs prowling near the player, firing tractor beams
+    for(let i=0;i<5;i++) Game.dz.aliens.push({ x:120+Math.random()*(W-240), y:0, vx:(Math.random()<0.5?-1:1)*(1.3+Math.random()*1.1), beaming:false, beamT:Game.t+Math.random()*1800, beamUntil:0, beamX:0 }); }
   if(typeof toast==='function') toast(DISASTER_INFO[t].name+' — '+DISASTER_INFO[t].tip);
   SFX.hit(); addShake(6);
 }
@@ -1487,16 +1499,27 @@ function disasterHit(knockUp){
   if(typeof toast==='function') toast('💥 Hit! ❤️ '+Math.max(0,Game.disasterLives)+' left');
   if(Game.disasterLives<=0) endDisaster(false);
 }
+const DISASTER_BUTTONS = 20;
 function checkDisasterButtons(){
   const p=Game.player;
   for(const c of Game.world.platforms){
     if(c.type!=='dbutton' || c.taken) continue;
     if(p.x<c.x+c.w && p.x+p.w>c.x && p.y<c.y+c.h && p.y+p.h>c.y){
       c.taken=true; Game.disasterButtons++; addCoins(5); SFX.coin();
-      if(typeof toast==='function') toast('🔘 Button '+Game.disasterButtons+'/10!  +5🪙');
-      if(Game.disasterButtons>=10){ if(typeof toast==='function') toast('🎉 All 10 buttons — YOU WIN!'); endDisaster(true); return; }
+      if(Game.multiplayer && typeof mpSendButton==='function') mpSendButton(c.bId);   // shared with friends
+      if(typeof toast==='function') toast('🔘 Button '+Game.disasterButtons+'/'+DISASTER_BUTTONS+'!  +5🪙');
+      if(Game.disasterButtons>=DISASTER_BUTTONS){ if(typeof toast==='function') toast('🎉 All buttons — YOU WIN!'); endDisaster(true); return; }
     }
   }
+}
+// a friend pressed a button — mark it done for me too (shared progress)
+function onButtonNet(bId){
+  if(!Game.disaster || !Game.world) return;
+  const c=Game.world.platforms.find(p=>p.type==='dbutton' && p.bId===bId);
+  if(!c || c.taken) return;
+  c.taken=true; Game.disasterButtons++;
+  if(typeof toast==='function') toast('🤝 Friend pressed a button! '+Game.disasterButtons+'/'+DISASTER_BUTTONS);
+  if(Game.disasterButtons>=DISASTER_BUTTONS && !Game.finished){ endDisaster(true); }
 }
 function updateDisaster(dt){
   const p=Game.player, W=Game.world.width, H=Game.world.height, dz=Game.dz, t=Game.disasterType;
@@ -1580,6 +1603,39 @@ function updateDisaster(dt){
       if(p.invuln<=0 && rectsOverlap(p.x,p.y,p.w,p.h, z.x,z.y,z.w,z.h)) disasterHit(false);
     }
   }
+  if(t==='aliens'){
+    const A=dz.aliens, topY=Game.cam.y - (Game.H/(2*((typeof gameScale==='function')?gameScale():1))) + 70;
+    // spawn more aliens over time — it gets crowded (hard!)
+    if(A.length<9 && Game.t-dz.lastSpawn>2600){ dz.lastSpawn=Game.t;
+      A.push({x:80+Math.random()*(W-160), y:topY, vx:(Math.random()<0.5?-1:1)*(1.5+Math.random()*1.4), beaming:false, beamT:Game.t+400, beamUntil:0, beamX:0}); }
+    for(const a of A){
+      a.y += (topY - a.y)*0.08;                     // hover near the top of the screen
+      if(!dz.beamed){ a.x += a.vx*escale;
+        if(a.x<70){a.x=70;a.vx=Math.abs(a.vx);} if(a.x>W-70){a.x=W-70;a.vx=-Math.abs(a.vx);} }
+      if(!a.beaming && Game.t>a.beamT && escale>0){ a.beaming=true; a.beamX=a.x; a.beamUntil=Game.t+2400; }
+      if(a.beaming && Game.t>a.beamUntil){ a.beaming=false; a.beamT=Game.t+1200+Math.random()*2200; }
+    }
+    if(!dz.beamed){
+      if(p.invuln<=0) for(const a of A){ if(!a.beaming) continue;
+        if(Math.abs((p.x+p.w/2)-a.beamX)<32 && (p.y+p.h)>a.y){ dz.beamed=true; dz.beamAlien=a; dz.levit=0; dz.lastInputDir=0;
+          if(typeof toast==='function') toast('🛸 Caught in a beam — mash ◀▶ to break free!'); SFX.hit(); break; } }
+    } else {
+      // levitating up toward the UFO — mash left/right to struggle down
+      const dir = (typeof readInput==='function') ? readInput() : 0;
+      if(dir!==0 && dz.lastInputDir!==0 && Math.sign(dir)!==Math.sign(dz.lastInputDir)) dz.levit -= 0.07;  // a mash!
+      if(dir!==0) dz.lastInputDir=Math.sign(dir);
+      dz.levit += 0.006;                             // steady pull upward
+      // friend rescue: a friend who touches you knocks you free
+      if(Game.multiplayer){
+        for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+          if(rectsOverlap(p.x-6,p.y-6,p.w+12,p.h+12, r.x,r.y,34,34)){ dz.beamed=false; p.vy=7;
+            if(typeof toast==='function') toast('🤝 A friend knocked you free!'); break; } }
+      }
+      if(dz.levit<=0){ dz.beamed=false; p.vy=8; if(typeof toast==='function') toast('🛸 Broke free!'); }
+      else if(dz.levit>=1){ dz.beamed=false; dz.levit=0; disasterHit(true);
+        if(typeof toast==='function') toast('👽 Abducted! Dropped back down…'); }
+    }
+  }
 }
 function endDisaster(survived){
   if(Game.disasterPhase==='over') return;
@@ -1623,6 +1679,23 @@ function drawDisaster(ctx){
       const flashing = z.flash && Game.t-z.flash<160;
       ctx.fillText(flashing?'💥':(frozen?'🧊':'🧟'), z.x+z.w/2, z.y+z.h/2);
     } }
+  if(t==='aliens' && dz.aliens){
+    const p=Game.player, bottom=Game.world.height+200;
+    for(const a of dz.aliens){
+      if(a.beaming){   // tractor beam column
+        const grd=ctx.createLinearGradient(0,a.y,0,bottom);
+        grd.addColorStop(0,'rgba(140,255,170,.5)'); grd.addColorStop(1,'rgba(140,255,170,0)');
+        ctx.fillStyle=grd; ctx.beginPath();
+        ctx.moveTo(a.beamX-14, a.y); ctx.lineTo(a.beamX+14, a.y);
+        ctx.lineTo(a.beamX+44, bottom); ctx.lineTo(a.beamX-44, bottom); ctx.closePath(); ctx.fill();
+      }
+      ctx.font='48px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🛸', a.x, a.y);
+    }
+    if(dz.beamed){   // struggle meter above the player
+      ctx.fillStyle='rgba(0,0,0,.35)'; roundRect(ctx, p.x-6, p.y-16, p.w+12, 7, 3); ctx.fill();
+      ctx.fillStyle='#8cffaa'; roundRect(ctx, p.x-6, p.y-16, (p.w+12)*Math.max(0,Math.min(1,dz.levit)), 7, 3); ctx.fill();
+    }
+  }
 }
 
 /* ===================== HIDE & SEEK / ROOM TAG ===================== */
@@ -2523,7 +2596,7 @@ function updateHudLive(){
     const left=Math.max(0, Math.ceil((Game.disasterPhaseT-Game.t)/1000));
     document.getElementById('hudCp').textContent = (Game.disasterPhase==='build'
         ? '🏗️ '+left+'s'
-        : '🔘 '+Game.disasterButtons+'/10 — press them all!');
+        : '🔘 '+Game.disasterButtons+'/'+DISASTER_BUTTONS+' — press them all!');
     const hp=document.getElementById('hudPower');
     if(hp){ hp.style.display='block'; hp.textContent='❤️ '+Math.max(0,Game.disasterLives); }
   } else if(Game.heist){
