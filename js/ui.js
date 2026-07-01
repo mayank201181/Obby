@@ -406,29 +406,67 @@ function refreshColorBar(){
 function ctPickColor(name){ if(typeof ctSetColor==='function') ctSetColor(name); }
 
 /* ---------------- Alien morph picker ---------------- */
-let pendingMorph=null, morphKeepPower=true;
+let pendingMorph=null, morphKeepPower=true, morphTab='animal', _morphAnimals=[];
 function openMorphPicker(target){
-  pendingMorph=target; morphKeepPower=true;
+  pendingMorph=target; morphKeepPower=true; morphTab='animal';
   Game.moveLock=true;                 // hold still while you choose
   renderMorphPicker(); openModal('morphModal');
 }
 function setMorphPower(keep){ morphKeepPower=!!keep; renderMorphPicker(); }
+function setMorphTab(t){ morphTab=t; renderMorphPicker(); }
+// the animals YOU own become morph choices (fall back to the classic set if you own none)
+function ownedMorphAnimals(){
+  const ids=Object.keys(SAVE.pets||{}).filter(id=>SAVE.pets[id]>0);
+  const list=ids.map(id=>{ const c=creatureById(id); return c?{emoji:c.emoji,name:c.name,power:'speed'}:null; }).filter(Boolean);
+  return list.length ? list : (typeof MORPH_ANIMALS!=='undefined'?MORPH_ANIMALS:[]);
+}
 function renderMorphPicker(){
   const body=document.getElementById('morphModalBody'); if(!body) return;
-  const tName = pendingMorph && pendingMorph.kind==='boss' ? 'the BOSS 👹' : ('your friend '+((pendingMorph&&pendingMorph.name)||''));
-  const grid = (typeof MORPH_ANIMALS!=='undefined'?MORPH_ANIMALS:[]).map((a,i)=>
-    `<button class="morph-pick" onclick="chooseMorph(${i})"><span class="mp-e">${a.emoji}</span><span class="mp-n">${a.name}</span><span class="mp-p">${a.power==='none'?'no power':'⚡'+a.power}</span></button>`).join('');
+  const isBoss = pendingMorph && pendingMorph.kind==='boss';
+  const tName = isBoss ? 'the BOSS 👹' : ('your friend '+((pendingMorph&&pendingMorph.name)||''));
+  const tab=isBoss?'animal':morphTab;
+  let inner='';
+  if(tab==='animal'){
+    _morphAnimals = ownedMorphAnimals();
+    const grid = _morphAnimals.map((a,i)=>
+      `<button class="morph-pick" onclick="chooseMorphAnimal(${i})"><span class="mp-e">${a.emoji}</span><span class="mp-n">${a.name}</span><span class="mp-p">${(morphKeepPower&&a.power&&a.power!=='none')?'⚡'+a.power:'no power'}</span></button>`).join('');
+    inner = `<div class="row" style="justify-content:center">
+        <button class="btn ${morphKeepPower?'pink':'ghost'} small" onclick="setMorphPower(true)">✨ With power</button>
+        <button class="btn ${!morphKeepPower?'pink':'ghost'} small" onclick="setMorphPower(false)">🚫 No power</button>
+      </div><div class="morph-grid">${grid||'<p class="muted">No animals owned yet!</p>'}</div>`;
+  } else if(tab==='face'){
+    const faces=(SAVE.ownedFaces||[]).map(id=>faceById(id)).filter(Boolean);
+    inner = `<div class="morph-grid">${faces.map(f=>
+      `<button class="morph-pick" onclick="chooseMorphFace('${f.id}')"><span class="mp-e">😊</span><span class="mp-n">${f.label}</span></button>`).join('')||'<p class="muted">No faces owned yet!</p>'}</div>`;
+  } else {
+    const accs=(SAVE.ownedAccessories||[]).map(id=>accById(id)).filter(a=>a&&a.id!=='none');
+    inner = `<div class="morph-grid">${accs.map(a=>
+      `<button class="morph-pick" onclick="chooseMorphAcc('${a.id}')"><span class="mp-e">${a.emoji}</span><span class="mp-n">${a.label}</span></button>`).join('')||'<p class="muted">No accessories owned yet!</p>'}</div>`;
+  }
+  const tabs = isBoss ? '' : `<div class="row" style="justify-content:center;gap:6px;margin-bottom:4px">
+      <button class="btn ${tab==='animal'?'blue':'ghost'} small" onclick="setMorphTab('animal')">🐾 Animal</button>
+      <button class="btn ${tab==='face'?'blue':'ghost'} small" onclick="setMorphTab('face')">😊 Face</button>
+      <button class="btn ${tab==='acc'?'blue':'ghost'} small" onclick="setMorphTab('acc')">🎀 Accessory</button>
+    </div>`;
   body.innerHTML = `<h2 style="margin:2px 0">👽 Morph ${tName}</h2>
-    <p class="hint">Pick an animal — and choose if they keep its power!</p>
-    <div class="row" style="justify-content:center">
-      <button class="btn ${morphKeepPower?'pink':'ghost'} small" onclick="setMorphPower(true)">✨ With power</button>
-      <button class="btn ${!morphKeepPower?'pink':'ghost'} small" onclick="setMorphPower(false)">🚫 No power</button>
-    </div>
-    <div class="morph-grid">${grid}</div>
+    <p class="hint">${isBoss?'Turn the boss into a harmless animal!':'Turn them into any animal, face or accessory you own — it lasts the whole round!'}</p>
+    ${tabs}${inner}
     <button class="btn ghost" onclick="closeMorphPicker()">Cancel</button>`;
 }
-function chooseMorph(i){
-  if(pendingMorph && typeof applyMorph==='function') applyMorph(pendingMorph, i, morphKeepPower);
+function chooseMorphAnimal(i){
+  const a=_morphAnimals[i]; if(!a){ closeMorphPicker(); return; }
+  const grant = (morphKeepPower && a.power) ? a.power : 'none';
+  if(pendingMorph && typeof applyMorph==='function') applyMorph(pendingMorph, {type:'animal', emoji:a.emoji, name:a.name, power:grant, grant});
+  closeMorphPicker();
+}
+function chooseMorphFace(id){
+  const f=faceById(id);
+  if(pendingMorph && typeof applyMorph==='function') applyMorph(pendingMorph, {type:'face', face:id, label:(f&&f.label)||'face'});
+  closeMorphPicker();
+}
+function chooseMorphAcc(id){
+  const a=accById(id);
+  if(pendingMorph && typeof applyMorph==='function') applyMorph(pendingMorph, {type:'acc', acc:id, label:(a&&a.label)||'accessory'});
   closeMorphPicker();
 }
 function closeMorphPicker(){ pendingMorph=null; Game.moveLock=false; closeModal('morphModal'); }
@@ -555,6 +593,7 @@ function wireRoomCallbacks(){
   MP.onRosterChange=refreshRoster;
   MP.onPeerLeft=()=>{ toast('A player left'); refreshRoster(); };
   MP.onStart=(config)=>{
+    closeModal('winModal');                 // in case we're restarting from the win screen
     Game.onLevelComplete=onLevelComplete;
     Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
     startGame({level:config.level, seed:config.seed, mode:config.mode, arena:config.arena, disasterType:config.disasterType,
@@ -645,6 +684,18 @@ function hostStart(){
   if(pendingRoomMode==='tower' || pendingRoomMode==='heist') cfg.difficulty='easy';  // no cannons
   mpStart(cfg);
 }
+// restart the SAME multiplayer room in the SAME mode (no need to make a new room)
+function mpPlayAgain(){
+  if(!MP.isHost){ toast('⏳ Waiting for the host to start the next round…'); return; }
+  const prev = MP.startConfig || {};
+  const cfg = Object.assign({}, prev, { seed:Math.floor(Math.random()*1e6), level:1 });
+  if(prev.disasterType){   // re-roll the disaster so it's a fresh one each round
+    const pool = (mpPlayerCount()>1) ? DISASTERS.concat(['killer']) : DISASTERS;
+    cfg.disasterType = pool[Math.floor(Math.random()*pool.length)];
+  }
+  SFX.click(); closeModal('winModal');
+  mpStart(cfg);
+}
 function leaveRoom(){
   mpLeave();
   showScreen('playScreen');
@@ -722,7 +773,7 @@ function onLevelComplete(level, earned, isFinal, res){
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
-    ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+    ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
     : (isColorTag
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
                   : `<button class="btn gold" onclick="startColorTag('${res.arena||'room'}','${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
@@ -1288,18 +1339,26 @@ function renderCollectionTab(body){
       ${btn}</div>`;
   }).join('');
   html+=`<p class="hint">Equipped: ${eq?eq.emoji+' '+eq.name:'none'}</p>`;
+  const petCellHtml=(c, rc)=>{
+    const owns=ownsPet(c.id)||isShiny(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
+    const shiny=isShiny(c.id); const lvl=owns?petLevel(c.id):1;
+    return `<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''} ${shiny?'shiny':''}" style="--rc:${rc}" onclick="${owns?`showPetActions('${c.id}')`:''}">
+      <div class="pet-emoji">${owns?c.emoji:'❓'}${shiny?'<span class="shiny-star">🌟</span>':''}</div>
+      <div class="pet-name">${owns?c.name:'???'}</div>
+      ${owns?`<span class="lvl-badge">L${lvl}</span>`:''}
+      ${owns&&n>1?`<span class="count-badge">x${n}</span>`:''}
+      ${eqd?`<span class="eq-badge">✓</span>`:''}</div>`;
+  };
+  // 😜 Troll pets — a special cross-rarity section for prank animals
+  const trolls = (typeof creaturesOfGroup==='function') ? creaturesOfGroup('troll') : [];
+  if(trolls.length){
+    html+=`<div class="rar-head" style="color:#8ad06b">😜 Troll — prank your friends & the boss!</div><div class="pet-grid">`;
+    for(const c of trolls) html+=petCellHtml(c, RARITY_INFO[c.rarity].color);
+    html+=`</div>`;
+  }
   for(const r of RARITIES){
     html+=`<div class="rar-head" style="color:${RARITY_INFO[r].color}">${RARITY_INFO[r].label}</div><div class="pet-grid">`;
-    for(const c of creaturesOfRarity(r)){
-      const owns=ownsPet(c.id)||isShiny(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
-      const shiny=isShiny(c.id); const lvl=owns?petLevel(c.id):1;
-      html+=`<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''} ${shiny?'shiny':''}" style="--rc:${RARITY_INFO[r].color}" onclick="${owns?`showPetActions('${c.id}')`:''}">
-        <div class="pet-emoji">${owns?c.emoji:'❓'}${shiny?'<span class="shiny-star">🌟</span>':''}</div>
-        <div class="pet-name">${owns?c.name:'???'}</div>
-        ${owns?`<span class="lvl-badge">L${lvl}</span>`:''}
-        ${owns&&n>1?`<span class="count-badge">x${n}</span>`:''}
-        ${eqd?`<span class="eq-badge">✓</span>`:''}</div>`;
-    }
+    for(const c of creaturesOfRarity(r)) html+=petCellHtml(c, RARITY_INFO[r].color);
     html+=`</div>`;
   }
   body.innerHTML=html;

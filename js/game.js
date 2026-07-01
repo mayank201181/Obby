@@ -41,6 +41,8 @@ const Game = {
   // equipped-pet ability effects:
   petMoveMul:1, petJumpMul:1, petFallMul:1, petMaxJumps:1, petCanPlatform:false,
   petSaveFall:false, petBanana:false, petMagnet:false, petAutoShield:false,
+  petCanPoop:false, petGlow:false,   // Hyena poop troll + Starlight glow
+  poops:[], floatUntil:0,       // dropped poop piles + Pegasus cloud-leap float
   bananas:[], lastSafe:null,    // Monkey banana projectiles + Phoenix last-platform rescue
   stunUntil:0,                  // hit by a friend's banana -> can't move for a bit
   placedPlatforms:[],           // platforms spawned by the 'platform' pet ability
@@ -63,18 +65,20 @@ const Game = {
   fire:[],                             // Dragon fire-breath projectiles
   morph:null, morphPower:'none', morphUntil:0,   // my own transformed animal (set by an Alien)
   morphMoveMul:1, morphJumpMul:1, morphFly:false,
+  faceMorph:null, accMorph:null, morphRound:false,  // Alien can also swap my face/accessory for the round
 };
 // SECRET pet signature powers — button emoji/label + cooldown (ms)
 const POWER_META = {
   polymorph: {emoji:'👽', label:'MORPH',  cd:6000},
   firebreath:{emoji:'🔥', label:'FIRE',   cd:2600},
-  freeze:    {emoji:'🧊', label:'FREEZE',  cd:9000},
+  freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   teleport:  {emoji:'🌈', label:'BLINK',  cd:1600},
   grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
   flight:    {emoji:'🦄', label:'FLY',    cd:11000},
   stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
-  slowtime:  {emoji:'🌟', label:'SLOW',   cd:10000},
+  supernova: {emoji:'🌟', label:'SUPERNOVA', cd:9000},   // Starlight signature
+  cloudjump: {emoji:'☁️', label:'CLOUD',  cd:4000},       // Pegasus (mythical)
 };
 // animals the Alien can morph a target into (with the power it grants)
 const MORPH_ANIMALS = [
@@ -100,13 +104,15 @@ function applyEquippedPet(){
   Game.petMaxJumps=a.maxJumps; Game.petCanPlatform=a.canPlatform;
   Game.petSaveFall=!!a.canSaveFall; Game.petBanana=!!a.canBanana;
   Game.petMagnet=!!a.canMagnet; Game.petAutoShield=!!a.canShield;
+  Game.petCanPoop=!!a.canPoop; Game.petGlow=!!a.glow;
   Game.petPower = a.power || null;
   const btn=document.getElementById('abilityBtn');
   if(btn){
     const pm = Game.petPower && POWER_META[Game.petPower];
-    btn.style.display = (a.canPlatform || a.canBanana || pm) ? 'flex' : 'none';
+    btn.style.display = (a.canPlatform || a.canBanana || a.canPoop || pm) ? 'flex' : 'none';
     btn.innerHTML = pm ? `${pm.emoji}<br><span style="font-size:10px">${pm.label}</span>`
                   : a.canBanana ? '🍌<br><span style="font-size:10px">THROW</span>'
+                  : a.canPoop ? '💩<br><span style="font-size:10px">POOP</span>'
                                 : '✨<br><span style="font-size:10px">PLATFORM</span>';
   }
 }
@@ -235,10 +241,11 @@ function loadLevel(level){
     onGround:false, squash:0, cp:0, respawnX:st.x, respawnY:st.y-22, invuln:0, jumps:0,
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
-  Game.bananas=[]; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
+  Game.bananas=[]; Game.poops=[]; Game.floatUntil=0; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
   Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.freezeEnemiesUntil=0;
   Game.slowWorldUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
   Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
+  Game.faceMorph=null; Game.accMorph=null; Game.morphRound=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
   Game.power={magnetUntil:0, dashUntil:0, shield:false, slowUntil:0, x2Until:0, ghostUntil:0};
   Game.bossShots=[]; Game.activeBoss=null;
@@ -313,10 +320,14 @@ function triggerAbility(){
   if(Game.petPower){ usePower(Game.petPower); return; }   // SECRET pet signature power
   if(Game.t < Game.platformCdUntil) return;        // shared cooldown
   const p=Game.player;
-  if(Game.petBanana){                              // Monkey: lob a banana forward
+  if(Game.petBanana){                              // Monkey: lob a banana forward (3s cooldown)
     Game.bananas.push({ x:p.x+p.w/2, y:p.y+p.h/2, vx:p.facing*9, vy:-6, r:11, born:Game.t });
-    Game.platformCdUntil = Game.t + 500;
+    Game.platformCdUntil = Game.t + 3000;
     SFX.jump();
+    return;
+  }
+  if(Game.petCanPoop){                             // Hyena: drop a stinky pile that freezes friends
+    dropPoop();
     return;
   }
   if(Game.petCanPlatform){
@@ -341,8 +352,45 @@ function throwBananaAt(screenX, screenY){
   const SP=15;
   Game.bananas.push({ x:ox, y:oy, vx:dx/d*SP, vy:dy/d*SP, r:11, born:Game.t, aimed:true });
   p.facing = dx>=0?1:-1;
-  Game.platformCdUntil = Game.t + 350;
+  Game.platformCdUntil = Game.t + 3000;      // Monkey banana — 3s cooldown
   SFX.jump();
+}
+/* Hyena: drop a poop pile at your feet; anyone who steps in it freezes 3s */
+function dropPoop(){
+  if(Game.t < Game.platformCdUntil) return;
+  const p=Game.player;
+  const poop={ x:p.x+p.w/2-13, y:p.y+p.h-8, w:26, h:16, born:Game.t, owner:MP.selfId||'me' };
+  Game.poops.push(poop);
+  if(Game.poops.length>40) Game.poops.shift();
+  Game.platformCdUntil = Game.t + 1200;
+  if(Game.multiplayer && typeof mpSendPoop==='function') mpSendPoop({x:poop.x, y:poop.y});
+  SFX.click(); if(typeof toast==='function') toast('💩 Plop! Watch them step in it…');
+}
+/* a friend dropped a poop (multiplayer) */
+function onPoopNet(d){
+  if(!d) return;
+  Game.poops.push({ x:d.x, y:d.y, w:26, h:16, born:Game.t, owner:'friend' });
+  if(Game.poops.length>40) Game.poops.shift();
+}
+/* step-in-poop checks: freeze whoever walks over someone else's pile */
+function updatePoops(){
+  if(!Game.poops || !Game.poops.length) return;
+  const p=Game.player, me=MP.selfId||'me';
+  for(let i=Game.poops.length-1;i>=0;i--){ const g=Game.poops[i];
+    if(Game.t-g.born > 14000){ Game.poops.splice(i,1); continue; }   // dries up
+    const feetY=p.y+p.h;
+    const overP = p.x+p.w>g.x && p.x<g.x+g.w && feetY>=g.y-6 && feetY<=g.y+g.h+10;
+    if(overP && g.owner!==me && Game.t-g.born>250 && Game.t>=(Game.stunUntil||0)-100 && !g._hitMe){
+      g._hitMe=true; Game.stunUntil=Math.max(Game.stunUntil||0, Game.t+3000);
+      SFX.hit(); addShake(2); if(typeof toast==='function') toast('💩 Ew! Frozen for 3s!');
+    }
+    // in solo modes, poop also freezes the AI bot & disaster zombies that walk over it
+    const a=Game.ai;
+    if(a && a.x+a.w>g.x && a.x<g.x+g.w && (a.y+a.h)>=g.y-6 && (a.y+a.h)<=g.y+g.h+12){
+      a.frozenUntil=Math.max(a.frozenUntil||0, Game.t+3000); }
+    if(Game.dz && Game.dz.zombies){ for(const z of Game.dz.zombies){
+      if(z.x+z.w>g.x && z.x<g.x+g.w && (z.y+z.h)>=g.y-6 && (z.y+z.h)<=g.y+g.h+12) z.frozenUntil=Math.max(z.frozenUntil||0, Game.t+3000); } }
+  }
 }
 
 /* ==================== SECRET pet signature powers ==================== */
@@ -395,6 +443,32 @@ function usePower(power){
       for(let i=0;i<14;i++){ const a=i/14*Math.PI*2; Game.abilityFx.push({kind:'dust', x:cx+Math.cos(a)*24, y:cy, vx:Math.cos(a)*3, vy:-Math.random()*1.5, life:1, born:Game.t}); }
       if(typeof toast==='function') toast('🦕 MEGA STOMP!'); break;
     }
+    case 'supernova': {                                   // 🌟 Starlight — huge starburst
+      addShake(12); SFX.rare(); p.invuln = Math.max(p.invuln, 2500);
+      p.vy = -14; p.onGround=false; p.jumps=0;             // launch skyward
+      const cx=p.x+p.w/2, cy=p.y+p.h/2, R=240;
+      Game.freezeEnemiesUntil = Math.max(Game.freezeEnemiesUntil||0, Game.t+2500);   // stun the world briefly
+      if(Game.dz){                                         // wipe nearby hazards
+        if(Game.dz.zombies) for(let i=Game.dz.zombies.length-1;i>=0;i--){ const z=Game.dz.zombies[i];
+          if(Math.hypot((z.x+z.w/2)-cx,(z.y+z.h/2)-cy)<R){ Game.dz.zombies.splice(i,1); } }
+        if(Game.dz.meteors) for(const m of Game.dz.meteors){ if(Math.hypot(m.x-cx,m.y-cy)<R){ m.vy=-8; m.x+= (m.x<cx?-1:1)*6; } }
+      }
+      if(Game.bossShots) Game.bossShots=[];                // clear falling boss blocks
+      if(Game.activeBoss && !Game.activeBoss.defeated){ Game.activeBoss.stunUntil=Game.t+3000; }  // dazzle the boss
+      if(Game.multiplayer){                                // stun every nearby rival
+        for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+          if(Math.hypot((r.x+17)-cx,(r.y+17)-cy)<R+40 && typeof mpSendStun==='function') mpSendStun(r.id); } }
+      for(let i=0;i<26;i++){ const an=i/26*Math.PI*2, sp=3+Math.random()*3;
+        Game.abilityFx.push({kind:'star', x:cx, y:cy, vx:Math.cos(an)*sp, vy:Math.sin(an)*sp-1, life:1, born:Game.t}); }
+      if(typeof toast==='function') toast('🌟 SUPERNOVA!'); break;
+    }
+    case 'cloudjump': {                                   // ☁️ Pegasus — big leap + refill jumps + float
+      p.vy = -17; p.onGround=false; p.jumps=0; p.squash=-1.1;
+      Game.floatUntil = Game.t + 1200;                    // gentle float on the way down
+      p.invuln = Math.max(p.invuln, 300);
+      for(let i=0;i<8;i++) Game.abilityFx.push({kind:'dust', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h, vx:(Math.random()*2-1)*2, vy:Math.random()*1.5, life:1, born:Game.t});
+      SFX.jump(); if(typeof toast==='function') toast('☁️ Cloud Leap!'); break;
+    }
     case 'polymorph': {                                   // 👽 morph a friend or the boss
       const target = pickMorphTarget();
       if(!target){ Game.powerCdUntil = Game.t + 400;      // nothing near — refund most of the cd
@@ -418,29 +492,43 @@ function pickMorphTarget(){
   }
   return best;
 }
-// apply a chosen morph (called by the picker). animal={emoji,name,power}; keepPower=bool
-function applyMorph(target, animalIdx, keepPower){
-  const animal = MORPH_ANIMALS[animalIdx]; if(!animal) return;
-  const grant = keepPower ? animal.power : 'none';
+// apply a chosen morph (called by the picker).
+//   spec = {type:'animal',emoji,name,power} | {type:'face',face,label} | {type:'acc',acc,label}
+// The change lasts the WHOLE round.
+function applyMorph(target, spec){
+  if(!spec) return;
   if(target.kind==='boss'){
-    // a morphed boss is just a harmless animal — it stops dropping blocks entirely
-    if(Game.activeBoss){ Game.activeBoss.morph = animal.emoji; Game.activeBoss.tamed = true; }
+    // only an animal morph makes sense for the boss — it becomes a harmless critter
+    const emoji = spec.type==='animal' ? spec.emoji : '🐤';
+    const name  = spec.type==='animal' ? spec.name : 'critter';
+    if(Game.activeBoss){ Game.activeBoss.morph = emoji; Game.activeBoss.tamed = true; }
     Game.bossShots=[];                     // clear any blocks already falling
-    if(typeof toast==='function') toast('👽 Turned the boss into a harmless '+animal.name+'!');
+    if(typeof toast==='function') toast('👽 Turned the boss into a harmless '+name+'!');
   } else if(target.kind==='player'){
-    if(Game.multiplayer && typeof mpSendMorph==='function') mpSendMorph(target.id, animal.emoji, grant);
-    const r=MP.remote[target.id]; if(r){ r.morph=animal.emoji; }
-    if(typeof toast==='function') toast('👽 Morphed '+((target.name)||'your friend')+' into a '+animal.name+'!');
+    const payload = { emoji:spec.emoji||null, grant:spec.grant||'none', face:spec.face||null, acc:spec.acc||null, kind:spec.type };
+    if(Game.multiplayer && typeof mpSendMorph==='function') mpSendMorph(target.id, payload);
+    const r=MP.remote[target.id];
+    if(r){ if(spec.type==='animal') r.morph=spec.emoji;
+           else if(spec.type==='face') r.faceMorph=spec.face;
+           else if(spec.type==='acc') r.accMorph=spec.acc; }
+    const what = spec.type==='animal'?('a '+spec.name):spec.type==='face'?('the '+spec.label+' face'):('the '+spec.label);
+    if(typeof toast==='function') toast('👽 Morphed '+((target.name)||'your friend')+' into '+what+' for the round!');
   }
   SFX.rare();
 }
-// a friend morphed ME (multiplayer): change how I look + optionally my power
-function onMorphedMe(emoji, grant){
-  Game.morph = emoji;
-  Game.morphPower = grant;                 // 'speed'|'jump'|'fly'|'shield'|'none'
-  Game.morphUntil = Game.t + 15000;        // lasts 15s
-  applyMorphPower(grant);
-  if(typeof toast==='function') toast('✨ You were morphed into '+emoji+'!');
+// a friend morphed ME (multiplayer): change how I look for the round + optionally my power
+function onMorphedMe(payload){
+  const d = (typeof payload==='object' && payload) ? payload : {emoji:payload, grant:arguments[1], kind:'animal'};
+  Game.morphRound = true;
+  if(d.kind==='face'){ Game.faceMorph = d.face; if(typeof toast==='function') toast('✨ Your face was swapped for the round!'); }
+  else if(d.kind==='acc'){ Game.accMorph = d.acc; if(typeof toast==='function') toast('✨ Your accessory was swapped for the round!'); }
+  else {
+    Game.morph = d.emoji;
+    Game.morphPower = d.grant||'none';
+    Game.morphUntil = Game.t + 10000000;   // round-long
+    applyMorphPower(d.grant||'none');
+    if(typeof toast==='function') toast('✨ You were morphed into '+d.emoji+' for the round!');
+  }
 }
 function applyMorphPower(grant){
   // temporary stat tweaks from being morphed
@@ -457,8 +545,8 @@ function powerScale(){
   return 1;
 }
 function updatePowers(dt){
-  // a morph wears off after a while
-  if(Game.morph && Game.t>Game.morphUntil){
+  // a morph wears off after a while (unless it's a round-long Alien morph)
+  if(Game.morph && !Game.morphRound && Game.t>Game.morphUntil){
     Game.morph=null; Game.morphPower='none'; Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   }
   if(!Game.fire.length) return;
@@ -531,10 +619,12 @@ function update(dt){
     p.vy=-(2.6 + (Game.dz.levit||0)*5);
     p.onGround=false;
   } else {
-    // gravity (pet glide = slower fall; flight = gentle float)
-    const g = flying ? 0.14 : (p.vy>0) ? GRAV*Game.petFallMul : GRAV;
+    // gravity (pet glide = slower fall; flight = gentle float; Pegasus cloud-leap floats you down)
+    const floating = Game.t < (Game.floatUntil||0);
+    const g = flying ? 0.14 : (p.vy>0) ? GRAV*Game.petFallMul*(floating?0.35:1) : GRAV;
     p.vy+=g; if(p.vy>MAXFALL)p.vy=MAXFALL;
     if(flying && p.vy>4) p.vy=4;
+    if(floating && p.vy>3.2) p.vy=3.2;
   }
 
   // integrate + collide
@@ -562,6 +652,7 @@ function update(dt){
   updatePowers(dt);                     // secret-pet powers (fire, morph timers)
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
   if(Game.bananas.length) updateBananas();
+  if(Game.poops.length) updatePoops();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
   if(Game.disaster && !Game.finished){
     const drives = !Game.multiplayer || MP.isHost;   // host drives the shared disaster cycle
@@ -1292,7 +1383,36 @@ function drawAbilityFx(ctx){
   for(const f of Game.abilityFx){
     ctx.globalAlpha=Math.max(0,f.life)*0.7;
     if(f.kind==='dust'){ ctx.fillStyle='#e8dcc8'; ctx.beginPath(); ctx.arc(f.x,f.y,4*(1.4-f.life)+2,0,6.283); ctx.fill(); }
+    else if(f.kind==='star'){ ctx.font='14px serif'; ctx.textAlign='center'; ctx.fillText('🌟', f.x, f.y); }
     else { ctx.font='12px serif'; ctx.textAlign='center'; ctx.fillText('✨', f.x, f.y); }
+  }
+  ctx.globalAlpha=1;
+}
+/* Starlight passive: a soft, shimmering rainbow-star halo around the blob */
+function drawStarGlow(ctx, cx, cy){
+  const t=Game.t/1000, pulse=0.5+Math.sin(t*3)*0.12;
+  ctx.save();
+  const g=ctx.createRadialGradient(cx,cy,6,cx,cy,34);
+  const hue=(t*60)%360;
+  g.addColorStop(0, `hsla(${hue},100%,80%,${0.55*pulse})`);
+  g.addColorStop(0.6, `hsla(${(hue+60)%360},100%,72%,${0.28*pulse})`);
+  g.addColorStop(1, 'hsla(0,0%,100%,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,34,0,6.283); ctx.fill();
+  // a few twinkling stars orbiting
+  ctx.font='11px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let i=0;i<3;i++){ const a=t*2+i*2.09, rr=26+Math.sin(t*4+i)*3;
+    ctx.globalAlpha=0.7+Math.sin(t*6+i)*0.3;
+    ctx.fillText('✨', cx+Math.cos(a)*rr, cy+Math.sin(a)*rr); }
+  ctx.restore();
+}
+/* dropped poop piles (Hyena troll) */
+function drawPoops(ctx){
+  if(!Game.poops || !Game.poops.length) return;
+  ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const g of Game.poops){
+    const age=Game.t-g.born, fade=age>11000?Math.max(0,(14000-age)/3000):1;
+    ctx.globalAlpha=fade;
+    ctx.fillText('💩', g.x+g.w/2, g.y+g.h/2);
   }
   ctx.globalAlpha=1;
 }
@@ -1595,7 +1715,7 @@ function updateDisaster(dt){
     // so you can shake them with good movement & jumps
     const ZSPEED=(3.5+prog*0.7)*escale;   // frozen/slowed by Yeti/Starlight powers
     for(const z of dz.zombies){
-      if(escale===0){ continue; }         // 🧊 zombies frozen solid
+      if(escale===0 || Game.t < (z.frozenUntil||0)){ z.vx=0; continue; }   // 🧊 frozen (Yeti power or 💩 poop)
       let dir;
       if(z.chase){
         // not a perfect mirror — they react with a delay and sometimes guess wrong / juke
@@ -1666,12 +1786,16 @@ function updateDisaster(dt){
       if(!dz._sandToast || Game.t-dz._sandToast>2500){ dz._sandToast=Game.t; if(typeof toast==='function') toast('🌫️ Sand in your eyes!'); } }
   }
   if(t==='earthquake' && escale>0){
-    addShake(6 + prog*5);                       // the whole world rumbles
-    // periodic jolts shove you around so you slide/fall off the platforms
-    if(Game.t-dz.lastSpawn > Math.max(240, 560-prog*280)){ dz.lastSpawn=Game.t;
-      p.vx += (Math.random()<0.5?-1:1)*(6.5+prog*4.5);
-      if(p.onGround && Math.random()<0.55){ p.vy=-4.5; p.onGround=false; }   // bounced off your footing
-      SFX.hit();
+    addShake(8 + prog*6);                        // the whole world violently rumbles
+    // constant tremor: the ground you stand on keeps sliding you around
+    if(p.onGround){ dz.quakeDir = dz.quakeDir||1;
+      if(Math.random()<0.04) dz.quakeDir*=-1;
+      p.vx += dz.quakeDir*(1.2+prog*1.4); }       // steady drift toward the edges
+    // hard jolts buck you right off your footing
+    if(Game.t-dz.lastSpawn > Math.max(150, 460-prog*300)){ dz.lastSpawn=Game.t;
+      p.vx += (Math.random()<0.5?-1:1)*(10+prog*7);
+      p.vy = -6 - prog*2; p.onGround=false;        // the platform throws you up & off
+      addShake(6); SFX.hit();
     }
   }
 }
@@ -1859,7 +1983,7 @@ function setDisguise(kind){
 function stepAgent(a){
   const GRAV=0.86, MAXFALL=18;
   const sc=(typeof powerScale==='function')?powerScale():1;
-  if(sc===0){ a.frozen=true; return; }   // 🧊 the bot is frozen solid
+  if(sc===0 || Game.t < (a.frozenUntil||0)){ a.frozen=true; return; }   // 🧊 frozen (Yeti power or 💩 poop)
   a.frozen=false; a.speedScale=sc;
   const dx = (a.tx!=null?a.tx:a.x) - (a.x+a.w/2);
   const desired = Math.abs(dx)<6 ? 0 : (dx>0?1:-1);
@@ -2288,7 +2412,7 @@ function render(){
       } else {
         const rskin = Game.partnerColor || r.skin;
         ctx.save(); if(caught) ctx.globalAlpha=0.5;
-        drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t,
+        drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accMorph||r.accessory,face:r.faceMorph||r.face,facing:r.facing||1,t:Game.t,
                       petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
         ctx.restore();
         drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
@@ -2303,6 +2427,7 @@ function render(){
   // AI seeker / tagger
   if((Game.room||Game.colorTag) && Game.roomSolo) drawRoomAgent(ctx);
 
+  drawPoops(ctx);                          // stinky Hyena poop piles
   const p=Game.player;
   // visible pet-ability effects + cosmetic trail behind the player
   if(!Game.spectating){ drawAbilityFx(ctx); drawTrail(ctx, p); }
@@ -2329,10 +2454,11 @@ function render(){
     const mySkin = Game.myColor || SAVE.skin;
     const ghosting = Game.t < Game.power.ghostUntil;
     const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
+    if(Game.petGlow) drawStarGlow(ctx, p.x+p.w/2, p.y+p.h/2);   // Starlight pretty aura
     ctx.save();
     if(ghosting) ctx.globalAlpha=0.45;
     else if(blink) ctx.globalAlpha=0.4;
-    drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
+    drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:Game.accMorph||SAVE.accessory,face:Game.faceMorph||SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
                   petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');

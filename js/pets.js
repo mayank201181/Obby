@@ -28,15 +28,21 @@ const ABILITY_INFO = {
   banana:     'Throw bananas (tap 🍌) at the boss & friends!',
   highJump:   'Jump much higher!',
   // ===== SECRET pet signature powers (one each, no repeats) =====
-  polymorph:  '👽 Morph! Touch a friend or boss and turn them into ANY animal — with or without its power!',
-  firebreath: '🐉 Fire Breath! Blast a jet of fire that torches blocks & hammers the boss',
+  polymorph:  '👽 Morph! Touch a friend or boss — turn them into ANY animal, face or accessory you own for the whole round!',
+  firebreath: '🐉 Fire Breath! Blast a huge jet of fire that torches blocks & hammers the boss',
   freeze:     '🧊 Deep Freeze! Freeze every enemy, hazard & rival solid for a few seconds',
   phase:      '👻 Ghost Phase! Go invincible & drift through all hazards for a few seconds',
-  teleport:   '🌈 Blink! Instantly teleport forward through walls',
-  grapple:    '🦑 Tentacle! Fling up and reel yourself onto a high ledge',
-  flight:     '🦄 Rainbow Flight! Soar wherever you want, invincible, for a few seconds',
-  stomp:      '🦕 Mega Stomp! Crash down with a shockwave that stuns everyone near you',
-  slowtime:   '🌟 Star Time! Slow the whole world to a crawl while you zoom around',
+  teleport:   '🌈 Blink! Instantly teleport far forward through walls',
+  grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
+  flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for several seconds',
+  stomp:      '🦕 Mega Stomp! Crash down with a shockwave that flattens & stuns everyone near you',
+  supernova:  '🌟 SUPERNOVA! Erupt in starlight — stun every rival, wipe nearby hazards, tame the boss & launch skyward, invincible',
+  // ===== MYTHICAL activated power (strong, but below the secrets) =====
+  cloudjump:  '☁️ Cloud Leap! Launch high off a cloud and refill your jumps in mid-air',
+  // ===== TROLL powers =====
+  poop:       '💩 Poop! Drop a stinky pile (tap 💩) — anyone who steps in it is frozen for 3 seconds!',
+  // ===== passive glow =====
+  starglow:   '✨ Starglow: your blob shimmers with a gorgeous rainbow-star aura',
   coinmagnet: 'Coins are always pulled to you',
   autoshield: 'Start every level with a shield 🛡️',
 };
@@ -64,21 +70,21 @@ const CREATURES = [
   { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
   { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'raccoon', name:'Raccoon',   emoji:'🦝', rarity:'superRare', abilities:['coinmagnet','speed1'], sell:120 },
-  { id:'hyena',   name:'Hyena',     emoji:'🐆', rarity:'superRare', abilities:['highJump'], sell:120 },
+  { id:'hyena',   name:'Hyena',     emoji:'🐆', rarity:'superRare', abilities:['poop','highJump'], group:'troll', sell:120 },
   { id:'kangaroo',name:'Kangaroo',  emoji:'🦘', rarity:'superRare', abilities:['highJump'], sell:120 },
   { id:'bear',    name:'Bear',      emoji:'🐻', rarity:'superRare', abilities:['speed2'], sell:120 },
   // legendary — sell 200
   { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
   { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['glideStrong'], sell:200 },
-  { id:'monkey',  name:'Monkey',    emoji:'🐵', rarity:'legendary', abilities:['banana'], sell:200 },
+  { id:'monkey',  name:'Monkey',    emoji:'🐵', rarity:'legendary', abilities:['banana'], group:'troll', sell:200 },
   { id:'panda',   name:'Panda',     emoji:'🐼', rarity:'legendary', abilities:['autoshield','speed1'], sell:200 },
   { id:'rhino',   name:'Rhino',     emoji:'🦏', rarity:'legendary', abilities:['speed2'], sell:200 },
   // mythical — sell 320
   { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['savefall','glideStrong'], sell:320 },
   { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
   { id:'octopus', name:'Octopus',   emoji:'🐙', rarity:'mythical', abilities:['platform','speed1'], sell:320 },
-  { id:'pegasus', name:'Pegasus',   emoji:'🐴', rarity:'mythical', abilities:['doubleJump','speed2'],      sell:320 },
+  { id:'pegasus', name:'Pegasus',   emoji:'🐴', rarity:'mythical', abilities:['cloudjump','doubleJump'],   sell:320 },
   { id:'swan',    name:'Swan',      emoji:'🦢', rarity:'mythical', abilities:['glideStrong','doubleJump'], sell:320 },
   { id:'narwhal', name:'Narwhal',   emoji:'🦭', rarity:'mythical', abilities:['highJump','glide'],         sell:320 },
   // secret — sell 700 (the rarest!)
@@ -88,9 +94,9 @@ const CREATURES = [
   { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['grapple','speed2'],      sell:700 },
   { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['freeze','glideStrong'],  sell:700 },
   { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['phase','glide'],         sell:700 },
-  { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['polymorph','glide'],     sell:700 },
+  { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['polymorph','glide'], group:'troll', sell:700 },
   { id:'dino',    name:'Dino',      emoji:'🦕', rarity:'secret', abilities:['stomp','speed2'],        sell:700 },
-  { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['slowtime','highJump'],   sell:700 },
+  { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['supernova','starglow'], sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
@@ -432,11 +438,15 @@ function equippedAbilities(){
     canPlatform: set.has('platform'),
     canSaveFall: set.has('savefall'),
     canBanana:   set.has('banana'),
+    canPoop:     set.has('poop'),
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
-    power: ['polymorph','firebreath','freeze','phase','teleport','grapple','flight','stomp','slowtime'].find(pw=>set.has(pw)) || null,
+    glow:        set.has('starglow'),
+    power: ['polymorph','firebreath','freeze','phase','teleport','grapple','flight','stomp','supernova','cloudjump'].find(pw=>set.has(pw)) || null,
   };
 }
+// creatures tagged as trolls (shown in their own collection section)
+function creaturesOfGroup(g){ return CREATURES.filter(c=>c.group===g); }
 
 /* ---- trading by code (no server: a shareable code transfers a pet) ---- */
 function makeTradeCode(petId, toName){

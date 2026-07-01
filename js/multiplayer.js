@@ -202,8 +202,17 @@ function mpOnMessage(conn,msg){
     }
     case 'morph': {
       if(MP.isHost) mpRelay(conn,msg);
-      const rr=MP.remote[msg.target]; if(rr) rr.morph=msg.emoji;
-      if(msg.target===MP.selfId && typeof onMorphedMe==='function') onMorphedMe(msg.emoji, msg.grant);
+      const rr=MP.remote[msg.target];
+      if(rr){ if(msg.kind==='face') rr.faceMorph=msg.face;
+              else if(msg.kind==='acc') rr.accMorph=msg.acc;
+              else rr.morph=msg.emoji; }
+      if(msg.target===MP.selfId && typeof onMorphedMe==='function')
+        onMorphedMe({emoji:msg.emoji, grant:msg.grant, face:msg.face, acc:msg.acc, kind:msg.kind});
+      break;
+    }
+    case 'poop': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onPoopNet==='function') onPoopNet(msg.d);
       break;
     }
     case 'dbtn': {
@@ -318,8 +327,11 @@ function mpSendCaught(targetId){ mpSend({t:'caught', from:MP.selfId, target:targ
 function mpSendTagColor(color){ mpSend({t:'tcol', from:MP.selfId, color}); }
 /* Yeti: freeze every other player */
 function mpSendFreeze(){ mpSend({t:'freeze', from:MP.selfId}); }
-/* Alien: morph a specific friend into an animal (with/without its power) */
-function mpSendMorph(targetId, emoji, grant){ mpSend({t:'morph', from:MP.selfId, target:targetId, emoji, grant}); }
+/* Alien: morph a specific friend into an animal / face / accessory for the round */
+function mpSendMorph(targetId, d){ mpSend({t:'morph', from:MP.selfId, target:targetId,
+  emoji:d.emoji, grant:d.grant, face:d.face, acc:d.acc, kind:d.kind}); }
+/* Hyena: broadcast a dropped poop pile */
+function mpSendPoop(d){ mpSend({t:'poop', from:MP.selfId, d}); }
 /* Disaster: a button I pressed is shared with everyone */
 function mpSendButton(bId){ mpSend({t:'dbtn', from:MP.selfId, bId}); }
 /* Disaster: a platform I built is shared so friends can hide under it */
