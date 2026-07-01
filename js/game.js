@@ -339,7 +339,7 @@ function triggerAbility(){
     if(typeof toast==='function') toast('✨ Platform!');
   }
 }
-/* Monkey: tap anywhere on the arena to fling a banana straight at that spot */
+/* Monkey: tap anywhere on the arena to LOB a banana in an arc onto that spot */
 function throwBananaAt(screenX, screenY){
   if(!Game.running || !Game.petBanana) return;
   if(Game.t < Game.platformCdUntil) return;          // shared ability cooldown
@@ -349,9 +349,14 @@ function throwBananaAt(screenX, screenY){
   const wx=(screenX-Game.W/2)/s + Game.cam.x;         // tap point -> world coords
   const wy=(screenY-Game.H/2)/s + Game.cam.y;
   const ox=p.x+p.w/2, oy=p.y+p.h/2;
-  let dx=wx-ox, dy=wy-oy; const d=Math.hypot(dx,dy)||1;
-  const SP=15;
-  Game.bananas.push({ x:ox, y:oy, vx:dx/d*SP, vy:dy/d*SP, r:11, born:Game.t, aimed:true });
+  const dx=wx-ox, dy=wy-oy, dist=Math.hypot(dx,dy)||1;
+  // ballistic throw: pick a flight time from the distance, then solve for the
+  // launch velocity so the banana ARCS through the air and lands on the tap.
+  const g=0.5;                                        // matches the banana gravity
+  const N=Math.max(22, Math.min(78, Math.round(dist/7)));   // flight time (frames)
+  const vx=dx/N;
+  const vy=dy/N - 0.5*g*N;                            // rises, then falls onto the target
+  Game.bananas.push({ x:ox, y:oy, vx, vy, r:11, born:Game.t, g });
   p.facing = dx>=0?1:-1;
   Game.platformCdUntil = Game.t + 3000;      // Monkey banana — 3s cooldown
   SFX.jump();
@@ -764,7 +769,7 @@ function updateBananas(){
   const W=Game.world.width;
   for(let i=Game.bananas.length-1;i>=0;i--){
     const b=Game.bananas[i];
-    if(!b.aimed) b.vy+=0.5;            // tapped/aimed shots fly straight; button lobs arc
+    b.vy += (b.g||0.5);               // all bananas arc through the air (gravity)
     b.x+=b.vx; b.y+=b.vy;
     if(Game.t-b.born>3500 || b.x<-40 || b.x>W+40 || b.y>Game.world.height+200){ Game.bananas.splice(i,1); continue; }
     let hit=false;
