@@ -270,7 +270,7 @@ const CHESTS = {
   rare:      { label:'Rare Chest',      cost:250, emoji:'🎁',
     weights:{ basic:38, rare:34, superRare:18, legendary:7,  mythical:2.5,secret:0.5 } },
   legendary: { label:'Legendary Chest', cost:350, emoji:'🏆',
-    weights:{ basic:12, rare:24, superRare:28, legendary:21, mythical:11, secret:4 } },
+    weights:{ basic:0, rare:0, superRare:0, legendary:62, mythical:30, secret:8 } },
   // exclusive fixed-reward vault — guarantees a bundle (no random roll)
   gold:      { label:'Gold Vault', cost:10000, emoji:'🌟', exclusive:true,
     grants:{ pet:'unicorn', trail:'royal', skin:'rainbow' } },
