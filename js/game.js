@@ -1661,7 +1661,7 @@ function ctCallColor(){                 // AI (bot IT) auto-picks a random colou
   const cols=Game.world.colors||[]; if(!cols.length) return;
   const c=cols[Math.floor(Math.random()*cols.length)];
   Game.ct.color=c.name; Game.ct.colorHex=c.hex;
-  Game.ct.graceUntil=Game.t+4500; Game.ct.nextCallT=Game.t+8500; SFX.checkpoint();
+  Game.ct.graceUntil=Game.t+2800; Game.ct.nextCallT=Game.t+8500; SFX.checkpoint();
   if(typeof toast==='function') toast('🎨 Get on '+c.name.toUpperCase()+'!');
   if(typeof refreshColorBar==='function') refreshColorBar();
 }
@@ -1672,7 +1672,7 @@ function ctSetColor(name){
   if(!amIt) return;
   const c=(Game.world.colors||[]).find(k=>k.name===name); if(!c) return;
   Game.ct.color=c.name; Game.ct.colorHex=c.hex;
-  Game.ct.graceUntil=Game.t+4500; Game.ct.nextCallT=Game.t+1e12;   // no auto re-call — you choose
+  Game.ct.graceUntil=Game.t+2800; Game.ct.nextCallT=Game.t+1e12;   // no auto re-call — you choose
   SFX.checkpoint();
   if(typeof toast==='function') toast('🎨 You called '+name.toUpperCase()+'!');
   if(Game.multiplayer && typeof mpSendTagColor==='function') mpSendTagColor(c.name);
@@ -1714,10 +1714,12 @@ function updateColorTag(dt){
       let target=null, best=1e9;
       for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
         const d=Math.hypot((p.x)-(r.x),(p.y)-(r.y)); if(d<best){best=d;target=r;} }
-      if(ct.color && hunting && target && Game.t>ct.tagCd && rectsOverlap(p.x,p.y,p.w,p.h, target.x,target.y,34,34)){
+      const touching = target && Math.hypot((p.x+p.w/2)-(target.x+17),(p.y+p.h/2)-(target.y+17)) < 42;
+      if(ct.color && hunting && touching && Game.t>ct.tagCd){
         const tsafe = onColorPad(target.x,target.y,34,34, ct.color);
-        if(!tsafe){ ct.tagCd=Game.t+1500; mpSendIt(target.id); SFX.win();
-          if(typeof toast==='function') toast('🌈 Tagged '+(target.name||'a friend')+'! They\'re IT'); } }
+        if(!tsafe){ ct.tagCd=Game.t+1500; mpSendIt(target.id); SFX.win(); addShake(5);
+          if(typeof toast==='function') toast('🌈 Tagged '+(target.name||'a friend')+'! They\'re IT'); }
+        else if(typeof toast==='function') toast('🛡️ Safe — they\'re on '+ct.color.toUpperCase()+'!'); }
     }
     if(Game.t>=ct.endT) return endColorTag(MP.itId!==MP.selfId);
     return;
