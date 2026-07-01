@@ -595,13 +595,13 @@ function generateColorArena(seed, style){
     // a wide pad of every colour along the bottom so any colour is quick to reach
     for(let k=0;k<COLORS_TAG.length;k++)
       pad(clamp(30+k*((W-60)/COLORS_TAG.length),20,W-130), floorTop-26-rint(0,30), 100, 24, COLORS_TAG[k]);
-    // climb a zigzag of colour pads to the top (cycled so all colours appear up high)
-    let y=floorTop-20, prevX=W/2, ci=rint(0,6);
-    for(let i=0;i<28;i++){
-      y -= rint(84, 102);
-      const w=rint(120,148);
-      let dir=rnd()<0.5?-1:1, nx=prevX+dir*rint(50, 108);
-      if(nx<70||nx>W-70) nx=prevX-dir*rint(50,108);
+    // climb a zigzag of colour pads to the top — CLOSE steps so every one is an easy hop
+    let y=floorTop-16, prevX=W/2, ci=rint(0,6);
+    for(let i=0;i<36;i++){
+      y -= rint(76, 94);                       // small vertical rise (well under a jump)
+      const w=rint(128,152);                   // wide pads = easy to land on
+      let dir=rnd()<0.5?-1:1, nx=prevX+dir*rint(36, 82);   // short sideways step
+      if(nx<70||nx>W-70) nx=prevX-dir*rint(36,82);
       nx=clamp(nx,60,W-60-w);
       pad(nx, y, w, 24, COLORS_TAG[ci%COLORS_TAG.length]); ci++;
       prevX=nx+w/2;
@@ -609,15 +609,32 @@ function generateColorArena(seed, style){
     return { mode:'colortag', colortag:true, room:false, level:1, seed, width:W, height:H,
              platforms, checkpoints:[], hazards:[], start:{x:W/2, y:floorTop}, finishY:-1e9, colors:colorTagColors() };
   }
-  // 'room' — wide flat arena, big colour pads spread out
+  // 'room' — wide flat arena, big colour pads on the floor + reachable staircases up top
   const W=2200, H=560, floorTop=H-40;
   platforms.push({id:id++, x:0, y:floorTop, w:W, h:H, type:'big', room:true});
+  const placed=[]; const PAD=12;
+  const fits=(x,y,w,h)=>{ if(x<40||x+w>W-40) return false;
+    for(const r of placed){ if(x<r.x+r.w+PAD && x+w+PAD>r.x && y<r.y+r.h+PAD && y+h+PAD>r.y) return false; } return true; };
+  const cpad=(x,y,w,h,col)=>{ pad(x,y,w,h,col); placed.push({x,y,w,h}); };
+  // base row: two big pads of every colour spread across the floor
   const order=[]; for(let r=0;r<2;r++) for(const c of COLORS_TAG) order.push(c);
   for(let i=order.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); const t=order[i];order[i]=order[j];order[j]=t; }
   let x=150;
-  for(const c of order){ const w=rint(120,150); pad(x, floorTop-28, w, 28, c); x += w + rint(46, 96); if(x>W-180) break; }
-  for(let i=0;i<8;i++){ const c=COLORS_TAG[rint(0,COLORS_TAG.length-1)]; const w=rint(110,140);
-    pad(clamp(rint(170,W-220),60,W-60-w), floorTop-rint(118,300), w, 24, c); }
+  for(const c of order){ const w=rint(120,150); if(fits(x,floorTop-28,w,28)) cpad(x, floorTop-28, w, 28, c); x += w + rint(46, 96); if(x>W-180) break; }
+  // reachable staircases of colour pads climbing toward the top (close, easy hops)
+  const buildCStair=(px, lean, steps)=>{
+    let top=floorTop, ci=rint(0,6);
+    for(let s=0;s<steps;s++){
+      top -= rint(80, 98); if(top-24<40) break;
+      const w=rint(120,144);
+      let nx=clamp(px + lean*rint(38, 84), 40, W-40-w);
+      if(!fits(nx, top-24, w, 24)){ nx=clamp(px - lean*rint(38,84), 40, W-40-w); if(!fits(nx,top-24,w,24)) break; }
+      cpad(nx, top-24, w, 24, COLORS_TAG[ci%COLORS_TAG.length]); ci++;
+      px=nx+w/2;
+    }
+  };
+  for(let c=0;c<6;c++) buildCStair(rint(320,W-380), rnd()<0.5?1:-1, 5);   // tall towers to the top
+  for(let c=0;c<4;c++) buildCStair(rint(260,W-320), rnd()<0.5?1:-1, 3);
   return { mode:'colortag', colortag:true, room:false, level:1, seed, width:W, height:H,
            platforms, checkpoints:[], hazards:[], start:{x:60, y:floorTop}, finishY:-1e9, colors:colorTagColors() };
 }

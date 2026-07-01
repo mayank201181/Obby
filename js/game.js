@@ -1044,9 +1044,10 @@ function sendBoost(){
 function onItChange(id){
   if(id===MP.selfId){
     Game.tagCdUntil=Game.t+2500;              // grace so you can't instantly tag back
-    if(Game.colorTag){                        // Colour Tag: the new "it" calls a colour
-      if(typeof toast==='function') toast("🌈 You're IT! Call a colour!");
-      if(Game.ct){ Game.ct.tagCd=Game.t+2500; if(typeof ctCallColor==='function') ctCallColor(); }
+    if(Game.colorTag){                        // Colour Tag: the new "it" picks a colour
+      if(typeof toast==='function') toast("🌈 You're IT! Tap a colour to call!");
+      if(Game.ct){ Game.ct.tagCd=Game.t+2500; Game.ct.color=null; }
+      if(typeof refreshColorBar==='function') refreshColorBar();
     } else if(typeof toast==='function') toast("🏃 You're IT! Catch a friend!");
     SFX.hit();
   } else if(typeof toast==='function'){
@@ -1656,26 +1657,40 @@ function onColorPad(x,y,w,h,colorName){
   }
   return false;
 }
-function ctCallColor(){
+function ctCallColor(){                 // AI (bot IT) auto-picks a random colour
   const cols=Game.world.colors||[]; if(!cols.length) return;
   const c=cols[Math.floor(Math.random()*cols.length)];
   Game.ct.color=c.name; Game.ct.colorHex=c.hex;
   Game.ct.graceUntil=Game.t+4500; Game.ct.nextCallT=Game.t+8500; SFX.checkpoint();
   if(typeof toast==='function') toast('🎨 Get on '+c.name.toUpperCase()+'!');
-  if(Game.multiplayer && MP.itId===MP.selfId && typeof mpSendTagColor==='function') mpSendTagColor(c.name);
+  if(typeof refreshColorBar==='function') refreshColorBar();
+}
+/* the human "it" taps a colour to call it (solo tagger or MP it) */
+function ctSetColor(name){
+  if(!Game.ct) return;
+  const amIt = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');
+  if(!amIt) return;
+  const c=(Game.world.colors||[]).find(k=>k.name===name); if(!c) return;
+  Game.ct.color=c.name; Game.ct.colorHex=c.hex;
+  Game.ct.graceUntil=Game.t+4500; Game.ct.nextCallT=Game.t+1e12;   // no auto re-call — you choose
+  SFX.checkpoint();
+  if(typeof toast==='function') toast('🎨 You called '+name.toUpperCase()+'!');
+  if(Game.multiplayer && typeof mpSendTagColor==='function') mpSendTagColor(c.name);
   if(typeof refreshColorBar==='function') refreshColorBar();
 }
 function initColorTag(){
   const W=Game.world.width, H=Game.world.height, floorTop=H-40;
   Game.ct={ color:null, colorHex:null, graceUntil:0, nextCallT:0, lives:3, endT:Game.t+100000, tagCd:0 };
   if(Game.multiplayer){
-    if(MP.isHost) setTimeout(()=>{ mpSendIt(MP.selfId); ctCallColor(); }, 500);
+    if(MP.isHost) setTimeout(()=>{ mpSendIt(MP.selfId);   // host is IT and picks the colour
+      if(typeof refreshColorBar==='function') refreshColorBar();
+      if(typeof toast==='function') toast('🌈 You are IT — tap a colour to call!'); }, 500);
   } else {
     const tagger = Game.soloRole==='tagger';
     Game.ct.score=0; Game.ct.target=5;
     Game.ai={ x: tagger?(W/2):(W-90), y:floorTop-34, vx:0,vy:0,w:34,h:34,facing:-1,onGround:false,
               speed: tagger?3.5:3.3, tx:W/2, ty:null, jumpCdUntil:0, _stuck:0, _wanderT:0, state:'chase' };
-    ctCallColor();
+    if(!tagger) ctCallColor();   // the bot IT calls colours; if YOU are IT you tap to call
   }
   if(typeof toast==='function') toast(Game.soloRole==='tagger'
       ? '🌈 You call the colours — tag the bot when it\'s off-colour! (5 to win)'
@@ -1699,11 +1714,10 @@ function updateColorTag(dt){
       let target=null, best=1e9;
       for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
         const d=Math.hypot((p.x)-(r.x),(p.y)-(r.y)); if(d<best){best=d;target=r;} }
-      if(hunting && target && Game.t>ct.tagCd && rectsOverlap(p.x,p.y,p.w,p.h, target.x,target.y,34,34)){
+      if(ct.color && hunting && target && Game.t>ct.tagCd && rectsOverlap(p.x,p.y,p.w,p.h, target.x,target.y,34,34)){
         const tsafe = onColorPad(target.x,target.y,34,34, ct.color);
         if(!tsafe){ ct.tagCd=Game.t+1500; mpSendIt(target.id); SFX.win();
           if(typeof toast==='function') toast('🌈 Tagged '+(target.name||'a friend')+'! They\'re IT'); } }
-      if(Game.t>ct.nextCallT) ctCallColor();   // call a fresh colour each cycle
     }
     if(Game.t>=ct.endT) return endColorTag(MP.itId!==MP.selfId);
     return;
@@ -1711,7 +1725,13 @@ function updateColorTag(dt){
   // ---- solo ----
   const a=Game.ai; if(!a) return;
   if(Game.soloRole==='tagger'){
-    // YOU call colours & chase; the bot tries to reach the called colour
+    // YOU tap a colour to call; the bot heads to it; you chase & tag it off-colour
+    if(!ct.color){                      // no colour called yet — the bot just mills about
+      if(Game.t>a._wanderT){ a._wanderT=Game.t+1400+Math.random()*1400; a.tx=200+Math.random()*(Game.world.width-400); }
+      a.ty=null; stepAgent(a);
+      if(Game.t>=ct.endT) return endColorTag((ct.score||0) >= Math.ceil(ct.target/2));
+      return;
+    }
     const pad=nearestColorPad(a.x+a.w/2, ct.color);
     a.tx = pad? pad.x+pad.w/2 : a.x; a.ty = pad? pad.y : null;
     stepAgent(a);
@@ -1719,11 +1739,9 @@ function updateColorTag(dt){
     const botSafe = onColorPad(a.x,a.y,34,34, ct.color);
     if(hunting && distT<32 && Game.t>ct.tagCd && !botSafe){
       ct.tagCd=Game.t+1200; ct.score=(ct.score||0)+1; SFX.win(); addShake(4);
-      if(typeof toast==='function') toast('🌈 Tagged the bot! ('+ct.score+'/'+ct.target+')');
+      if(typeof toast==='function') toast('🌈 Tagged the bot! ('+ct.score+'/'+ct.target+') — call a new colour!');
       if(ct.score>=ct.target) return endColorTag(true);
-      ctCallColor();
     }
-    if(Game.t>ct.nextCallT) ctCallColor();
     if(Game.t>=ct.endT) return endColorTag((ct.score||0) >= Math.ceil(ct.target/2));
     return;
   }

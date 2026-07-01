@@ -397,9 +397,17 @@ function refreshColorBar(){
   bar.style.display = show ? 'flex' : 'none';
   if(!show) return;
   const cols=(Game.world && Game.world.colors)||[], called=Game.ct.color;
-  bar.innerHTML = cols.map(c=>`<span class="col-dot${called===c.name?' called':''}" style="background:${c.hex}"></span>`).join('')
-    + (called?`<span class="col-now">${called.toUpperCase()}</span>`:'<span class="col-now">…</span>');
+  const amIt = (Game.multiplayer && typeof MP!=='undefined' && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');
+  bar.classList.toggle('pickable', amIt);
+  if(amIt){
+    bar.innerHTML = '<span class="col-now">Call:</span>' + cols.map(c=>
+      `<button class="col-pick${called===c.name?' called':''}" style="background:${c.hex}" onclick="ctPickColor('${c.name}')" aria-label="${c.name}"></button>`).join('');
+  } else {
+    bar.innerHTML = cols.map(c=>`<span class="col-dot${called===c.name?' called':''}" style="background:${c.hex}"></span>`).join('')
+      + (called?`<span class="col-now">${called.toUpperCase()}</span>`:'<span class="col-now">…</span>');
+  }
 }
+function ctPickColor(name){ if(typeof ctSetColor==='function') ctSetColor(name); }
 /* Colour Tag (solo) */
 function openColorTagPick(){ showScreen('colorTagPickScreen'); }
 function startColorTag(arena, role){
