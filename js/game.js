@@ -172,10 +172,11 @@ function startGame(opts){
   Game.colorTag = (opts.mode==='colortag');
   Game.colorArena = Game.colorTag ? (opts.arena||'room') : null;
   Game.towerResume = opts.resumeFloor || 0;
-  Game.room = (opts.mode==='hideseek' || opts.mode==='roomtag' || (opts.mode==='tag' && Game.tagArena==='room'));
-  Game.roomMode = opts.mode==='hideseek' ? 'hideseek' : (opts.mode==='roomtag' ? 'tag' : null);
+  Game.colorHide = (opts.mode==='colorhide');
+  Game.room = (opts.mode==='roomtag' || opts.mode==='colorhide' || (opts.mode==='tag' && Game.tagArena==='room'));
+  Game.roomMode = opts.mode==='roomtag' ? 'tag' : (opts.mode==='colorhide' ? 'colorhide' : null);
   // solo-vs-AI only for the single-player room modes; MP uses real players
-  Game.roomSolo = !Game.multiplayer && (opts.mode==='hideseek' || opts.mode==='roomtag' || opts.mode==='colortag');
+  Game.roomSolo = !Game.multiplayer && (opts.mode==='roomtag' || opts.mode==='colortag' || opts.mode==='colorhide');
   Game.soloRole = opts.role==='tagger' ? 'tagger' : 'runner';
   if(Game.room || Game.colorTag) Game.difficulty='easy';   // no cannons in these arenas
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
@@ -201,6 +202,7 @@ function startGame(opts){
   const bbar=document.getElementById('buildBar'); if(bbar){ bbar.style.display = Game.disaster ? 'flex':'none'; if(Game.disaster && typeof setupBuildBar==='function') setupBuildBar(); }
   if(typeof refreshCamoBar==='function') refreshCamoBar();
   if(typeof refreshColorBar==='function') refreshColorBar();
+  if(typeof refreshColorHideBar==='function') refreshColorHideBar();
   if(typeof setSpectateChrome==='function') setSpectateChrome(false);
   Game.running=true; Game.finished=false; Game.last=performance.now(); Game.acc=0;
   cancelAnimationFrame(Game.raf);
@@ -208,7 +210,8 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
+  Game.world = Game.colorHide ? generateColorHide(Game.seed)
+             : Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
              : Game.room ? generateRoom(Game.seed)
              : Game.disaster ? generateDisaster(Game.seed)
              : Game.heist ? generateHeist(Game.seed)
@@ -251,7 +254,8 @@ function loadLevel(level){
   Game.bullets=[];
   Game.player.invuln = 1200;        // brief grace at the start of a level
   Game.cam.x=st.x; Game.cam.y=st.y-200;
-  if(Game.room && Game.roomSolo) initRoom();
+  if(Game.colorHide){ if(Game.multiplayer) initColorHideMP(); else initColorHide(); }
+  else if(Game.room && Game.roomSolo) initRoom();
   else if(Game.room && Game.multiplayer) initRoomMP();
   if(Game.colorTag) initColorTag();
   updateHud();
@@ -310,6 +314,10 @@ function readInput(){
 /* pet ability button (next to JUMP): drop a platform OR throw a banana */
 function triggerAbility(){
   if(!Game.running) return;
+  if(Game.colorHide){                                     // Colour Hide & Seek: seeker taps to attack
+    const amSeeker = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && Game.rm && Game.rm.seeker);
+    if(amSeeker){ attackColorHide(); return; }
+  }
   if(Game.petPower){ usePower(Game.petPower); return; }   // SECRET pet signature power
   if(Game.t < Game.platformCdUntil) return;        // shared cooldown
   const p=Game.player;
@@ -564,10 +572,12 @@ function update(dt){
   if(Game.bananas.length) updateBananas();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
   if(Game.disaster && !Game.finished){
-    if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT) startDisasterActive(); }
-    else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT) nextDisaster(); }
+    const drives = !Game.multiplayer || MP.isHost;   // host drives the shared disaster cycle
+    if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT && drives) startDisasterActive(); }
+    else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT && drives) nextDisaster(); }
   }
-  if(Game.room && Game.roomSolo && !Game.finished) updateRoom(dt);
+  if(Game.colorHide && !Game.finished){ if(Game.multiplayer) updateColorHideMP(dt); else updateColorHide(dt); }
+  else if(Game.room && Game.roomSolo && !Game.finished) updateRoom(dt);
   else if(Game.room && Game.multiplayer && !Game.finished) updateRoomMP(dt);
   if(Game.colorTag && !Game.finished) updateColorTag(dt);
 
@@ -604,7 +614,8 @@ function update(dt){
       mpSendPos({x:Math.round(p.x),y:Math.round(p.y),facing:p.facing,
                  skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
                  name:SAVE.name,cp:p.cp,finished:Game.finished,
-                 disg:(Game.myDisguise&&Game.myDisguise.emoji)||null, morph:Game.morph||null});
+                 disg:(Game.myDisguise&&Game.myDisguise.emoji)||null, morph:Game.morph||null,
+                 chColor:(Game.colorHide&&Game.myHideColor)?Game.myHideColor.hex:null});
     }
   }
 }
@@ -1091,6 +1102,7 @@ function solidNow(pl){
   if(pl.type==='coin'){ return false; }                // collectible, not a platform
   if(pl.type==='powerup'){ return false; }             // collectible, not a platform
   if(pl.type==='dbutton'){ return false; }             // disaster button, not a platform
+  if(pl.type==='cwall'){ return false; }               // colour-hide backdrop panel (not solid)
   return true;
 }
 
@@ -1259,7 +1271,10 @@ function onItChange(id){
 function onCaughtNet(targetId){
   if(!Game.caughtIds) Game.caughtIds=new Set();
   Game.caughtIds.add(targetId);
-  if(targetId===MP.selfId && typeof onCaughtMe==='function') onCaughtMe();
+  if(targetId===MP.selfId){
+    if(Game.colorHide){ if(typeof onCaughtMeCH==='function') onCaughtMeCH(); }
+    else if(typeof onCaughtMe==='function') onCaughtMe();
+  }
 }
 /* Colour Tag: the "it" called a colour everyone must reach */
 function onTagColor(color){
@@ -1429,7 +1444,7 @@ function endHeist(){
 }
 
 /* ===== NATURAL DISASTER SURVIVAL ===== */
-const DISASTERS = ['lava','meteor','tsunami','zombies','aliens','sandstorm'];
+const DISASTERS = ['lava','meteor','tsunami','zombies','aliens','sandstorm','earthquake'];
 const DISASTER_INFO = {
   lava:    {name:'🌋 LAVA RISING', tip:'Get to high ground!'},
   meteor:  {name:'☄️ METEOR SHOWER', tip:'Dodge the meteors!'},
@@ -1437,6 +1452,7 @@ const DISASTER_INFO = {
   zombies: {name:'🧟 ZOMBIES', tip:"It's tag — don't get caught!"},
   aliens:  {name:'👽 ALIEN INVASION', tip:'Dodge the beams — mash ◀▶ to break free!'},
   sandstorm:{name:'🏜️ SAND STORM', tip:'The sand blurs your sight — keep moving!'},
+  earthquake:{name:'🫨 EARTHQUAKE', tip:'The ground is shaking — hold on!'},
 };
 /* place a built platform at a world position (during disaster mode) */
 function placeBuild(wx, wy){
@@ -1470,7 +1486,7 @@ function shuffledDisasters(){
 }
 function startDisasterActive(){
   Game.buildMode=false;
-  // disasters never stop — they cycle one after another until you press all 10 buttons
+  // disasters never stop — they cycle one after another until you press all buttons
   const chosen=Game.disasterType;
   Game.disasterCycle = shuffledDisasters();
   if(chosen && Game.disasterCycle.includes(chosen))   // start with the player's pick
@@ -1478,6 +1494,7 @@ function startDisasterActive(){
   Game.disasterIdx = 0;
   Game.disasterType = Game.disasterCycle[0];
   beginDisasterSegment();
+  if(Game.multiplayer && MP.isHost && typeof mpSendDisaster==='function') mpSendDisaster(Game.disasterType);
 }
 function beginDisasterSegment(){
   Game.disasterPhase='active';
@@ -1503,6 +1520,13 @@ function nextDisaster(){
   }
   Game.disasterType = Game.disasterCycle[Game.disasterIdx];
   beginDisasterSegment();
+  if(Game.multiplayer && MP.isHost && typeof mpSendDisaster==='function') mpSendDisaster(Game.disasterType);
+}
+/* a joiner follows the host's synced disaster */
+function onDisasterNet(type){
+  if(!Game.disaster || Game.finished) return;
+  Game.disasterType=type;
+  beginDisasterSegment();     // sets phase='active' + inits the same disaster
 }
 function disasterHit(knockUp){
   const p=Game.player; if(p.invuln>0) return;
@@ -1654,6 +1678,15 @@ function updateDisaster(dt){
     if(dz.sandX>W+170) dz.sandDir=-1; else if(dz.sandX<-170) dz.sandDir=1;
     if(Math.abs((p.x+p.w/2)-dz.sandX) < 100){ Game.blurUntil = Game.t + 3000;   // sight goes blurry for 3s
       if(!dz._sandToast || Game.t-dz._sandToast>2500){ dz._sandToast=Game.t; if(typeof toast==='function') toast('🌫️ Sand in your eyes!'); } }
+  }
+  if(t==='earthquake' && escale>0){
+    addShake(6 + prog*5);                       // the whole world rumbles
+    // periodic jolts shove you around so you slide/fall off the platforms
+    if(Game.t-dz.lastSpawn > Math.max(240, 560-prog*280)){ dz.lastSpawn=Game.t;
+      p.vx += (Math.random()<0.5?-1:1)*(6.5+prog*4.5);
+      if(p.onGround && Math.random()<0.55){ p.vy=-4.5; p.onGround=false; }   // bounced off your footing
+      SFX.hit();
+    }
   }
 }
 /* ---- Alien ship interior: sneak to the back door without being spotted ---- */
@@ -1967,6 +2000,30 @@ function drawFurni(ctx, pl){
 }
 function drawRoomAgent(ctx){
   const a=Game.ai; if(!a) return;
+  if(Game.colorHide){
+    const rm=Game.rm, cx=a.x+a.w/2, cy=a.y+a.h/2;
+    if(rm && rm.seeker){                                 // bot is the HIDER — blends into its wall
+      if(rm.phase==='hide') return;                       // can't see it while it hides
+      const blended = a.hideColor && colorBlended(a.x,a.w,a.hideColor.name,true);
+      ctx.save(); ctx.globalAlpha = blended?0.3:0.85;
+      ctx.fillStyle=(a.hideColor&&a.hideColor.hex)||'#ff7a5c';
+      roundRect(ctx, a.x, a.y, a.w, a.h, 8); ctx.fill();
+      ctx.fillStyle='#3a2a40';
+      ctx.beginPath(); ctx.arc(cx-5,cy-3,1.7,0,6.3); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+6,cy-3,1.7,0,6.3); ctx.fill();
+      ctx.restore(); return;
+    }
+    // bot is the SEEKER
+    ctx.fillStyle='#ff7a5c'; ctx.beginPath(); ctx.arc(cx,cy,17,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(cx-5*a.facing,cy-3,3.4,0,6.3); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+6*a.facing,cy-3,3.4,0,6.3); ctx.fill();
+    ctx.fillStyle='#3a2a40';
+    ctx.beginPath(); ctx.arc(cx-5*a.facing,cy-3,1.7,0,6.3); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+6*a.facing,cy-3,1.7,0,6.3); ctx.fill();
+    ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🎯', cx, a.y-14);
+    return;
+  }
   // Hide & Seek where YOU seek: the bot is disguised as furniture (hidden during the 20s)
   if(Game.roomMode==='hideseek' && Game.soloRole==='tagger'){
     if(Game.rm && Game.rm.phase==='hide') return;       // can't see it while it hides
@@ -2168,6 +2225,132 @@ function endColorTag(won){
   if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
     {colortag:true, survived:won, mp:Game.multiplayer, role:Game.soloRole, arena:Game.colorArena});
 }
+/* ================= COLOUR HIDE & SEEK ================= */
+function colorBlended(x,w,colorName,moving){
+  if(!colorName || moving) return false;
+  for(const pl of Game.world.platforms){ if(pl.type!=='cwall'||pl.colorName!==colorName) continue;
+    if(x < pl.x+pl.w && x+w > pl.x) return true; }
+  return false;
+}
+function initColorHide(){
+  const W=Game.world.width, H=Game.world.height, floorTop=H-44;
+  const seeker = Game.soloRole==='tagger';
+  Game.rm={ phase:'hide', hideEndT:Game.t+14000, endT:Game.t+14000+90000, attacks:5, seeker };
+  Game.myHideColor=null; Game.caughtIds=new Set();
+  Game.ai={ x: seeker?150:(W-90), y:floorTop-34, vx:0,vy:0,w:34,h:34,facing:-1,onGround:false,
+            speed:3.3, tx:W/2, ty:null, jumpCdUntil:0, _stuck:0, _wanderT:0, state:'search', attackCd:0, hideColor:null };
+  if(seeker){
+    const cols=Game.world.colors, c=cols[Math.floor(Math.random()*cols.length)];
+    Game.ai.hideColor=c;
+    const panels=Game.world.platforms.filter(pl=>pl.type==='cwall'&&pl.colorName===c.name);
+    const pn=panels[Math.floor(Math.random()*panels.length)]; if(pn) Game.ai.x=pn.x+pn.w/2-17;
+    if(typeof toast==='function') toast('🔍 You SEEK — 5 attacks to catch the hider (tap 🎯)!');
+  } else if(typeof toast==='function') toast('🎨 Turn a colour & hide against a matching wall — 14s!');
+  if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+}
+function initColorHideMP(){
+  const W=Game.world.width, H=Game.world.height, floorTop=H-44;
+  Game.rm={ phase:'hide', hideEndT:Game.t+14000, endT:Game.t+14000+90000, attacks:5, seeker:false };
+  Game.myHideColor=null; Game.caughtIds=new Set();
+  if(MP.isHost) setTimeout(()=>mpSendIt(MP.selfId), 500);   // host = seeker
+  if(typeof toast==='function') toast('🎨 Colour Hide & Seek! Hiders pick a colour & blend; seeker has 5 attacks.');
+  if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+}
+function setHideColor(name){
+  const seeker = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');
+  if(seeker || !Game.rm || Game.rm.phase!=='hide') return;
+  const c=(Game.world.colors||[]).find(k=>k.name===name); if(!c) return;
+  Game.myHideColor=c; SFX.click();
+  if(typeof toast==='function') toast('🎨 You turned '+name.toUpperCase()+'! Blend against a '+name+' wall.');
+  if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+}
+function updateColorHide(dt){
+  const p=Game.player, a=Game.ai, rm=Game.rm; if(!a||!rm) return;
+  const dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2),(p.y+p.h/2)-(a.y+a.h/2));
+  const pMoving=Math.abs(p.vx)>0.6;
+  if(rm.phase==='hide'){ Game.moveLock=rm.seeker;
+    if(Game.t>=rm.hideEndT){ rm.phase='seek'; Game.moveLock=false;
+      if(typeof toast==='function') toast(rm.seeker?'🔍 GO! Find the hider!':'🔍 The seeker is looking — hold still!');
+      if(typeof refreshColorHideBar==='function') refreshColorHideBar(); }
+    return;
+  }
+  Game.moveLock=false;
+  if(rm.seeker){
+    if(Game.t>a._wanderT){ a._wanderT=Game.t+3200+Math.random()*3400;
+      const panels=Game.world.platforms.filter(pl=>pl.type==='cwall'&&pl.colorName===a.hideColor.name);
+      const pn=panels[Math.floor(Math.random()*panels.length)]; if(pn) a.tx=pn.x+pn.w/2; }
+    a.ty=null; stepAgent(a);
+    if(rm.attacks<=0 || Game.t>=rm.endT) return endColorHide(false);   // ran out -> hider(bot) wins
+  } else {
+    const blended = colorBlended(p.x,p.w, Game.myHideColor&&Game.myHideColor.name, pMoving);
+    if(a.state!=='chase'){
+      if(Game.t>a._wanderT || Math.abs(a.tx-(a.x+a.w/2))<28){ a._wanderT=Game.t+1400+Math.random()*1400; a.tx=120+Math.random()*(Game.world.width-240); }
+      a.ty=null;
+      if(dist<340 && pMoving){ a.state='chase'; if(typeof toast==='function') toast('👀 It saw you move!'); }
+    } else { a.tx=p.x+p.w/2; a.ty=null; if(dist>460) a.state='search'; }
+    stepAgent(a);
+    if(dist<40 && Game.t>a.attackCd){ a.attackCd=Game.t+1100;
+      if(!blended){ return endColorHide(false); }               // caught you -> you lose
+      rm.attacks--; SFX.hit(); addShake(3);
+      if(typeof toast==='function') toast('🎯 Seeker attacked the wall! '+rm.attacks+' left');
+      if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+      a.state='search'; a.tx=120+Math.random()*(Game.world.width-240);
+      if(rm.attacks<=0) return endColorHide(true);              // survived -> you win
+    }
+    if(Game.t>=rm.endT) return endColorHide(true);
+  }
+}
+function updateColorHideMP(dt){
+  const p=Game.player, rm=Game.rm; if(!rm) return;
+  const amSeeker = MP.itId===MP.selfId;
+  if(rm.phase==='hide' && Game.t>=rm.hideEndT){ rm.phase='seek';
+    if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+    if(typeof toast==='function') toast(amSeeker?'🔍 GO! 5 attacks — tap 🎯 on a hider!':'🔍 The seeker is looking — hold still!'); }
+  Game.moveLock = (amSeeker && rm.phase==='hide');
+  if(amSeeker && rm.phase==='seek'){
+    const hiders=mpRemoteList().filter(r=>typeof r.x==='number');
+    if(hiders.length && hiders.every(r=>Game.caughtIds.has(r.id))) return endColorHide(true);
+  }
+  if(rm.attacks<=0 && amSeeker) return endColorHide(false);    // out of attacks -> hiders win
+  if(Game.t>=rm.endT) return endColorHide(!amSeeker);          // timeout -> hiders win
+}
+function attackColorHide(){
+  if(!Game.colorHide || Game.finished || !Game.rm || Game.rm.phase!=='seek') return;
+  const rm=Game.rm, p=Game.player;
+  const amSeeker = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && rm.seeker);
+  if(!amSeeker || rm.attacks<=0) return;
+  if(Game.multiplayer){
+    let hit=null;
+    for(const r of mpRemoteList()){ if(typeof r.x!=='number' || Game.caughtIds.has(r.id)) continue;
+      if(Math.hypot((p.x+p.w/2)-(r.x+17),(p.y+p.h/2)-(r.y+17))<42){ hit=r; break; } }
+    if(hit){ Game.caughtIds.add(hit.id); if(typeof mpSendCaught==='function') mpSendCaught(hit.id); SFX.win(); addShake(4);
+      if(typeof toast==='function') toast('🎯 Caught '+(hit.name||'a hider')+'!'); }
+    else { rm.attacks--; SFX.hit(); addShake(3); if(typeof toast==='function') toast('❌ Missed! '+rm.attacks+' attacks left'); }
+    if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+    if(rm.attacks<=0) endColorHide(false);
+    return;
+  }
+  const a=Game.ai, dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2),(p.y+p.h/2)-(a.y+a.h/2));
+  if(dist<42){ SFX.win(); return endColorHide(true); }         // caught the hider -> you win
+  rm.attacks--; SFX.hit(); addShake(3);
+  if(typeof toast==='function') toast('❌ Missed! '+rm.attacks+' attacks left');
+  if(typeof refreshColorHideBar==='function') refreshColorHideBar();
+  if(rm.attacks<=0) return endColorHide(false);
+}
+function endColorHide(youWin){
+  if(Game.finished) return;
+  Game.finished=true; Game.running=false;
+  if(youWin) SFX.win(); else SFX.hit();
+  const reward=youWin?55:10; addCoins(reward);
+  if(Game.multiplayer) mpSendFinish();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
+    {colorhide:true, survived:youWin, role:Game.soloRole, mp:Game.multiplayer});
+}
+function drawColorWall(ctx, pl){
+  ctx.fillStyle=pl.fill; roundRect(ctx, pl.x, pl.y, pl.w, pl.h, 10); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.18)'; roundRect(ctx, pl.x, pl.y, pl.w, 10, 8); ctx.fill();
+}
+function onCaughtMeCH(){ if(!Game.finished && Game.colorHide) endColorHide(false); }
 function drawColorPads(ctx){
   for(const pl of Game.world.platforms){ if(pl.type!=='cpad') continue;
     const called = Game.ct && Game.ct.color===pl.colorName;
@@ -2203,7 +2386,7 @@ function render(){
   drawWorldBackdrop(ctx);
 
   const plats=Game.world.platforms;
-  for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else drawPlatform(ctx,pl); }
+  for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else if(pl.type==='cwall') drawColorWall(ctx,pl); else drawPlatform(ctx,pl); }
   if(Game.colorTag) drawColorPads(ctx);
 
   // floating collectible coins
@@ -2267,12 +2450,15 @@ function render(){
         ctx.font='51px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
         ctx.fillText(r.disg, r.x+17, r.y+17);
       } else {
-        const rskin = Game.partnerColor || r.skin;
-        ctx.save(); if(caught) ctx.globalAlpha=0.5;
+        const chHider = Game.colorHide && r.chColor;
+        const rskin = chHider ? r.chColor : (Game.partnerColor || r.skin);
+        ctx.save();
+        if(caught) ctx.globalAlpha=0.5;
+        else if(chHider) ctx.globalAlpha=0.5;         // coloured & partly faded — blends into a matching wall
         drawCharacter(ctx, r.x+17, r.y+17, 34, {skin:rskin,accessory:r.accessory,face:r.face,facing:r.facing||1,t:Game.t,
-                      petSkin:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
+                      petSkin:chHider?null:r.petSkin, ring:Game.partnerColor&&r.petSkin?Game.partnerColor:null});
         ctx.restore();
-        drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
+        if(!chHider) drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');  // no name tag would give hiders away
       }
       if(r.emote && nowMs()-r.emoteAt < 2200) drawEmoteBubble(ctx, r.x+17, r.y-22, r.emote);
       if(isSeeker){ ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🔦', r.x+17, r.y-22); }
@@ -2307,11 +2493,15 @@ function render(){
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-10, 'You');
   } else if(!Game.spectating){
-    const mySkin = Game.myColor || SAVE.skin;
+    const mySkin = (Game.colorHide && Game.myHideColor) ? Game.myHideColor.hex : (Game.myColor || SAVE.skin);
     const ghosting = Game.t < Game.power.ghostUntil;
     const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
+    // when you turn a colour and hold still against a matching wall, you fade to blend in
+    const chBlend = Game.colorHide && Game.myHideColor && Math.abs(p.vx)<=0.6 &&
+                    colorBlended(p.x,p.w,Game.myHideColor.name,false);
     ctx.save();
-    if(ghosting) ctx.globalAlpha=0.45;
+    if(chBlend) ctx.globalAlpha=0.28;
+    else if(ghosting) ctx.globalAlpha=0.45;
     else if(blink) ctx.globalAlpha=0.4;
     drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:SAVE.accessory,face:SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
                   petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
@@ -2324,9 +2514,12 @@ function render(){
     }
     if(Game.myEmote && Game.t-Game.myEmoteAt < 2200) drawEmoteBubble(ctx, p.x+p.w/2, p.y-22, Game.myEmote);
     const meIt = MP.itId===MP.selfId;
-    if(Game.multiplayer && meIt && Game.room && Game.roomMode==='hideseek'){
+    const chSeeker = Game.colorHide && ((Game.multiplayer&&meIt) || (!Game.multiplayer&&Game.rm&&Game.rm.seeker));
+    if(chSeeker){
+      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🎯', p.x+p.w/2, p.y-26);
+    } else if(Game.multiplayer && meIt && Game.room && Game.roomMode==='hideseek'){
       ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🔦', p.x+p.w/2, p.y-26);
-    } else if(meIt && (Game.mode==='tag'||Game.disasterType==='killer'||Game.colorTag||(Game.room&&Game.roomMode!=='hideseek'))) {
+    } else if(!Game.colorHide && meIt && (Game.mode==='tag'||Game.disasterType==='killer'||Game.colorTag||(Game.room&&Game.roomMode!=='hideseek'))) {
       drawItMarker(ctx, p.x+p.w/2, p.y);
     }
   }
@@ -2666,6 +2859,7 @@ function roundRect(ctx,x,y,w,h,r){
 function updateHud(){
   const el=document.getElementById('hudLevel');
   el.textContent = Game.colorTag ? '🌈 Colour Tag'
+                 : Game.colorHide ? '🎨 Colour Hide & Seek'
                  : Game.room ? (Game.roomMode==='hideseek'?'🙈 Hide & Seek':'🏃 Room Tag')
                  : Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
                  : Game.heist ? '💰 Gold Heist'
@@ -2684,6 +2878,21 @@ function updateHudLive(){
         ? ' · 🎯'+(ct.score||0)+'/'+ct.target : ' · ❤️'+Math.max(0,ct.lives));
       const lead = amIt ? '🌈 Call '+(ct.color?ct.color.toUpperCase():'…')+'! ' : (ct.color?'🎨 '+ct.color.toUpperCase()+'! ':'');
       cp.textContent = lead + clock(ct.endT-Game.t) + suffix;
+    }
+    document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+    const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
+    return;
+  }
+  if(Game.colorHide){
+    const rm=Game.rm, cp=document.getElementById('hudCp');
+    const amSeeker = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && rm && rm.seeker);
+    if(rm){
+      if(rm.phase==='hide'){
+        cp.textContent = (amSeeker?'🙈 Eyes closed… ':'🎨 HIDE — pick a colour! ')+Math.max(0,Math.ceil((rm.hideEndT-Game.t)/1000))+'s';
+      } else {
+        cp.textContent = amSeeker ? ('🎯 SEEK! '+rm.attacks+' attacks · '+clock(rm.endT-Game.t))
+                                   : ('🎨 Blend & survive! '+clock(rm.endT-Game.t));
+      }
     }
     document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
     const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';

@@ -216,6 +216,11 @@ function mpOnMessage(conn,msg){
       if(msg.from!==MP.selfId && typeof onBuildNet==='function') onBuildNet(msg.d);
       break;
     }
+    case 'dstr': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(!MP.isHost && typeof onDisasterNet==='function') onDisasterNet(msg.dtype);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -319,6 +324,8 @@ function mpSendMorph(targetId, emoji, grant){ mpSend({t:'morph', from:MP.selfId,
 function mpSendButton(bId){ mpSend({t:'dbtn', from:MP.selfId, bId}); }
 /* Disaster: a platform I built is shared so friends can hide under it */
 function mpSendBuild(p){ mpSend({t:'build', from:MP.selfId, d:{x:p.x,y:p.y,w:p.w,h:p.h,color:p.color,lavaProof:p.lavaProof}}); }
+/* Disaster (host only): everyone gets the SAME disaster at the same time */
+function mpSendDisaster(dtype){ mpSend({t:'dstr', from:MP.selfId, dtype}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 

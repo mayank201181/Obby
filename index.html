@@ -244,7 +244,7 @@
     </div>
     <button class="btn gold" onclick="startTower()">🏗️ Endless Tower<br><span style="font-size:12px;font-weight:700">climb as high as you can!</span></button>
     <button class="btn blue" onclick="openDisasterPick()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
-    <button class="btn pink" onclick="openRolePick('hideseek')">🙈 Hide &amp; Seek<br><span style="font-size:12px;font-weight:700">disguise as furniture!</span></button>
+    <button class="btn pink" onclick="openRolePick('colorhide')">🎨 Colour Hide &amp; Seek<br><span style="font-size:12px;font-weight:700">turn a colour &amp; blend into the wall!</span></button>
     <button class="btn blue" onclick="openTagPick()">🏃 Tag<br><span style="font-size:12px;font-weight:700">obby or furniture room!</span></button>
     <button class="btn gold" onclick="openColorTagPick()">🌈 Colour Tag<br><span style="font-size:12px;font-weight:700">stand on the called colour!</span></button>
 
@@ -337,7 +337,7 @@
         <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
         <button class="btn ghost small" data-mode="tag" onclick="selectRoomMode('tag')">🏃 Tag</button>
         <button class="btn ghost small" data-mode="roomtag" onclick="selectRoomMode('roomtag')">🛋️ Room Tag</button>
-        <button class="btn ghost small" data-mode="hideseek" onclick="selectRoomMode('hideseek')">🙈 Hide &amp; Seek</button>
+        <button class="btn ghost small" data-mode="colorhide" onclick="selectRoomMode('colorhide')">🎨 Colour Hide &amp; Seek</button>
         <button class="btn ghost small" data-mode="colortag" onclick="selectRoomMode('colortag')">🌈 Colour Tag</button>
         <button class="btn ghost small" data-mode="disaster" onclick="selectRoomMode('disaster')">🌪️ Disaster</button>
         <button class="btn ghost small" data-mode="tower" onclick="selectRoomMode('tower')">🏗️ Tower</button>
@@ -400,6 +400,7 @@
 
     <div class="camo-bar" id="camoBar" style="display:none"></div>
     <div class="color-bar" id="colorBar" style="display:none"></div>
+    <div class="color-bar" id="colorHideBar" style="display:none"></div>
   </div>
 </section>
 

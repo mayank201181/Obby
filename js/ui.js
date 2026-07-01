@@ -348,26 +348,26 @@ function toggleLavaProof(){ Game.buildLavaProof=!Game.buildLavaProof; SFX.click(
 let pendingSolo=null;
 function openRolePick(mode, arena){
   pendingSolo={mode, arena};
-  const isHs = mode==='hideseek';
-  document.getElementById('roleTitle').textContent = isHs ? '🙈 Hide & Seek — pick your side' : '🏃 Pick your side';
-  document.getElementById('roleRunBtn').innerHTML = (isHs?'🙈 You hide':'🏃 You run')+
-    '<br><span style="font-size:12px;font-weight:700">'+(isHs?'disguise &amp; dodge the seeker bot':'dodge &amp; parkour from the tagger bot')+'</span>';
-  document.getElementById('roleTagBtn').innerHTML = (isHs?'🔦 You seek':'😈 You\'re IT')+
-    '<br><span style="font-size:12px;font-weight:700">'+(isHs?'find the hidden bot':'chase &amp; tag the bot')+'</span>';
+  const isCh = mode==='colorhide';
+  document.getElementById('roleTitle').textContent = isCh ? '🎨 Colour Hide & Seek — pick your side' : '🏃 Pick your side';
+  document.getElementById('roleRunBtn').innerHTML = (isCh?'🎨 You hide':'🏃 You run')+
+    '<br><span style="font-size:12px;font-weight:700">'+(isCh?'turn a colour &amp; blend into a wall':'dodge &amp; parkour from the tagger bot')+'</span>';
+  document.getElementById('roleTagBtn').innerHTML = (isCh?'🎯 You seek':'😈 You\'re IT')+
+    '<br><span style="font-size:12px;font-weight:700">'+(isCh?'5 attacks to find the hider':'chase &amp; tag the bot')+'</span>';
   showScreen('rolePickScreen');
 }
 function startWithRole(role){
   const s=pendingSolo||{mode:'roomtag'};
-  if(s.mode==='hideseek') startHideSeek(role);
+  if(s.mode==='colorhide') startColorHide(role);
   else if(s.mode==='roomtag') startRoomTag(role);
   else if(s.mode==='colortag') startColorTag(s.arena||'room', role);
 }
-function startHideSeek(role){
+function startColorHide(role){
   SFX.click(); closeModal('winModal');
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({mode:'hideseek', role:role||'runner', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startGame({mode:'colorhide', role:role||'runner', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
 function openTagPick(){ showScreen('tagPickScreen'); }
@@ -414,6 +414,36 @@ function refreshColorBar(){
   }
 }
 function ctPickColor(name){ if(typeof ctSetColor==='function') ctSetColor(name); }
+
+/* colour picker + attack counter (Colour Hide & Seek) */
+function refreshColorHideBar(){
+  const bar=document.getElementById('colorHideBar'); if(!bar) return;
+  const show = Game.colorHide && Game.rm;
+  bar.style.display = show ? 'flex' : 'none';
+  const rm=Game.rm;
+  const amSeeker = show && ((Game.multiplayer && typeof MP!=='undefined' && MP.itId===MP.selfId) || (!Game.multiplayer && rm.seeker));
+  // repurpose the ability button as the seeker's ATTACK button (hider has none)
+  const abtn=document.getElementById('abilityBtn');
+  if(abtn && Game.colorHide){
+    if(amSeeker){ abtn.style.display='flex'; abtn.innerHTML='⚡<br><span style="font-size:10px">ATTACK</span>'; }
+    else abtn.style.display='none';
+  }
+  if(!show) return;
+  bar.classList.toggle('pickable', !amSeeker && rm.phase==='hide');
+  if(amSeeker){
+    bar.innerHTML = `<span class="col-now">🎯 Attacks left: ${'🔴'.repeat(Math.max(0,rm.attacks))||'—'}</span>`
+      + (rm.phase==='hide'?'<span class="col-now">👀 eyes closed…</span>':'<span class="col-now">tap ⚡ on a hider!</span>');
+  } else {
+    const cols=(Game.world && Game.world.colors)||[], cur=Game.myHideColor&&Game.myHideColor.name;
+    if(rm.phase==='hide'){
+      bar.innerHTML = '<span class="col-now">🎨 Turn:</span>' + cols.map(c=>
+        `<button class="col-pick${cur===c.name?' called':''}" style="background:${c.hex}" onclick="chPickColor('${c.name}')" aria-label="${c.name}"></button>`).join('');
+    } else {
+      bar.innerHTML = '<span class="col-now">'+(cur?('🎨 '+cur.toUpperCase()+' — hold still on a matching wall!'):'⚠️ no colour picked!')+'</span>';
+    }
+  }
+}
+function chPickColor(name){ if(typeof setHideColor==='function') setHideColor(name); }
 
 /* ---------------- Alien morph picker ---------------- */
 let pendingMorph=null, morphKeepPower=true;
@@ -550,7 +580,7 @@ const ROOM_MODE_DESC = {
   race:    'Race: same obby, separate climbs — first to the top wins! 🏁',
   tag:     'Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃',
   roomtag: '🛋️ Room Tag: tag in a big furniture room — jump on the furniture to escape the tagger!',
-  hideseek:'🙈 Hide & Seek: the host seeks (eyes closed 20s) while everyone hides & disguises as furniture!',
+  colorhide:'🎨 Colour Hide & Seek: hiders turn a rainbow colour & blend against a matching wall — the host seeks with only 5 attacks!',
   colortag:'🌈 Colour Tag: the IT calls a rainbow colour — stand on it or get tagged (then YOU are IT)!',
   disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
   tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
@@ -726,20 +756,35 @@ function onLevelComplete(level, earned, isFinal, res){
         : `<p class="timer-big">😈 Tagged off-colour!</p><p class="muted">Get on the called colour next time!</p>`;
     }
   }
+  const isCH=!!res.colorhide;
+  if(isCH){
+    if(isTagger){
+      waitMsg = res.survived
+        ? `<p class="timer-big">🎯 Found the hider!</p><p class="muted">You spotted them through the blend! 🎨</p>`
+        : `<p class="timer-big">🎨 They blended in!</p><p class="muted">You ran out of attacks — the hider wins!</p>`;
+    } else {
+      waitMsg = res.survived
+        ? `<p class="timer-big">🎨 You stayed hidden!</p><p class="muted">The seeker never caught your colour! 🌈</p>`
+        : `<p class="timer-big">🎯 Caught!</p><p class="muted">The seeker saw through your disguise — try a better blend!</p>`;
+    }
+  }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag && !isCH;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-    : (isColorTag
+    : (isCH
+        ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+                  : `<button class="btn gold" onclick="startColorHide('${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
+        : (isColorTag
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
                   : `<button class="btn gold" onclick="startColorTag('${res.arena||'room'}','${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isRoom
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
-                  : `<button class="btn gold" onclick="${hsRoom?`startHideSeek('${res.role||'runner'}')`:`startRoomTag('${res.role||'runner'}')`}">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
+                  : `<button class="btn gold" onclick="startRoomTag('${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isDisaster
         ? `<button class="btn gold" onclick="startDisaster()">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isHeist
@@ -748,15 +793,16 @@ function onLevelComplete(level, earned, isFinal, res){
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))))));
-  const heading = isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)))))));
+  const heading = isCH ? (res.survived?(isTagger?'🎯 Found!':'🎨 Hidden!'):(isTagger?'🎨 Escaped you!':'🎯 Caught!'))
+                : isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
                 : isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
                 : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isCH?(res.survived?'🎨🎉':'🎯😈'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag&&!isCH?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;
