@@ -211,6 +211,11 @@ function mpOnMessage(conn,msg){
       if(msg.from!==MP.selfId && typeof onButtonNet==='function') onButtonNet(msg.bId);
       break;
     }
+    case 'build': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onBuildNet==='function') onBuildNet(msg.d);
+      break;
+    }
     case 'trade':
       mpTradeOnMessage(msg);
       break;
@@ -312,6 +317,8 @@ function mpSendFreeze(){ mpSend({t:'freeze', from:MP.selfId}); }
 function mpSendMorph(targetId, emoji, grant){ mpSend({t:'morph', from:MP.selfId, target:targetId, emoji, grant}); }
 /* Disaster: a button I pressed is shared with everyone */
 function mpSendButton(bId){ mpSend({t:'dbtn', from:MP.selfId, bId}); }
+/* Disaster: a platform I built is shared so friends can hide under it */
+function mpSendBuild(p){ mpSend({t:'build', from:MP.selfId, d:{x:p.x,y:p.y,w:p.w,h:p.h,color:p.color,lavaProof:p.lavaProof}}); }
 /* how many remote players have already finished (for race standings) */
 function mpFinishedCount(){ return mpRemoteList().filter(r=>r.finished).length; }
 

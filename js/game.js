@@ -220,7 +220,9 @@ function loadLevel(level){
     Game.disasterButtons=0; Game.disasterLives=3;
     Game.buildMode=false; Game.buildLavaProof=false; Game.builtPlatforms=[]; Game.dz=null;
     Game.disasterType = Game.disasterTypeForce || DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
+    Game.ship=null;
   }
+  Game.blurUntil=0; if(Game.canvas) Game.canvas.style.filter='';
   Game.heistLoot=0; Game.heistEndT=Game.t+20000;   // 20-second heist clock
   Game.disappear={};
   Game.hitCheckpoints=new Set();
@@ -482,6 +484,7 @@ function updatePowers(dt){
 
 function update(dt){
   if(Game.spectating){ spectateUpdate(); return; }
+  if(Game.ship){ updateShip(dt); return; }      // inside the alien ship — escape scene
   const p=Game.player; if(!p) return;
   if(Game.shakeMag){ Game.shakeMag*=0.86; if(Game.shakeMag<0.2) Game.shakeMag=0; }
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.0;
@@ -1426,13 +1429,14 @@ function endHeist(){
 }
 
 /* ===== NATURAL DISASTER SURVIVAL ===== */
-const DISASTERS = ['lava','meteor','tsunami','zombies','aliens'];
+const DISASTERS = ['lava','meteor','tsunami','zombies','aliens','sandstorm'];
 const DISASTER_INFO = {
   lava:    {name:'🌋 LAVA RISING', tip:'Get to high ground!'},
   meteor:  {name:'☄️ METEOR SHOWER', tip:'Dodge the meteors!'},
   tsunami: {name:'🌊 TSUNAMI', tip:'The wave roams everywhere — dodge it!'},
   zombies: {name:'🧟 ZOMBIES', tip:"It's tag — don't get caught!"},
   aliens:  {name:'👽 ALIEN INVASION', tip:'Dodge the beams — mash ◀▶ to break free!'},
+  sandstorm:{name:'🏜️ SAND STORM', tip:'The sand blurs your sight — keep moving!'},
 };
 /* place a built platform at a world position (during disaster mode) */
 function placeBuild(wx, wy){
@@ -1443,7 +1447,14 @@ function placeBuild(wx, wy){
   const w=96, h=20;
   const p={id:1e6+Game.builtPlatforms.length, type:'built', x:wx-w/2, y:wy-h/2, w, h, color:Game.buildColor, lavaProof};
   Game.builtPlatforms.push(p); Game.world.platforms.push(p);
+  if(Game.multiplayer && typeof mpSendBuild==='function') mpSendBuild(p);   // friends see & can hide under it
   SFX.click();
+}
+/* a friend built a platform — add it to my world too */
+function onBuildNet(d){
+  if(!Game.disaster || !Game.world) return;
+  const p={id:2e6+Game.builtPlatforms.length, type:'built', x:d.x, y:d.y, w:d.w, h:d.h, color:d.color, lavaProof:d.lavaProof};
+  Game.builtPlatforms.push(p); Game.world.platforms.push(p);
 }
 function disasterStandingProof(){          // true if the player is on a lava-proof block
   const p=Game.player;
@@ -1474,7 +1485,8 @@ function beginDisasterSegment(){
   const H=Game.world.height, W=Game.world.width, t=Game.disasterType;
   Game.dz={ startT:Game.t, dur:DISASTER_SEG_MS, lavaY:H+40, meteors:[],
     waveBX:W/2, waveBY:200, wtx:W/2, wty:200, wr:140,   // roaming tsunami orb (big)
-    zombies:[], aliens:[], beamed:false, levit:0, lastInputDir:0, lastSpawn:0 };
+    zombies:[], aliens:[], beamed:false, levit:0, lastInputDir:0,
+    sandX:-180, sandDir:1, lastSpawn:0 };
   if(t==='zombies'){ Game.dz.maxChasers = 2+Math.floor(Math.random()*2);   // only 2-3 ever chase you
     for(let i=0;i<5;i++) Game.dz.zombies.push({x:60+Math.random()*(W-120), y:H-30-34, vx:0, vy:0, w:26, h:34, onGround:false, chase:i<Game.dz.maxChasers, wanderDir:Math.random()<0.5?-1:1, wanderUntil:0}); }
   if(t==='aliens'){   // lots of UFOs prowling near the player, firing tractor beams
@@ -1632,11 +1644,99 @@ function updateDisaster(dt){
             if(typeof toast==='function') toast('🤝 A friend knocked you free!'); break; } }
       }
       if(dz.levit<=0){ dz.beamed=false; p.vy=8; if(typeof toast==='function') toast('🛸 Broke free!'); }
-      else if(dz.levit>=1){ dz.beamed=false; dz.levit=0; disasterHit(true);
-        if(typeof toast==='function') toast('👽 Abducted! Dropped back down…'); }
+      else if(dz.levit>=1){ dz.beamed=false; dz.levit=0; abductToShip();
+        if(typeof toast==='function') toast('👽 Beamed into the ship — sneak to the back door!'); }
     }
   }
+  if(t==='sandstorm'){
+    const sp=(3.6+prog*3)*escale;
+    dz.sandX += dz.sandDir*sp;
+    if(dz.sandX>W+170) dz.sandDir=-1; else if(dz.sandX<-170) dz.sandDir=1;
+    if(Math.abs((p.x+p.w/2)-dz.sandX) < 100){ Game.blurUntil = Game.t + 3000;   // sight goes blurry for 3s
+      if(!dz._sandToast || Game.t-dz._sandToast>2500){ dz._sandToast=Game.t; if(typeof toast==='function') toast('🌫️ Sand in your eyes!'); } }
+  }
 }
+/* ---- Alien ship interior: sneak to the back door without being spotted ---- */
+function abductToShip(){
+  if(Game.dz){ Game.dz.beamed=false; Game.dz.levit=0; }
+  const W=Game.W, H=Game.H, floorY=Math.round(H*0.82);
+  const plats=[
+    {x:Math.round(W*0.26), y:Math.round(H*0.60), w:120, h:16},
+    {x:Math.round(W*0.48), y:Math.round(H*0.48), w:120, h:16},
+    {x:Math.round(W*0.66), y:Math.round(H*0.62), w:130, h:16},
+  ];
+  const aliens=[];
+  for(let i=0;i<5;i++) aliens.push({ x:150+Math.random()*(W-360), y:floorY-34, w:30, h:34,
+      vx:(Math.random()<0.5?-1:1)*(1.4+Math.random()*1.1), face:1, alert:0 });
+  Game.ship={ p:{x:50, y:floorY-34, w:30, h:34, vx:0, vy:0, onGround:false, facing:1},
+    floorY, plats, aliens, doorX:W-64, spotted:false, hitCd:0 };
+  const bb=document.getElementById('buildBar'); if(bb) bb.style.display='none';
+  SFX.hit(); addShake(6);
+}
+function updateShip(dt){
+  const s=Game.ship, p=s.p, W=Game.W;
+  const dir=(typeof readInput==='function')?readInput():0;
+  const MOVE=4.6, GRAV=0.9;
+  p.vx += (dir*MOVE - p.vx)*0.35;
+  if(dir>0.1)p.facing=1; else if(dir<-0.1)p.facing=-1;
+  if(Game.input.jump && p.onGround){ p.vy=-14; p.onGround=false; SFX.jump(); }
+  Game.input.jump=false;
+  p.vy+=GRAV; if(p.vy>18)p.vy=18;
+  p.x=Math.max(10, Math.min(W-10-p.w, p.x+p.vx));
+  const prevB=p.y+p.h; p.y+=p.vy; const newB=p.y+p.h; p.onGround=false;
+  if(newB>=s.floorY){ p.y=s.floorY-p.h; p.vy=0; p.onGround=true; }
+  if(p.vy>=0) for(const pl of s.plats){ if(p.x<pl.x+pl.w && p.x+p.w>pl.x && prevB<=pl.y+2 && newB>=pl.y){ p.y=pl.y-p.h; p.vy=0; p.onGround=true; } }
+  s.spotted=false;
+  for(const a of s.aliens){
+    const inFront = Math.sign((p.x+p.w/2)-(a.x+a.w/2))===a.face;
+    const dist = Math.abs((p.x+p.w/2)-(a.x+a.w/2));
+    const sameLevel = Math.abs((p.y+p.h)-(a.y+a.h))<48;
+    if(inFront && dist<150 && sameLevel) a.alert=Math.min(1,a.alert+0.06); else a.alert=Math.max(0,a.alert-0.02);
+    if(a.alert>=1){ s.spotted=true; a.vx=Math.sign((p.x)-(a.x))*2.4; }   // chase!
+    a.x += a.vx;
+    if(a.x<40){a.x=40;a.vx=Math.abs(a.vx);} if(a.x>W-40-a.w){a.x=W-40-a.w;a.vx=-Math.abs(a.vx);}
+    a.face = a.vx>0?1:-1;
+    if(Game.t>s.hitCd && Math.abs((p.x+p.w/2)-(a.x+a.w/2))<26 && Math.abs((p.y+p.h/2)-(a.y+a.h/2))<32){
+      s.hitCd=Game.t+1200; Game.disasterLives=Math.max(0,Game.disasterLives-0.5); SFX.hit(); addShake(5);
+      p.x=50; p.y=s.floorY-p.h; p.vx=0;
+      if(typeof toast==='function') toast('👽 Caught! ❤️ '+Math.max(0,Game.disasterLives)+' — back to the start');
+      if(Game.disasterLives<=0){ Game.ship=null; endDisaster(false); return; }
+    }
+  }
+  if(Math.abs((p.x+p.w/2)-s.doorX)<38 && (p.y+p.h)>=s.floorY-4) escapeShip();
+}
+function escapeShip(){
+  Game.ship=null;
+  const bb=document.getElementById('buildBar'); if(bb && Game.disaster) bb.style.display='flex';
+  const p=Game.player; if(p){ p.invuln=1500; p.vy=6; }
+  if(typeof toast==='function') toast('🚪 Escaped the ship! Dropped back down.');
+  SFX.win();
+}
+function drawShipOverlay(ctx){
+  const s=Game.ship, W=Game.W, H=Game.H;
+  ctx.fillStyle='rgba(18,24,46,.94)'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(120,160,255,.12)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=48){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=48){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.fillStyle='#2a3560'; ctx.fillRect(0, s.floorY, W, H-s.floorY);
+  ctx.fillStyle='#3a4a80'; ctx.fillRect(0, s.floorY, W, 6);
+  for(const pl of s.plats){ ctx.fillStyle='#3a4a80'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,6); ctx.fill(); }
+  ctx.fillStyle='#0d1830'; roundRect(ctx, s.doorX-26, s.floorY-72, 52, 72, 8); ctx.fill();
+  ctx.fillStyle='rgba(120,255,170,'+(0.45+0.4*Math.abs(Math.sin(Game.t/250)))+')'; roundRect(ctx, s.doorX-20, s.floorY-64, 40, 60, 6); ctx.fill();
+  ctx.font='24px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🚪', s.doorX, s.floorY-34);
+  ctx.font='30px serif';
+  for(const a of s.aliens){
+    if(a.alert>0.05){ ctx.fillStyle='rgba(255,'+(a.alert>=1?60:210)+',80,'+(0.05+a.alert*0.13)+')';
+      ctx.beginPath(); ctx.moveTo(a.x+a.w/2, a.y+8);
+      ctx.lineTo(a.x+a.w/2+a.face*155, a.y-28); ctx.lineTo(a.x+a.w/2+a.face*155, a.y+a.h+28); ctx.closePath(); ctx.fill(); }
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(a.alert>=1?'😡':'👽', a.x+a.w/2, a.y+a.h/2);
+  }
+  ctx.font='28px serif'; ctx.fillText('🧑‍🚀', s.p.x+s.p.w/2, s.p.y+s.p.h/2);
+  ctx.fillStyle='#dfeaff'; ctx.font='bold 17px Nunito'; ctx.textAlign='left';
+  ctx.fillText('🛸 Sneak to the 🚪 back door!   ❤️ '+Math.max(0,Game.disasterLives), 14, 28);
+  if(s.spotted){ ctx.fillStyle='rgba(255,70,70,.95)'; ctx.textAlign='center'; ctx.font='bold 20px Nunito'; ctx.fillText('❗ SPOTTED — RUN!', W/2, 30); }
+}
+
 function endDisaster(survived){
   if(Game.disasterPhase==='over') return;
   Game.disasterPhase='over'; Game.finished=true;
@@ -1695,6 +1795,13 @@ function drawDisaster(ctx){
       ctx.fillStyle='rgba(0,0,0,.35)'; roundRect(ctx, p.x-6, p.y-16, p.w+12, 7, 3); ctx.fill();
       ctx.fillStyle='#8cffaa'; roundRect(ctx, p.x-6, p.y-16, (p.w+12)*Math.max(0,Math.min(1,dz.levit)), 7, 3); ctx.fill();
     }
+  }
+  if(t==='sandstorm'){
+    ctx.fillStyle='rgba(224,196,140,.42)';
+    ctx.fillRect(dz.sandX-100, Game.cam.y-500, 200, 1200);
+    ctx.font='42px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(let i=0;i<7;i++){ const yy=Game.cam.y-260+i*80+Math.sin(Game.t/300+i)*22;
+      ctx.fillText('🌫️', dz.sandX+Math.sin(Game.t/220+i*1.3)*40, yy); }
   }
 }
 
@@ -2229,6 +2336,11 @@ function render(){
   // weather + hazards drawn in SCREEN space
   drawWeather(ctx);
   drawHazardsScreen(ctx);
+  if(Game.ship) drawShipOverlay(ctx);           // the alien-ship escape scene (screen space)
+  // 🏜️ sand storm: blur your sight for 3s + a sandy haze
+  const blurry = Game.t < (Game.blurUntil||0);
+  if(Game.canvas) Game.canvas.style.filter = blurry ? 'blur(4px) sepia(.35) contrast(.9)' : '';
+  if(blurry){ ctx.fillStyle='rgba(214,184,132,.34)'; ctx.fillRect(0,0,Game.W,Game.H); }
   updateHudLive();
 }
 
