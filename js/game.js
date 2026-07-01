@@ -175,6 +175,7 @@ function startGame(opts){
   Game.multiplayer=!!opts.multiplayer;
   Game.difficulty=opts.difficulty||'hard';
   Game.tower = opts.mode==='tower';
+  Game.mine = opts.mode==='mine';
   Game.daily = !!opts.daily;
   Game.heist = opts.mode==='heist';
   Game.disaster = opts.mode==='disaster';
@@ -188,7 +189,7 @@ function startGame(opts){
   // solo-vs-AI only for the single-player room modes; MP uses real players
   Game.roomSolo = !Game.multiplayer && (opts.mode==='roomtag' || opts.mode==='colortag' || opts.mode==='copsrobbers');
   Game.soloRole = opts.role==='tagger' ? 'tagger' : 'runner';
-  if(Game.room || Game.colorTag || Game.copsRob) Game.difficulty='easy';   // no cannons in these arenas
+  if(Game.room || Game.colorTag || Game.copsRob || Game.mine) Game.difficulty='easy';   // no cannons in these arenas
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
@@ -219,7 +220,8 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.copsRob ? generateBank(Game.seed)
+  Game.world = Game.mine ? generateMine(Game.seed)
+             : Game.copsRob ? generateBank(Game.seed)
              : Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
              : Game.room ? generateRoom(Game.seed)
              : Game.disaster ? generateDisaster(Game.seed)
@@ -264,7 +266,8 @@ function loadLevel(level){
   Game.bullets=[];
   Game.player.invuln = 1200;        // brief grace at the start of a level
   Game.cam.x=st.x; Game.cam.y=st.y-200;
-  if(Game.copsRob){ if(Game.multiplayer) initCopsRobMP(); else initCopsRob(); }
+  if(Game.mine) initMine();
+  else if(Game.copsRob){ if(Game.multiplayer) initCopsRobMP(); else initCopsRob(); }
   else if(Game.room && Game.roomSolo) initRoom();
   else if(Game.room && Game.multiplayer) initRoomMP();
   if(Game.colorTag) initColorTag();
@@ -690,6 +693,7 @@ function update(dt){
   collectCoins(p);
   updatePowers(dt);                     // secret-pet powers (fire, morph timers)
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
+  if(Game.mine){ maybeExtendMine(); if(!Game.finished) updateMine(dt); }   // grow shaft + mine logic
   if(Game.bananas.length) updateBananas();
   if(Game.poops.length) updatePoops();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
@@ -1094,6 +1098,7 @@ function updateSoloHazards(){
 /* ---- per-level themes / weather ---- */
 function levelTheme(){
   if(Game.heist) return {css:'linear-gradient(180deg,#2a2030,#4a3a2a 55%,#6e5a2e)', weather:'embers', glow:'rgba(255,210,90,.25)'};
+  if(Game.mine) return {css:'linear-gradient(180deg,#3a2a1e,#241a2e 55%,#120c1c)', weather:'embers', glow:'rgba(255,190,80,.16)'};
   if(Game.tower) return {css:'linear-gradient(180deg,#1a1340,#3b2a7a 55%,#5a4a9a)', weather:'stars', glow:'rgba(180,160,255,.22)'};
   const T={
     1:{css:'linear-gradient(180deg,#cfeaff,#bcd9ff)',         weather:null,     glow:'rgba(123,224,176,.25)'},
@@ -2314,6 +2319,109 @@ function drawJailOverlay(ctx){
   ctx.font='bold 15px Nunito'; ctx.fillStyle='#cdd6ee';
   ctx.fillText(iAmCop?'The robber is locked up — tap 😂 to taunt them!':'You are locked up… no escape!', W/2, H*0.88);
 }
+
+/* ================= COIN MINE (endless descent) ================= */
+function initMine(){
+  Game.mineHaul=0; Game.mineBanked=0; Game.mineDepth=0; Game.mineMaxDepth=0;
+  Game.mineSecretGot=false; Game.mineSecretPet=null; Game.mineHintShown=false;
+  if(typeof toast==='function') toast('⛏️ COIN MINE! Dig deep, grab the 💰 & 🏦 bank it before you die!');
+}
+function bankMine(){
+  if(Game.mineHaul<=0){ if(typeof toast==='function') toast('🏦 Nothing to bank yet — grab some ore!'); return; }
+  const amt=Game.mineHaul; addCoins(amt); Game.mineBanked+=amt; Game.mineHaul=0;
+  if(typeof persist==='function') persist();
+  if(SFX && SFX.chest) SFX.chest(); addShake(2);
+  if(typeof toast==='function') toast('🏦 Banked 🪙'+amt+'! Safe — keep digging deeper!');
+}
+function grabMineSecret(){
+  if(Game.mineSecretGot) return;
+  Game.mineSecretGot=true;
+  const secrets = (typeof CREATURES!=='undefined') ? CREATURES.filter(c=>c.rarity==='secret') : [];
+  const pet = secrets.length ? secrets[Math.floor(Math.random()*secrets.length)] : null;
+  if(pet){
+    SAVE.pets[pet.id]=(SAVE.pets[pet.id]||0)+1;
+    if(!SAVE.equippedPet) SAVE.equippedPet=pet.id;
+    Game.mineSecretPet=pet;
+    if(typeof unlockAchievement==='function') unlockAchievement('secret');
+    if(typeof checkPetAchievements==='function') checkPetAchievements();
+    if(typeof persist==='function') persist();
+    if(SFX && SFX.rare) SFX.rare(); addShake(10);
+    if(typeof toast==='function') toast('🌟 SECRET PET! You dug up '+pet.emoji+' '+pet.name+'!');
+  }
+}
+function updateMine(dt){
+  const p=Game.player, w=Game.world; if(!w) return;
+  Game.mineDepth = Math.max(0, Math.round((p.y - w.start.y)/10));
+  if(Game.mineDepth>Game.mineMaxDepth) Game.mineMaxDepth=Game.mineDepth;
+  // "something glimmers below" hint as you approach the secret
+  if(!Game.mineHintShown && w._secretY!=null && (w._secretY - p.y) < 1400){
+    Game.mineHintShown=true; if(typeof toast==='function') toast('💎 Something glimmers deep below…');
+  }
+  // collect ore
+  for(const o of w.ore){ if(o.taken) continue;
+    if(p.x+p.w>o.x && p.x<o.x+o.w && p.y+p.h>o.y && p.y<o.y+o.h){
+      o.taken=true;
+      if(o.kind==='secret'){ grabMineSecret(); }
+      else { Game.mineHaul += o.val; if(SFX && SFX.coin) SFX.coin(); else if(SFX && SFX.checkpoint) SFX.checkpoint(); }
+    } }
+  if(p.onGround){
+    // bank ledge → lock in the haul
+    for(const pl of w.platforms){ if(!pl.bank || pl.done) continue;
+      if(p.x+p.w>pl.x && p.x<pl.x+pl.w && Math.abs((p.y+p.h)-pl.y)<8){ pl.done=true; bankMine(); break; } }
+    // spiked ledge → you die (lose the unbanked haul)
+    if(p.invuln<=0) for(const pl of w.platforms){ if(!pl.spike) continue;
+      if(p.x+p.w>pl.x && p.x<pl.x+pl.w && (p.y+p.h)>=pl.y-2 && (p.y+p.h)<=pl.y+14){ return endMine(); } }
+  }
+}
+function endMine(){
+  if(Game.finished) return;
+  Game.finished=true; Game.running=false;
+  const lost=Game.mineHaul; Game.mineHaul=0;
+  addShake(8); if(SFX && SFX.hit) SFX.hit();
+  // track a personal best depth
+  if(!SAVE.mineBest || Game.mineMaxDepth>SAVE.mineBest){ SAVE.mineBest=Game.mineMaxDepth; if(typeof persist==='function') persist(); }
+  if(Game.onLevelComplete) Game.onLevelComplete(1, Game.mineBanked, true,
+    {mine:true, depth:Game.mineMaxDepth, banked:Game.mineBanked, lost,
+     gotSecret:Game.mineSecretGot,
+     secretPet: Game.mineSecretPet?{emoji:Game.mineSecretPet.emoji, name:Game.mineSecretPet.name}:null, mp:false});
+}
+function drawMine(ctx){
+  const w=Game.world; if(!w) return;
+  // spikes on spiked ledges + markers on bank / secret ledges
+  for(const pl of w.platforms){
+    if(pl.spike){
+      ctx.fillStyle='#e0526a';
+      const n=Math.max(2,Math.floor(pl.w/16));
+      for(let i=0;i<n;i++){ const sx=pl.x + i*(pl.w/n);
+        ctx.beginPath(); ctx.moveTo(sx, pl.y); ctx.lineTo(sx+pl.w/n/2, pl.y-13); ctx.lineTo(sx+pl.w/n, pl.y); ctx.closePath(); ctx.fill(); }
+    } else if(pl.bank){
+      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText('🏦', pl.x+pl.w/2, pl.y-2);
+      if(!pl.done){ ctx.fillStyle='rgba(120,255,170,'+(0.3+0.25*Math.abs(Math.sin(Game.t/300)))+')';
+        roundRect(ctx, pl.x, pl.y-4, pl.w, 6, 3); ctx.fill(); }
+    } else if(pl.secretLedge){
+      ctx.fillStyle='rgba(255,220,120,'+(0.25+0.2*Math.abs(Math.sin(Game.t/220)))+')';
+      roundRect(ctx, pl.x-6, pl.y-4, pl.w+12, 10, 6); ctx.fill();
+    }
+  }
+  // ore
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const o of w.ore){ if(o.taken) continue;
+    const bob=Math.sin(Game.t/300 + o.x)*2;
+    if(o.kind==='secret'){
+      ctx.save();
+      const g=ctx.createRadialGradient(o.x+o.w/2,o.y+o.h/2,4,o.x+o.w/2,o.y+o.h/2,42);
+      const hue=(Game.t/12)%360; g.addColorStop(0,`hsla(${hue},100%,75%,.8)`); g.addColorStop(1,'hsla(0,0%,100%,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(o.x+o.w/2,o.y+o.h/2,42,0,6.28); ctx.fill();
+      ctx.font='40px serif'; ctx.fillText('🥚', o.x+o.w/2, o.y+o.h/2+bob);
+      ctx.font='14px serif'; ctx.fillText('✨', o.x+o.w/2-22, o.y-6); ctx.fillText('✨', o.x+o.w/2+22, o.y+8);
+      ctx.restore();
+    } else {
+      ctx.font='23px serif';
+      ctx.fillText(o.kind==='bag'?'💰':o.kind==='gem'?'💎':'🪙', o.x+o.w/2, o.y+o.h/2+bob);
+    }
+  }
+}
 function drawFire(ctx){
   ctx.textAlign='center'; ctx.textBaseline='middle';
   for(const f of Game.fire){ if(Game.t<f.born) continue;
@@ -2586,6 +2694,7 @@ function render(){
   for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else drawPlatform(ctx,pl); }
   if(Game.colorTag) drawColorPads(ctx);
   if(Game.copsRob) drawMoney(ctx);       // 💰 bags across the bank
+  if(Game.mine) drawMine(ctx);           // ⛏️ ore, spikes, banks & the secret
 
   // floating collectible coins
   for(const c of plats){
@@ -3051,6 +3160,7 @@ function updateHud(){
   const el=document.getElementById('hudLevel');
   el.textContent = Game.colorTag ? '🌈 Colour Tag'
                  : Game.copsRob ? '🚓 Cops & Robbers'
+                 : Game.mine ? '⛏️ Coin Mine'
                  : Game.room ? (Game.roomMode==='hideseek'?'🙈 Hide & Seek':'🏃 Room Tag')
                  : Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
                  : Game.heist ? '💰 Gold Heist'
@@ -3061,6 +3171,13 @@ function updateHud(){
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
   const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
+  if(Game.mine){
+    const cp=document.getElementById('hudCp');
+    cp.textContent='⛏️ '+Game.mineDepth+'m · 💰'+Game.mineHaul+' (🏦'+Game.mineBanked+')';
+    document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+    const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
+    return;
+  }
   if(Game.copsRob){
     const cr=Game.cr, cp=document.getElementById('hudCp');
     if(cr){

@@ -371,6 +371,14 @@ function startCopsRob(role){
   startGame({mode:'copsrobbers', role:r, seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
+function startMine(){
+  SFX.click(); closeModal('winModal');
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'mine', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
+}
 function openTagPick(){ showScreen('tagPickScreen'); }
 function startRoomTag(role){
   SFX.click(); closeModal('winModal');
@@ -791,15 +799,23 @@ function onLevelComplete(level, earned, isFinal, res){
         : `<p class="timer-big">🚔 Caught & jailed!</p><p class="muted">The cop nabbed you — 10 seconds in the clink!</p>`;
     }
   }
+  const isMine=!!res.mine;
+  if(isMine){
+    waitMsg = `<p class="timer-big">⛏️ ${res.depth}m deep!</p>
+      <p class="muted">🏦 Banked 🪙${res.banked}${res.lost?` · lost 🪙${res.lost} unbanked 💀`:''}${SAVE.mineBest?` · best ${SAVE.mineBest}m`:''}</p>
+      ${res.gotSecret&&res.secretPet?`<p class="timer-big">🌟 Dug up ${res.secretPet.emoji} ${res.secretPet.name}!</p>`:''}`;
+  }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag && !isCr;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag && !isCr && !isMine;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-    : (isCr
+    : (isMine
+        ? `<button class="btn gold" onclick="startMine()">🔁 Dig again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        : (isCr
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
                   : `<button class="btn gold" onclick="startCopsRob('${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isColorTag
@@ -816,16 +832,17 @@ function onLevelComplete(level, earned, isFinal, res){
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)))))));
-  const heading = isCr ? (res.survived?'🚔 You win!':'😢 You lost!')
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))))))));
+  const heading = isMine ? (res.gotSecret?'🌟 JACKPOT!':'⛏️ Mine run over!')
+                : isCr ? (res.survived?'🚔 You win!':'😢 You lost!')
                 : isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
                 : isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
                 : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isMine?(res.gotSecret?'🌟🥚':'⛏️💰'):isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag&&!isCr?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag&&!isCr&&!isMine?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;
