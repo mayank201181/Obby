@@ -1211,13 +1211,15 @@ function endHeist(){
   Game.finished=true;
   const loot=Game.heistLoot;
   addCoins(loot); SFX.win(); addShake(6);
-  const k=dailyKey();
-  if(!SAVE.heist || SAVE.heist.key!==k) SAVE.heist={key:k, best:0, done:false};
-  SAVE.heist.done=true;
-  if(loot>SAVE.heist.best) SAVE.heist.best=loot;
+  if(!Game.multiplayer){                 // playing with friends doesn't burn your daily heist
+    const k=dailyKey();
+    if(!SAVE.heist || SAVE.heist.key!==k) SAVE.heist={key:k, best:0, done:false};
+    SAVE.heist.done=true;
+    if(loot>SAVE.heist.best) SAVE.heist.best=loot;
+  }
   unlockAchievement('heist');
   persist();
-  if(Game.onLevelComplete) Game.onLevelComplete(1, loot, true, {heist:true, loot, coins:Game.runCoins});
+  if(Game.onLevelComplete) Game.onLevelComplete(1, loot, true, {heist:true, loot, coins:Game.runCoins, mp:Game.multiplayer});
 }
 
 /* ===== NATURAL DISASTER SURVIVAL ===== */

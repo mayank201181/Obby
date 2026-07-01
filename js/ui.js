@@ -519,6 +519,8 @@ const ROOM_MODE_DESC = {
   hideseek:'🙈 Hide & Seek: the host seeks (eyes closed 20s) while everyone hides & disguises as furniture!',
   colortag:'🌈 Colour Tag: the IT calls a rainbow colour — stand on it or get tagged (then YOU are IT)!',
   disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
+  tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
+  heist:   '💰 Gold Heist: everyone grabs gold in the same arena for 20s — most gold wins!',
 };
 function selectRoomMode(m){
   pendingRoomMode=m;
@@ -617,6 +619,7 @@ function hostStart(){
     const pool = (mpPlayerCount()>1) ? DISASTERS.concat(['killer']) : DISASTERS;
     cfg.disasterType = pool[Math.floor(Math.random()*pool.length)];
   }
+  if(pendingRoomMode==='tower' || pendingRoomMode==='heist') cfg.difficulty='easy';  // no cannons
   mpStart(cfg);
 }
 function leaveRoom(){
