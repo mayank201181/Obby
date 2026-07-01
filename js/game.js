@@ -1509,6 +1509,13 @@ function updateDisaster(dt){
       for(let k=0;k<n;k++) dz.meteors.push({x:40+Math.random()*(W-80), y:p.y-520-Math.random()*200, vy:5+Math.random()*3, r:16}); }
     for(let i=dz.meteors.length-1;i>=0;i--){ const m=dz.meteors[i]; m.vy=Math.min(15,m.vy+0.3); m.y+=m.vy*escale;
       if(m.y>p.y+700){ dz.meteors.splice(i,1); continue; }
+      // a block you built (above OR beside you) smashes the meteor — it shields you!
+      let blocked=false;
+      for(const b of Game.builtPlatforms){
+        if(m.x+m.r>b.x && m.x-m.r<b.x+b.w && m.y+m.r>b.y && m.y-m.r<b.y+b.h){ blocked=true; break; } }
+      if(blocked){ dz.meteors.splice(i,1); addShake(2); SFX.hit();
+        for(let k=0;k<4;k++) Game.abilityFx.push({kind:'dust', x:m.x, y:m.y, vx:(Math.random()*2-1)*2, vy:-Math.random()*1.2, life:1, born:Game.t});
+        continue; }
       if(p.invuln<=0 && p.x<m.x+m.r && p.x+p.w>m.x-m.r && p.y<m.y+m.r && p.y+p.h>m.y-m.r){ dz.meteors.splice(i,1); disasterHit(true); } }
   }
   if(t==='tsunami'){
