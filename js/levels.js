@@ -582,6 +582,41 @@ function generateRoom(seed){
            camoKinds:roomCamoKinds() };
 }
 
+/* ===== COPS & ROBBERS bank =====
+   A big wide bank. The robber must grab every 💰 spread across it (some on the
+   floor, some up on vault counters) while dodging the cop. */
+function generateBank(seed){
+  const rnd=mulberry32((seed*1000+9191)|0);
+  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+  const W=2800, H=560, floorTop=H-44;
+  const platforms=[]; let id=0;
+  platforms.push({id:id++, x:0, y:floorTop, w:W, h:H, type:'big', room:true});   // marble floor
+  // vault counters / desks to jump on (one-way furniture) — evenly spaced across
+  const shelves=[];
+  const COUNTERS=12;
+  for(let i=0;i<COUNTERS;i++){
+    const w=rint(96,150), x=clamp(150 + i*((W-320)/COUNTERS) + rint(-24,24), 46, W-46-w);
+    const y=floorTop - rint(70, 250);
+    platforms.push({id:id++, x, y, w, h:16, type:'furni', furni:true, kind:'vault', emoji:'🏦'});
+    shelves.push({x,y,w});
+    // a small step below tall counters so they stay reachable
+    if(y < floorTop-150){ const sw=90, sx=clamp(x+rint(-30,30),46,W-46-sw);
+      platforms.push({id:id++, x:sx, y:y+rint(80,110), w:sw, h:14, type:'furni', furni:true, kind:'crate', emoji:'📦'}); }
+  }
+  // money bags scattered everywhere — half on the floor, half up on counters
+  const money=[]; const TOTAL=20;
+  for(let i=0;i<TOTAL;i++){
+    let mx,my;
+    if(i%2===0){ const s=shelves[i%shelves.length]; mx=clamp(s.x+rint(6,s.w-30),20,W-40); my=s.y-30; }
+    else { mx=clamp(120 + (i/TOTAL)*(W-240) + rint(-40,40), 20, W-40); my=floorTop-30; }
+    money.push({x:mx, y:my, w:26, h:26, taken:false});
+  }
+  return { mode:'copsrobbers', room:true, bank:true, level:1, seed, width:W, height:H,
+           platforms, money, checkpoints:[], hazards:[], start:{x:70, y:floorTop}, finishY:-1e9,
+           moneyTotal:TOTAL };
+}
+
 /* ===== COLOUR TAG arena =====
    Rainbow safe pads (incl. pink). The "it" calls a colour; stand on that
    colour or get tagged. Obby (climb) or Room (wide flat) layouts. */

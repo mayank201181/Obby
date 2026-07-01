@@ -146,6 +146,7 @@ function gameInit(){
     const r=Game.canvas.getBoundingClientRect();
     const sx=e.clientX-r.left, sy=e.clientY-r.top;
     if(Game.ship){ shipTap(sx,sy); return; }                 // tap a trapped friend to free you both
+    if(Game.copsRob && Game.cr && Game.cr.phase==='jail'){ copLaugh(); return; }  // cop taunts the jailed robber
     if(Game.disaster && Game.buildMode){ disasterBuildAt(sx,sy); return; }
     if(Game.petPower==='polymorph' && Game.running){ alienTapMorph(sx,sy); return; }  // 👽 tap a friend/boss
     if(Game.petBanana && Game.running) throwBananaAt(sx,sy);
@@ -183,10 +184,11 @@ function startGame(opts){
   Game.towerResume = opts.resumeFloor || 0;
   Game.room = (opts.mode==='roomtag' || (opts.mode==='tag' && Game.tagArena==='room'));
   Game.roomMode = opts.mode==='roomtag' ? 'tag' : null;
+  Game.copsRob = (opts.mode==='copsrobbers');
   // solo-vs-AI only for the single-player room modes; MP uses real players
-  Game.roomSolo = !Game.multiplayer && (opts.mode==='roomtag' || opts.mode==='colortag');
+  Game.roomSolo = !Game.multiplayer && (opts.mode==='roomtag' || opts.mode==='colortag' || opts.mode==='copsrobbers');
   Game.soloRole = opts.role==='tagger' ? 'tagger' : 'runner';
-  if(Game.room || Game.colorTag) Game.difficulty='easy';   // no cannons in these arenas
+  if(Game.room || Game.colorTag || Game.copsRob) Game.difficulty='easy';   // no cannons in these arenas
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
@@ -217,7 +219,8 @@ function startGame(opts){
 }
 
 function loadLevel(level){
-  Game.world = Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
+  Game.world = Game.copsRob ? generateBank(Game.seed)
+             : Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
              : Game.room ? generateRoom(Game.seed)
              : Game.disaster ? generateDisaster(Game.seed)
              : Game.heist ? generateHeist(Game.seed)
@@ -261,7 +264,8 @@ function loadLevel(level){
   Game.bullets=[];
   Game.player.invuln = 1200;        // brief grace at the start of a level
   Game.cam.x=st.x; Game.cam.y=st.y-200;
-  if(Game.room && Game.roomSolo) initRoom();
+  if(Game.copsRob){ if(Game.multiplayer) initCopsRobMP(); else initCopsRob(); }
+  else if(Game.room && Game.roomSolo) initRoom();
   else if(Game.room && Game.multiplayer) initRoomMP();
   if(Game.colorTag) initColorTag();
   updateHud();
@@ -407,7 +411,7 @@ function updatePoops(){
   if(!Game.poops || !Game.poops.length) return;
   const p=Game.player, me=MP.selfId||'me';
   for(let i=Game.poops.length-1;i>=0;i--){ const g=Game.poops[i];
-    if(Game.t-g.born > 14000){ Game.poops.splice(i,1); continue; }   // dries up
+    // poop piles stay for the whole round (only trimmed by the 40-pile cap)
     const feetY=p.y+p.h;
     const overP = p.x+p.w>g.x && p.x<g.x+g.w && feetY>=g.y-6 && feetY<=g.y+g.h+10;
     if(overP && g.owner!==me && Game.t-g.born>250 && Game.t>=(Game.stunUntil||0)-100 && !g._hitMe){
@@ -694,13 +698,14 @@ function update(dt){
     if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT && drives) startDisasterActive(); }
     else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT && drives) nextDisaster(); }
   }
-  if(Game.room && Game.roomSolo && !Game.finished) updateRoom(dt);
+  if(Game.copsRob && !Game.finished){ if(Game.multiplayer) updateCopsRobMP(dt); else updateCopsRob(dt); }
+  else if(Game.room && Game.roomSolo && !Game.finished) updateRoom(dt);
   else if(Game.room && Game.multiplayer && !Game.finished) updateRoomMP(dt);
   if(Game.colorTag && !Game.finished) updateColorTag(dt);
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
-  const flatArena = Game.room || (Game.colorTag && Game.colorArena==='room');
+  const flatArena = Game.room || Game.copsRob || (Game.colorTag && Game.colorArena==='room');
   const camTX=p.x, camTY=flatArena ? Game.world.height/2 - 20 : p.y-40;
   Game.cam.x += (camTX-Game.cam.x)*0.12;
   Game.cam.y += (camTY-Game.cam.y)*0.12;
@@ -1444,12 +1449,9 @@ function drawStarGlow(ctx, cx, cy){
 function drawPoops(ctx){
   if(!Game.poops || !Game.poops.length) return;
   ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(const g of Game.poops){
-    const age=Game.t-g.born, fade=age>11000?Math.max(0,(14000-age)/3000):1;
-    ctx.globalAlpha=fade;
+  for(const g of Game.poops){                 // piles last the whole round
     ctx.fillText('💩', g.x+g.w/2, g.y+g.h/2);
   }
-  ctx.globalAlpha=1;
 }
 /* a red "IT" marker over the tagged player in Tag mode */
 function drawItMarker(ctx,cx,topY){
@@ -2166,6 +2168,152 @@ function endRoom(survived){
   if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
     {room:true, roomMode:Game.roomMode, survived, role:Game.soloRole});
 }
+
+/* ================= COPS & ROBBERS ================= */
+function crNearestMoney(x,y){
+  let best=null, bd=1e9;
+  for(const m of Game.world.money){ if(m.taken) continue;
+    const d=Math.hypot((m.x+m.w/2)-x,(m.y+m.h/2)-y); if(d<bd){ bd=d; best=m; } }
+  return best;
+}
+function crCollect(box, announce){
+  const cr=Game.cr; let any=false;
+  for(let i=0;i<Game.world.money.length;i++){ const m=Game.world.money[i]; if(m.taken) continue;
+    if(box.x < m.x+m.w && box.x+box.w > m.x && box.y < m.y+m.h && box.y+box.h > m.y){
+      m.taken=true; cr.got++; any=true;
+      if(SFX && SFX.checkpoint) SFX.checkpoint();
+      if(Game.multiplayer && typeof mpSendMoney==='function') mpSendMoney(i);
+      if(announce && typeof toast==='function') toast('💰 '+cr.got+'/'+cr.total+'!');
+    } }
+  return any;
+}
+function initCopsRob(){
+  const W=Game.world.width, H=Game.world.height, floorTop=H-44;
+  const iAmCop = Game.soloRole==='tagger';
+  Game.cr={ role:iAmCop?'cop':'robber', total:(Game.world.money?Game.world.money.length:0), got:0,
+            phase:'rob', jailUntil:0, laughT:0, mp:false };
+  const p=Game.player;
+  if(iAmCop){ p.x=W-110; p.respawnX=p.x; }                 // cop starts on the far right
+  Game.ai={ x: iAmCop?140:(W-130), y:floorTop-34, vx:0, vy:0, w:34, h:34, facing:1, onGround:false,
+            speed: iAmCop?3.6:4.1, tx:W/2, ty:null, jumpCdUntil:0, _stuck:0, _wanderT:0 };
+  Game.jail=null;
+  if(typeof toast==='function') toast(iAmCop
+    ? '🚓 You are the COP! Catch the robber before they loot the bank!'
+    : '🦹 You are the ROBBER! Grab every 💰 and dodge the cop!');
+}
+function initCopsRobMP(){
+  Game.cr={ role: MP.isHost?'cop':'robber', total:(Game.world.money?Game.world.money.length:0), got:0,
+            phase:'rob', jailUntil:0, laughT:0, mp:true };
+  const W=Game.world.width, p=Game.player;
+  if(MP.isHost){ p.x=W-110; p.respawnX=p.x; setTimeout(()=>{ if(typeof mpSendIt==='function') mpSendIt(MP.selfId); }, 400); }  // host is the cop ("it")
+  Game.jail=null;
+  if(typeof toast==='function') toast(MP.isHost
+    ? '🚓 You are the COP! Catch the robber!'
+    : '🦹 You are the ROBBER! Grab all the 💰 before the cop tags you!');
+}
+function updateCopsRob(dt){
+  const p=Game.player, a=Game.ai, cr=Game.cr; if(!a||!cr) return;
+  if(cr.phase==='jail'){
+    if(cr.role==='robber' && Game.t>cr.laughT+1600){ cr.laughT=Game.t; }   // bot cop taunts periodically
+    if(Game.t>=cr.jailUntil) return endCopsRob(false);                     // 10s up → cop wins
+    return;
+  }
+  const dist=Math.hypot((p.x+p.w/2)-(a.x+a.w/2),(p.y+p.h/2)-(a.y+a.h/2));
+  const robberBox = cr.role==='robber' ? p : a;
+  crCollect(robberBox, cr.role==='robber');
+  if(cr.got>=cr.total) return endCopsRob(true);            // robber grabbed it all → robber wins
+  if(cr.role==='cop'){
+    // the bot is the robber: head for the nearest money, but bolt if the cop is close
+    const m=crNearestMoney(a.x+a.w/2, a.y+a.h/2);
+    if(dist<170){ const away=(a.x<p.x)?-1:1; a.tx=Math.max(60,Math.min(Game.world.width-60, a.x+away*320)); a.ty=null; }
+    else if(m){ a.tx=m.x+m.w/2; a.ty = (m.y < a.y-30)? m.y : null; }
+    else { a.tx=p.x; a.ty=null; }
+    stepAgent(a);
+    if(dist<34) return enterJail();
+  } else {
+    // the bot is the cop: chase you
+    a.tx=p.x+p.w/2; a.ty=p.y; stepAgent(a);
+    if(dist<32 && p.invuln<=0) return enterJail();
+  }
+}
+function updateCopsRobMP(dt){
+  const p=Game.player, cr=Game.cr; if(!cr) return;
+  if(cr.phase==='jail'){ if(Game.t>=cr.jailUntil) return endCopsRob(false); return; }
+  if(cr.role==='robber'){
+    crCollect(p, true);
+    if(cr.got>=cr.total){ if(typeof mpSendCopsWin==='function') mpSendCopsWin(); return endCopsRob(true); }
+  } else if(MP.itId===MP.selfId){   // I'm the cop — tag a robber on contact
+    for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+      if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<36){
+        if(typeof mpSendCaught==='function') mpSendCaught(r.id);
+        enterJail(); break; } }
+  }
+}
+function enterJail(){
+  const cr=Game.cr; if(!cr || cr.phase==='jail') return;
+  cr.phase='jail'; cr.jailUntil=Game.t+10000; cr.laughT=0;
+  Game.moveLock=true; SFX.hit(); addShake(4);
+  Game.jail={ until:cr.jailUntil };
+  if(typeof toast==='function') toast(cr.role==='cop'
+    ? '🚔 Gotcha! Off to jail — tap 😂 to taunt. You win in 10s!'
+    : '🚔 Busted! Straight to jail for 10 seconds — no escape!');
+}
+/* a friend grabbed a money bag (multiplayer) — mark it gone on my screen too */
+function onMoneyNet(i){
+  if(!Game.world || !Game.world.money) return;
+  const m=Game.world.money[i]; if(m && !m.taken){ m.taken=true; if(Game.cr) Game.cr.got++; }
+}
+/* the cop got a robber (multiplayer) — everyone drops into the jail scene */
+function onCopsCaughtNet(){ if(Game.copsRob) enterJail(); }
+/* the robber looted the whole bank (multiplayer) — robber wins for everyone */
+function onCopsWinNet(){ if(Game.copsRob && !Game.finished) endCopsRob(true); }
+function copLaugh(){
+  const cr=Game.cr; if(!cr || cr.phase!=='jail') return;
+  const iAmCop = cr.role==='cop' || (Game.multiplayer && MP.itId===MP.selfId);
+  if(!iAmCop) return;
+  cr.laughT=Game.t;
+  if(SFX && SFX.click) SFX.click();
+  if(Game.multiplayer && typeof mpSendEmote==='function') mpSendEmote('laugh');
+}
+function endCopsRob(robberWon){
+  if(Game.finished) return;
+  Game.finished=true; Game.running=false; Game.moveLock=false; Game.jail=null;
+  const iWon = (Game.cr.role==='robber')===robberWon;
+  if(iWon) SFX.win(); else SFX.hit();
+  const reward = iWon?60:12; addCoins(reward);
+  if(Game.multiplayer && typeof mpSendFinish==='function') mpSendFinish();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, reward, true,
+    {copsRob:true, robberWon, role:Game.cr.role, survived:iWon, mp:Game.multiplayer});
+}
+function drawMoney(ctx){
+  if(!Game.world || !Game.world.money) return;
+  ctx.font='24px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(const m of Game.world.money){ if(m.taken) continue;
+    const bob=Math.sin(Game.t/300 + m.x)*2;
+    ctx.fillText('💰', m.x+m.w/2, m.y+m.h/2+bob);
+  }
+}
+function drawJailOverlay(ctx){
+  const cr=Game.cr, W=Game.W, H=Game.H; if(!cr) return;
+  ctx.fillStyle='rgba(18,20,32,.95)'; ctx.fillRect(0,0,W,H);
+  const iAmCop = cr.role==='cop' || (Game.multiplayer && MP.itId===MP.selfId);
+  const secsLeft=Math.max(0,Math.ceil((cr.jailUntil-Game.t)/1000));
+  const cellX=W*0.10, cellY=H*0.30, cellW=W*0.36, cellH=H*0.44;
+  ctx.fillStyle='#262a3c'; roundRect(ctx,cellX,cellY,cellW,cellH,10); ctx.fill();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=Math.round(cellH*0.4)+'px serif'; ctx.fillText('🦹', cellX+cellW/2, cellY+cellH*0.62);
+  ctx.font='22px serif'; ctx.fillText('😭', cellX+cellW/2, cellY+cellH*0.30);
+  ctx.strokeStyle='#c9d2e6'; ctx.lineWidth=5;                 // cell bars
+  for(let bx=cellX+16; bx<cellX+cellW-8; bx+=22){ ctx.beginPath(); ctx.moveTo(bx,cellY+5); ctx.lineTo(bx,cellY+cellH-5); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(cellX,cellY+7); ctx.lineTo(cellX+cellW,cellY+7); ctx.stroke();
+  ctx.font='52px serif'; ctx.fillText('👮', W*0.74, cellY+cellH*0.62);   // cop watching
+  ctx.font='22px serif'; ctx.fillText('🚓', W*0.74, cellY+cellH*0.62-54);
+  if(Game.t-(cr.laughT||0) < 1300){ ctx.font='36px serif'; ctx.fillText('😂', W*0.60, cellY+cellH*0.34); }
+  ctx.fillStyle='#fff'; ctx.font='bold 22px Nunito'; ctx.fillText('🚔 JAIL', W/2, H*0.15);
+  ctx.font='bold 42px Nunito'; ctx.fillText(secsLeft+'s', W/2, H*0.235);
+  ctx.font='bold 15px Nunito'; ctx.fillStyle='#cdd6ee';
+  ctx.fillText(iAmCop?'The robber is locked up — tap 😂 to taunt them!':'You are locked up… no escape!', W/2, H*0.88);
+}
 function drawFire(ctx){
   ctx.textAlign='center'; ctx.textBaseline='middle';
   for(const f of Game.fire){ if(Game.t<f.born) continue;
@@ -2191,6 +2339,14 @@ function drawFurni(ctx, pl){
 }
 function drawRoomAgent(ctx){
   const a=Game.ai; if(!a) return;
+  if(Game.copsRob && Game.cr){
+    const cx=a.x+a.w/2, cy=a.y+a.h/2;
+    ctx.fillStyle='rgba(60,50,80,.18)'; ctx.beginPath(); ctx.ellipse(cx, a.y+a.h, 18,6,0,0,Math.PI*2); ctx.fill();
+    ctx.font='30px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(Game.cr.role==='cop'?'🦹':'👮', cx, cy);   // bot is the robber if you're the cop, else the cop
+    ctx.font='16px serif'; ctx.fillText(Game.cr.role==='cop'?'💰':'🚓', cx, a.y-12);
+    return;
+  }
   // Hide & Seek where YOU seek: the bot is disguised as furniture (hidden during the 20s)
   if(Game.roomMode==='hideseek' && Game.soloRole==='tagger'){
     if(Game.rm && Game.rm.phase==='hide') return;       // can't see it while it hides
@@ -2429,6 +2585,7 @@ function render(){
   const plats=Game.world.platforms;
   for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else drawPlatform(ctx,pl); }
   if(Game.colorTag) drawColorPads(ctx);
+  if(Game.copsRob) drawMoney(ctx);       // 💰 bags across the bank
 
   // floating collectible coins
   for(const c of plats){
@@ -2506,7 +2663,7 @@ function render(){
   }
 
   // AI seeker / tagger
-  if((Game.room||Game.colorTag) && Game.roomSolo) drawRoomAgent(ctx);
+  if((Game.room||Game.colorTag||Game.copsRob) && Game.roomSolo) drawRoomAgent(ctx);
 
   drawPoops(ctx);                          // stinky Hyena poop piles
   const p=Game.player;
@@ -2563,6 +2720,7 @@ function render(){
   drawWeather(ctx);
   drawHazardsScreen(ctx);
   if(Game.ship) drawShipOverlay(ctx);           // the alien-ship escape scene (screen space)
+  if(Game.copsRob && Game.cr && Game.cr.phase==='jail') drawJailOverlay(ctx);   // the jail scene
   // 🏜️ sand storm: blur your sight for 3s + a sandy haze
   const blurry = Game.t < (Game.blurUntil||0);
   if(Game.canvas) Game.canvas.style.filter = blurry ? 'blur(4px) sepia(.35) contrast(.9)' : '';
@@ -2892,6 +3050,7 @@ function roundRect(ctx,x,y,w,h,r){
 function updateHud(){
   const el=document.getElementById('hudLevel');
   el.textContent = Game.colorTag ? '🌈 Colour Tag'
+                 : Game.copsRob ? '🚓 Cops & Robbers'
                  : Game.room ? (Game.roomMode==='hideseek'?'🙈 Hide & Seek':'🏃 Room Tag')
                  : Game.disaster ? (Game.disasterPhase==='build'?'🏗️ Build!':(DISASTER_INFO[Game.disasterType]||{}).name||'Disaster')
                  : Game.heist ? '💰 Gold Heist'
@@ -2902,6 +3061,17 @@ function updateHud(){
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
   const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
+  if(Game.copsRob){
+    const cr=Game.cr, cp=document.getElementById('hudCp');
+    if(cr){
+      if(cr.phase==='jail'){ cp.textContent='🚔 JAIL '+Math.max(0,Math.ceil((cr.jailUntil-Game.t)/1000))+'s'; }
+      else { const amCop = cr.role==='cop' || (Game.multiplayer && MP.itId===MP.selfId);
+        cp.textContent = (amCop?'🚓 Catch the robber! ':'🦹 Rob the bank! ')+'💰 '+cr.got+'/'+cr.total; }
+    }
+    document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+    const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
+    return;
+  }
   if(Game.colorTag){
     const ct=Game.ct, cp=document.getElementById('hudCp');
     const amIt = (Game.multiplayer && MP.itId===MP.selfId) || (!Game.multiplayer && Game.soloRole==='tagger');

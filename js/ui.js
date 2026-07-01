@@ -348,17 +348,28 @@ function toggleLavaProof(){ Game.buildLavaProof=!Game.buildLavaProof; SFX.click(
 let pendingSolo=null;
 function openRolePick(mode, arena){
   pendingSolo={mode, arena};
-  document.getElementById('roleTitle').textContent = '🏃 Pick your side';
-  document.getElementById('roleRunBtn').innerHTML = '🏃 You run'+
-    '<br><span style="font-size:12px;font-weight:700">dodge &amp; parkour from the tagger bot</span>';
-  document.getElementById('roleTagBtn').innerHTML = '😈 You\'re IT'+
-    '<br><span style="font-size:12px;font-weight:700">chase &amp; tag the bot</span>';
+  const isCr = mode==='copsrobbers';
+  document.getElementById('roleTitle').textContent = isCr ? '🚓 Cops & Robbers — pick your side' : '🏃 Pick your side';
+  document.getElementById('roleRunBtn').innerHTML = (isCr?'🦹 Robber':'🏃 You run')+
+    '<br><span style="font-size:12px;font-weight:700">'+(isCr?'grab all the 💰 &amp; dodge the cop':'dodge &amp; parkour from the tagger bot')+'</span>';
+  document.getElementById('roleTagBtn').innerHTML = (isCr?'🚓 Cop':'😈 You\'re IT')+
+    '<br><span style="font-size:12px;font-weight:700">'+(isCr?'catch the robber before they loot it':'chase &amp; tag the bot')+'</span>';
   showScreen('rolePickScreen');
 }
 function startWithRole(role){
   const s=pendingSolo||{mode:'roomtag'};
   if(s.mode==='roomtag') startRoomTag(role);
   else if(s.mode==='colortag') startColorTag(s.arena||'room', role);
+  else if(s.mode==='copsrobbers') startCopsRob(role);
+}
+function startCopsRob(role){
+  SFX.click(); closeModal('winModal');
+  Game.multiplayer=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  const r = (role==='cop'||role==='tagger') ? 'tagger' : 'runner';   // cop = the chaser
+  startGame({mode:'copsrobbers', role:r, seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
 }
 function openTagPick(){ showScreen('tagPickScreen'); }
 function startRoomTag(role){
@@ -579,6 +590,7 @@ const ROOM_MODE_DESC = {
   tag:     'Tag: one player is IT and chases the others up the obby — touch a friend to pass it on! 🏃',
   roomtag: '🛋️ Room Tag: tag in a big furniture room — jump on the furniture to escape the tagger!',
   colortag:'🌈 Colour Tag: the IT calls a rainbow colour — stand on it or get tagged (then YOU are IT)!',
+  copsrobbers:'🚓 Cops & Robbers: the robber grabs all the 💰 in the big bank while the cop chases — get tagged and it\'s 10s in jail!',
   disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
   tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
   heist:   '💰 Gold Heist: everyone grabs gold in the same arena for 20s — most gold wins!',
@@ -766,15 +778,31 @@ function onLevelComplete(level, earned, isFinal, res){
         : `<p class="timer-big">😈 Tagged off-colour!</p><p class="muted">Get on the called colour next time!</p>`;
     }
   }
+  const isCr=!!res.copsRob;
+  if(isCr){
+    const cop = res.role==='cop';
+    if(res.robberWon){
+      waitMsg = cop
+        ? `<p class="timer-big">💰 The robber got away!</p><p class="muted">They looted the whole bank before you caught them!</p>`
+        : `<p class="timer-big">💰 Clean getaway!</p><p class="muted">You robbed the entire bank — nice one! 🦹</p>`;
+    } else {
+      waitMsg = cop
+        ? `<p class="timer-big">🚔 Busted 'em!</p><p class="muted">You caught the robber and locked them up! 👮</p>`
+        : `<p class="timer-big">🚔 Caught & jailed!</p><p class="muted">The cop nabbed you — 10 seconds in the clink!</p>`;
+    }
+  }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag && !isCr;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-    : (isColorTag
+    : (isCr
+        ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
+                  : `<button class="btn gold" onclick="startCopsRob('${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
+        : (isColorTag
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
                   : `<button class="btn gold" onclick="startColorTag('${res.arena||'room'}','${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
         : (isRoom
@@ -788,15 +816,16 @@ function onLevelComplete(level, earned, isFinal, res){
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))))));
-  const heading = isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)))))));
+  const heading = isCr ? (res.survived?'🚔 You win!':'😢 You lost!')
+                : isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
                 : isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
                 : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
-    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
+    ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag&&!isCr?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}
     ${isHeist?'':`<p class="timer-big">+🪙${earned}</p>`}${waitMsg}
     ${nav}`;
