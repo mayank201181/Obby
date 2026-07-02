@@ -371,12 +371,17 @@ function startCopsRob(role){
   startGame({mode:'copsrobbers', role:r, seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
-function startMine(){
+function startMine(resumeChoice){
   SFX.click(); closeModal('winModal');
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
-  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  startGame({mode:'mine', seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  // leaving to the lobby saves your dig so you can pick it up later
+  Game.onExit=()=>{ if(Game.dig && typeof saveMine==='function') saveMine(Game.dig); showScreen('lobbyScreen'); initLobby(); };
+  const canResume = !!(SAVE.mineSave && SAVE.mineSave.seed!=null);
+  const resume = canResume && resumeChoice!=='fresh';
+  if(resumeChoice==='fresh' && typeof clearMineSave==='function') clearMineSave();
+  const seed = resume ? SAVE.mineSave.seed : Math.floor(Math.random()*1e6);
+  startGame({mode:'mine', seed, mineResume:resume, multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
 function openTagPick(){ showScreen('tagPickScreen'); }
@@ -816,7 +821,7 @@ function onLevelComplete(level, earned, isFinal, res){
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
     : (isMine
-        ? `<button class="btn gold" onclick="startMine()">🔁 Dig again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        ? `<button class="btn gold" onclick="startMine()">🔁 Keep digging</button><button class="btn ghost" onclick="startMine('fresh')">🆕 New mine</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isCr
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
                   : `<button class="btn gold" onclick="startCopsRob('${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)

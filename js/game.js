@@ -128,6 +128,9 @@ function gameInit(){
   Game.canvas=document.getElementById('gameCanvas');
   Game.ctx=Game.canvas.getContext('2d');
   window.addEventListener('resize', gameResize);
+  // never lose an in-progress dig if the tab closes / backgrounds
+  window.addEventListener('beforeunload', ()=>{ if(Game.mine && Game.dig && !Game.multiplayer) saveMine(Game.dig); });
+  window.addEventListener('pagehide', ()=>{ if(Game.mine && Game.dig && !Game.multiplayer) saveMine(Game.dig); });
   // keyboard (desktop)
   const typingInField = e => {
     const t=e.target;
@@ -177,6 +180,7 @@ function startGame(opts){
   Game.difficulty=opts.difficulty||'hard';
   Game.tower = opts.mode==='tower';
   Game.mine = opts.mode==='mine';
+  Game.mineResume = !!opts.mineResume;
   Game.daily = !!opts.daily;
   Game.heist = opts.mode==='heist';
   Game.disaster = opts.mode==='disaster';
@@ -2364,10 +2368,48 @@ function digSolid(dg,c,r){
   digGenRow(dg,r);
   return dg.rows[r][c]!=null;
 }
+/* ---- save / resume your dig (solo) ---- */
+function serializeMine(dg){
+  if(!dg) return null;
+  const dug=[], dmg=[];
+  for(let r=0;r<dg.rows.length;r++){ const row=dg.rows[r]; if(!row) continue;
+    for(let c=0;c<row.length;c++){ const cell=row[c];
+      if(cell===null) dug.push([r,c]);
+      else if(cell.hp<cell.max) dmg.push([r,c,cell.hp]); } }
+  return { seed:dg.seed, px:Math.round(dg.px), py:Math.round(dg.py), dug, dmg,
+           coins:dg.coins, gems:dg.gems, pets:dg.pets, deepest:dg.deepest,
+           foundPets:(dg.foundPets||[]).map(p=>({emoji:p.emoji, name:p.name})) };
+}
+function saveMine(dg){
+  if(!dg || Game.multiplayer) return;
+  try{ SAVE.mineSave = serializeMine(dg); if(typeof persist==='function') persist(); }catch(e){}
+}
+function clearMineSave(){ SAVE.mineSave=null; if(typeof persist==='function') persist(); }
+function deserializeMine(s){
+  const dg={ seed:s.seed, cols:DIG_COLS, cell:DIG_CELL, rows:[], builtTo:-1,
+    px:s.px, py:s.py, vx:0, vy:0, w:DIG_PW, h:DIG_PH, facing:1, onGround:false, netT:0, saveT:0,
+    coins:s.coins||0, gems:s.gems||0, pets:s.pets||0, deepest:s.deepest||0,
+    foundPets:(s.foundPets||[]).map(p=>({emoji:p.emoji, name:p.name})), fx:[], loot:[], camY:0, hint:true };
+  let maxR=14;
+  for(const d of (s.dug||[])) maxR=Math.max(maxR, d[0]);
+  for(const d of (s.dmg||[])) maxR=Math.max(maxR, d[0]);
+  maxR=Math.max(maxR, digRowAt(s.py)+6);
+  for(let r=0;r<=maxR;r++) digGenRow(dg, r);
+  for(const [r,c] of (s.dug||[])){ if(dg.rows[r]) dg.rows[r][c]=null; }
+  for(const d of (s.dmg||[])){ const cell=dg.rows[d[0]] && dg.rows[d[0]][d[1]]; if(cell) cell.hp=d[2]; }
+  dg.camY = Math.max(0, s.py - Game.H*0.42);
+  return dg;
+}
 function initMine(){
+  // resume your saved solo dig if you have one
+  if(!Game.multiplayer && Game.mineResume && SAVE.mineSave && SAVE.mineSave.seed!=null){
+    Game.dig = deserializeMine(SAVE.mineSave);
+    if(typeof toast==='function') toast('⛏️ Back in your mine — '+(SAVE.mineSave.deepest||0)+' deep. Keep digging!');
+    return;
+  }
   const seed = (Game.multiplayer && MP.startConfig && MP.startConfig.seed) ? MP.startConfig.seed : (Game.seed|0);
   const dg={ seed, cols:DIG_COLS, cell:DIG_CELL, rows:[], builtTo:-1,
-    px:0, py:0, vx:0, vy:0, w:DIG_PW, h:DIG_PH, facing:1, onGround:false, netT:0,
+    px:0, py:0, vx:0, vy:0, w:DIG_PW, h:DIG_PH, facing:1, onGround:false, netT:0, saveT:0,
     coins:0, gems:0, pets:0, deepest:0, foundPets:[], fx:[], loot:[], camY:0, hint:false };
   for(let r=0;r<=14;r++) digGenRow(dg, r);
   const mid=Math.floor(DIG_COLS/2);
@@ -2375,6 +2417,7 @@ function initMine(){
   dg.px = mid*dg.cell + (dg.cell-dg.w)/2;       // WORLD x, centred on screen at draw time
   dg.py = DIG_TOP + dg.cell - dg.h;             // feet resting on row 1's top
   Game.dig=dg;
+  if(!Game.multiplayer) saveMine(dg);
   if(typeof toast==='function') toast('⛏️ Move with ◀▶ + JUMP, and tap blocks to dig any direction!');
 }
 function digPhysics(dg){
@@ -2407,6 +2450,7 @@ function updateDig(dt){
   const depthRow=Math.max(0, digRowAt(dg.py+dg.h)); dg.deepest=Math.max(dg.deepest, depthRow);
   if(!dg.hint && dg.deepest>=15){ dg.hint=true; if(typeof toast==='function') toast('💎 Keep digging — rare pets hide deep down!'); }
   for(let i=dg.fx.length-1;i>=0;i--){ const f=dg.fx[i]; f.x+=f.vx; f.y+=f.vy; f.vy+=0.4; f.life-=0.045; if(f.life<=0) dg.fx.splice(i,1); }
+  if(!Game.multiplayer){ dg.saveT=(dg.saveT||0)+dt; if(dg.saveT>3){ dg.saveT=0; saveMine(dg); } }   // autosave your dig
   if(Game.multiplayer && typeof mpSendPos==='function'){ dg.netT+=dt;
     if(dg.netT>0.09){ dg.netT=0; mpSendPos({digX:Math.round(dg.px), digY:Math.round(dg.py), name:SAVE.name, skin:SAVE.skin, inShip:false, finished:false}); } }
 }
@@ -2481,6 +2525,7 @@ function finishDig(){
   const dg=Game.dig; if(!dg || Game.finished) return;
   collectDigLootNow(dg);                           // grab anything still mid-air
   Game.finished=true; Game.running=false;
+  if(!Game.multiplayer) saveMine(dg);              // keep the dig so you can carry on later
   if(!SAVE.mineBest || dg.deepest>SAVE.mineBest){ SAVE.mineBest=dg.deepest; if(typeof persist==='function') persist(); }
   if(Game.multiplayer && typeof mpSendFinish==='function') mpSendFinish();
   if(SFX && SFX.win) SFX.win();

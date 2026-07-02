@@ -223,6 +223,7 @@ function defaultSave(){
     lvlCoinsCollected:0,    // total floating coins collected in levels
     towerBest:0,           // highest floor reached in endless Tower mode
     mineBest:0,            // deepest metres reached in Coin Mine mode
+    mineSave:null,         // saved Coin Mine dig (resume your tunnels)
     towerFloor:0,          // saved Tower progress (resume from this floor)
     towerSeed:null,        // seed of the saved Tower run
     daily:{key:'',best:0,done:false},  // daily challenge progress for the current day
