@@ -402,7 +402,7 @@ function alienTapMorph(screenX, screenY){
 function teleportTo(screenX, screenY){
   if(!Game.running || Game.petPower!=='teleport') return;
   const p=Game.player; if(!p) return;
-  if(Game.t < Game.powerCdUntil){ if(typeof toast==='function') toast('🌈 Blink recharging…'); return; }
+  if(Game.t < Game.powerCdUntil) return;              // still on cooldown (a small timer shows on-screen)
   const s=(typeof gameScale==='function')?gameScale():1;
   const wx=(screenX-Game.W/2)/s + Game.cam.x;         // tap point -> world coords
   const wy=(screenY-Game.H/2)/s + Game.cam.y;
@@ -3024,6 +3024,18 @@ function render(){
   const blurry = Game.t < (Game.blurUntil||0);
   if(Game.canvas) Game.canvas.style.filter = blurry ? 'blur(4px) sepia(.35) contrast(.9)' : '';
   if(blurry){ ctx.fillStyle='rgba(214,184,132,.34)'; ctx.fillRect(0,0,Game.W,Game.H); }
+  // 🌈 Prism: a small blink-cooldown countdown on the side
+  if(Game.petPower==='teleport' && Game.running && Game.t < Game.powerCdUntil){
+    const left=Math.ceil((Game.powerCdUntil-Game.t)/1000);
+    const bx=Game.W-28, by=Math.round(Game.H*0.42);
+    ctx.save();
+    ctx.fillStyle='rgba(30,24,48,.6)'; ctx.beginPath(); ctx.arc(bx,by,15,0,6.283); ctx.fill();
+    ctx.strokeStyle='rgba(255,211,107,.7)'; ctx.lineWidth=2; ctx.stroke();
+    ctx.fillStyle='#ffd36b'; ctx.font='bold 15px Nunito'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(left, bx, by+1);
+    ctx.font='11px serif'; ctx.fillText('🌈', bx, by-17);
+    ctx.restore();
+  }
   updateHudLive();
 }
 
