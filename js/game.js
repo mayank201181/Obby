@@ -145,6 +145,7 @@ function gameInit(){
   Game.canvas.addEventListener('pointerdown', e=>{
     const r=Game.canvas.getBoundingClientRect();
     const sx=e.clientX-r.left, sy=e.clientY-r.top;
+    if(Game.mine){ digTap(sx,sy); return; }                  // Coin Mine: tap blocks to dig
     if(Game.ship){ shipTap(sx,sy); return; }                 // tap a trapped friend to free you both
     if(Game.copsRob && Game.cr && Game.cr.phase==='jail'){ copLaugh(); return; }  // cop taunts the jailed robber
     if(Game.disaster && Game.buildMode){ disasterBuildAt(sx,sy); return; }
@@ -614,6 +615,7 @@ function updatePowers(dt){
 
 function update(dt){
   if(Game.spectating){ spectateUpdate(); return; }
+  if(Game.mine){ updateDig(dt); return; }        // Coin Mine is a grid-dig game, not a platformer
   if(Game.ship){ updateShip(dt); return; }      // inside the alien ship — escape scene
   const p=Game.player; if(!p) return;
   if(Game.shakeMag){ Game.shakeMag*=0.86; if(Game.shakeMag<0.2) Game.shakeMag=0; }
@@ -693,7 +695,6 @@ function update(dt){
   collectCoins(p);
   updatePowers(dt);                     // secret-pet powers (fire, morph timers)
   if(Game.tower){ maybeExtendTower(); updateBoss(); }   // grow tower + boss fights
-  if(Game.mine){ maybeExtendMine(); if(!Game.finished) updateMine(dt); }   // grow shaft + mine logic
   if(Game.bananas.length) updateBananas();
   if(Game.poops.length) updatePoops();
   if(Game.heist && !Game.finished && Game.t>=Game.heistEndT) endHeist();
@@ -2320,108 +2321,188 @@ function drawJailOverlay(ctx){
   ctx.fillText(iAmCop?'The robber is locked up — tap 😂 to taunt them!':'You are locked up… no escape!', W/2, H*0.88);
 }
 
-/* ================= COIN MINE (endless descent) ================= */
+/* ================= COIN MINE — grid digging (Dino-Dig style) ================= */
+const DIG_COLS = 7, DIG_CELL = 58;
+// material tiers by depth — harder (more taps) but richer the deeper you dig
+const DIG_TIERS = [
+  {name:'Soil',    taps:2, col:'#7b4e2e', top:'#8f5d38', coin:[1,2],   gem:0.03, pet:0,     secret:0},
+  {name:'Dirt',    taps:3, col:'#8a5a30', top:'#9d6b3c', coin:[2,4],   gem:0.05, pet:0.006, secret:0},
+  {name:'Clay',    taps:4, col:'#9a6a4a', top:'#b07d58', coin:[3,6],   gem:0.07, pet:0.012, secret:0.0004},
+  {name:'Stone',   taps:5, col:'#6f757f', top:'#848b96', coin:[5,9],   gem:0.09, pet:0.02,  secret:0.001},
+  {name:'Rock',    taps:6, col:'#565c68', top:'#6a7180', coin:[8,14],  gem:0.11, pet:0.03,  secret:0.002},
+  {name:'Deeprock',taps:8, col:'#3c3550', top:'#4d4468', coin:[12,22], gem:0.13, pet:0.045, secret:0.004},
+];
+function digTier(r){ return DIG_TIERS[Math.min(DIG_TIERS.length-1, Math.floor(r/7))]; }
+// deterministic per-cell rng so co-op players reveal the SAME loot from a block
+function digCellRng(seed, r, c){ return mulberry32(((seed*73856093) ^ ((r+9)*19349663) ^ ((c+3)*83492791))>>>0); }
+function digGenRow(dg, r){
+  if(dg.rows[r]) return;
+  const row=[], tier=digTier(r);
+  for(let c=0;c<DIG_COLS;c++){
+    const rnd=digCellRng(dg.seed, r, c);
+    let loot=null; const roll=rnd();
+    if(r>=2 && roll < tier.secret){ loot={kind:'secret'}; }
+    else if(r>=2 && roll < tier.pet){ loot={kind:'pet'}; }
+    else if(roll < tier.gem){ loot={kind:'gem', val: tier.coin[1]*3}; }
+    else if(rnd() < 0.55){ const lo=tier.coin[0], hi=tier.coin[1]; loot={kind:'coin', val: lo+Math.floor(rnd()*(hi-lo+1))}; }
+    row.push({ mat:tier, hp:tier.taps, max:tier.taps, loot });
+  }
+  dg.rows[r]=row; if(r>dg.builtTo) dg.builtTo=r;
+}
+function digEnsure(dg, downTo){ for(let r=dg.builtTo+1; r<=downTo; r++) digGenRow(dg, r); }
+function digGridX(dg){ return Math.round(Game.W/2 - dg.cols*dg.cell/2); }
+function digCellCX(dg,c){ return digGridX(dg) + c*dg.cell + dg.cell/2; }
+function digCellWY(dg,r){ return 150 + r*dg.cell + dg.cell/2; }   // world y (subtract camY at draw)
 function initMine(){
-  Game.mineHaul=0; Game.mineBanked=0; Game.mineDepth=0; Game.mineMaxDepth=0;
-  Game.mineSecretGot=false; Game.mineSecretPet=null; Game.mineHintShown=false;
-  if(typeof toast==='function') toast('⛏️ COIN MINE! Dig deep, grab the 💰 & 🏦 bank it before you die!');
+  const seed = (Game.multiplayer && MP.startConfig && MP.startConfig.seed) ? MP.startConfig.seed : (Game.seed|0);
+  const dg={ seed, cols:DIG_COLS, cell:DIG_CELL, rows:[], builtTo:-1,
+    pc:Math.floor(DIG_COLS/2), pr:0, px:0, py:0, moveCd:0, netT:0,
+    coins:0, gems:0, pets:0, deepest:0, foundPets:[], fx:[], camY:0, hint:false };
+  for(let r=0;r<=14;r++) digGenRow(dg, r);
+  dg.rows[0][dg.pc]=null;                       // carve the starting hole
+  dg.px=digCellCX(dg,dg.pc); dg.py=digCellWY(dg,dg.pr);
+  Game.dig=dg;
+  if(typeof toast==='function') toast('⛏️ Tap blocks to dig down — harder & richer the deeper you go!');
 }
-function bankMine(){
-  if(Game.mineHaul<=0){ if(typeof toast==='function') toast('🏦 Nothing to bank yet — grab some ore!'); return; }
-  const amt=Game.mineHaul; addCoins(amt); Game.mineBanked+=amt; Game.mineHaul=0;
-  if(typeof persist==='function') persist();
-  if(SFX && SFX.chest) SFX.chest(); addShake(2);
-  if(typeof toast==='function') toast('🏦 Banked 🪙'+amt+'! Safe — keep digging deeper!');
-}
-function grabMineSecret(){
-  if(Game.mineSecretGot) return;
-  Game.mineSecretGot=true;
-  const secrets = (typeof CREATURES!=='undefined') ? CREATURES.filter(c=>c.rarity==='secret') : [];
-  const pet = secrets.length ? secrets[Math.floor(Math.random()*secrets.length)] : null;
-  if(pet){
-    SAVE.pets[pet.id]=(SAVE.pets[pet.id]||0)+1;
-    if(!SAVE.equippedPet) SAVE.equippedPet=pet.id;
-    Game.mineSecretPet=pet;
-    if(typeof unlockAchievement==='function') unlockAchievement('secret');
-    if(typeof checkPetAchievements==='function') checkPetAchievements();
-    if(typeof persist==='function') persist();
-    if(SFX && SFX.rare) SFX.rare(); addShake(10);
-    if(typeof toast==='function') toast('🌟 SECRET PET! You dug up '+pet.emoji+' '+pet.name+'!');
-  }
-}
-function updateMine(dt){
-  const p=Game.player, w=Game.world; if(!w) return;
-  Game.mineDepth = Math.max(0, Math.round((p.y - w.start.y)/10));
-  if(Game.mineDepth>Game.mineMaxDepth) Game.mineMaxDepth=Game.mineDepth;
-  // "something glimmers below" hint as you approach the secret
-  if(!Game.mineHintShown && w._secretY!=null && (w._secretY - p.y) < 1400){
-    Game.mineHintShown=true; if(typeof toast==='function') toast('💎 Something glimmers deep below…');
-  }
-  // collect ore
-  for(const o of w.ore){ if(o.taken) continue;
-    if(p.x+p.w>o.x && p.x<o.x+o.w && p.y+p.h>o.y && p.y<o.y+o.h){
-      o.taken=true;
-      if(o.kind==='secret'){ grabMineSecret(); }
-      else { Game.mineHaul += o.val; if(SFX && SFX.coin) SFX.coin(); else if(SFX && SFX.checkpoint) SFX.checkpoint(); }
-    } }
-  if(p.onGround){
-    // bank ledge → lock in the haul
-    for(const pl of w.platforms){ if(!pl.bank || pl.done) continue;
-      if(p.x+p.w>pl.x && p.x<pl.x+pl.w && Math.abs((p.y+p.h)-pl.y)<8){ pl.done=true; bankMine(); break; } }
-    // spiked ledge → you die (lose the unbanked haul)
-    if(p.invuln<=0) for(const pl of w.platforms){ if(!pl.spike) continue;
-      if(p.x+p.w>pl.x && p.x<pl.x+pl.w && (p.y+p.h)>=pl.y-2 && (p.y+p.h)<=pl.y+14){ return endMine(); } }
-  }
-}
-function endMine(){
+function updateDig(dt){
+  const dg=Game.dig; if(!dg) return;
   if(Game.finished) return;
+  const tx=digCellCX(dg,dg.pc), ty=digCellWY(dg,dg.pr);
+  dg.px += (tx-dg.px)*0.35;
+  dg.py += (ty-dg.py)*0.30;
+  digEnsure(dg, dg.pr+4);
+  // gravity: once settled on the current cell, drop into an empty cell below
+  if(Math.abs(dg.py-ty)<10){
+    digGenRow(dg, dg.pr+1);
+    if(dg.rows[dg.pr+1][dg.pc]===null) dg.pr++;
+  }
+  // hold left/right to shuffle into already-dug neighbour cells
+  dg.moveCd=Math.max(0,dg.moveCd-dt*1000);
+  if(dg.moveCd<=0){
+    const left=Game.keys['ArrowLeft']||Game.keys['a'], right=Game.keys['ArrowRight']||Game.keys['d'];
+    if(left && dg.pc>0 && dg.rows[dg.pr][dg.pc-1]===null){ dg.pc--; dg.moveCd=140; }
+    else if(right && dg.pc<dg.cols-1 && dg.rows[dg.pr][dg.pc+1]===null){ dg.pc++; dg.moveCd=140; }
+  }
+  dg.camY += ((dg.py - Game.H*0.42) - dg.camY)*0.12; if(dg.camY<0) dg.camY=0;
+  dg.deepest=Math.max(dg.deepest, dg.pr);
+  if(!dg.hint && dg.pr>=15){ dg.hint=true; if(typeof toast==='function') toast('💎 Keep digging — rare pets hide deep down!'); }
+  for(let i=dg.fx.length-1;i>=0;i--){ const f=dg.fx[i]; f.x+=f.vx; f.y+=f.vy; f.vy+=0.4; f.life-=0.045; if(f.life<=0) dg.fx.splice(i,1); }
+  if(Game.multiplayer && typeof mpSendPos==='function'){ dg.netT+=dt;
+    if(dg.netT>0.09){ dg.netT=0; mpSendPos({digC:dg.pc, digR:dg.pr, name:SAVE.name, skin:SAVE.skin, inShip:false, finished:false}); } }
+}
+function digButtonRect(){ return {x:Game.W-132, y:14, w:120, h:42}; }
+function digTap(sx, sy){
+  const dg=Game.dig; if(!dg || Game.finished) return;
+  const b=digButtonRect();
+  if(sx>=b.x && sx<=b.x+b.w && sy>=b.y && sy<=b.y+b.h){ finishDig(); return; }   // 🏁 Done
+  const c=Math.floor((sx-digGridX(dg))/dg.cell);
+  const r=Math.floor((sy+dg.camY-150)/dg.cell);
+  if(c<0||c>=dg.cols||r<0) return;
+  if((Math.abs(c-dg.pc)+Math.abs(r-dg.pr))!==1) return;   // only dig a block right next to you
+  digGenRow(dg, r);
+  const cell=dg.rows[r][c]; if(!cell) return;
+  cell.hp--;
+  for(let i=0;i<5;i++) dg.fx.push({x:digCellCX(dg,c)+(Math.random()*20-10), y:digCellWY(dg,r), vx:(Math.random()*2-1)*2.4, vy:-Math.random()*3-1, life:1, col:cell.mat.top});
+  if(SFX && SFX.click) SFX.click();
+  if(cell.hp<=0){
+    digReveal(dg, r, c, cell);
+    dg.rows[r][c]=null;
+    if(Game.multiplayer && typeof mpSendDig==='function') mpSendDig(c, r);
+  }
+}
+function digRollPet(dg, r, c, secret){
+  if(typeof CREATURES==='undefined') return null;
+  const rnd=digCellRng(dg.seed, r*7+13, c*3+5);
+  if(secret){ const s=CREATURES.filter(x=>x.rarity==='secret'); return s[Math.floor(rnd()*s.length)]||null; }
+  const pool=CREATURES.filter(x=>x.rarity!=='secret'); return pool[Math.floor(rnd()*pool.length)]||null;
+}
+function digReveal(dg, r, c, cell){
+  const loot=cell.loot; if(!loot) return;
+  if(loot.kind==='coin'){ dg.coins+=loot.val; addCoins(loot.val); }
+  else if(loot.kind==='gem'){ dg.coins+=loot.val; dg.gems++; addCoins(loot.val); if(SFX&&SFX.checkpoint) SFX.checkpoint(); addShake(2); }
+  else if(loot.kind==='pet' || loot.kind==='secret'){
+    const pet=digRollPet(dg, r, c, loot.kind==='secret');
+    if(pet){ SAVE.pets[pet.id]=(SAVE.pets[pet.id]||0)+1; if(!SAVE.equippedPet) SAVE.equippedPet=pet.id;
+      dg.pets++; dg.foundPets.push(pet);
+      if(loot.kind==='secret' && typeof unlockAchievement==='function') unlockAchievement('secret');
+      if(typeof checkPetAchievements==='function') checkPetAchievements();
+      if(typeof persist==='function') persist();
+      if(SFX&&SFX.rare) SFX.rare(); addShake(loot.kind==='secret'?9:5);
+      if(typeof toast==='function') toast((loot.kind==='secret'?'🌟 SECRET PET! ':'🐾 A pet! ')+pet.emoji+' '+pet.name+'!');
+    }
+  }
+}
+/* a friend dug a block (co-op) — it disappears on my screen too (they keep the loot) */
+function onDigNet(c, r){
+  const dg=Game.dig; if(!dg) return;
+  digGenRow(dg, r);
+  const cell=dg.rows[r] && dg.rows[r][c];
+  if(cell){ for(let i=0;i<5;i++) dg.fx.push({x:digCellCX(dg,c)+(Math.random()*20-10), y:digCellWY(dg,r), vx:(Math.random()*2-1)*2.4, vy:-Math.random()*3-1, life:1, col:cell.mat.top});
+    dg.rows[r][c]=null; }
+}
+function finishDig(){
+  const dg=Game.dig; if(!dg || Game.finished) return;
   Game.finished=true; Game.running=false;
-  const lost=Game.mineHaul; Game.mineHaul=0;
-  addShake(8); if(SFX && SFX.hit) SFX.hit();
-  // track a personal best depth
-  if(!SAVE.mineBest || Game.mineMaxDepth>SAVE.mineBest){ SAVE.mineBest=Game.mineMaxDepth; if(typeof persist==='function') persist(); }
-  if(Game.onLevelComplete) Game.onLevelComplete(1, Game.mineBanked, true,
-    {mine:true, depth:Game.mineMaxDepth, banked:Game.mineBanked, lost,
-     gotSecret:Game.mineSecretGot,
-     secretPet: Game.mineSecretPet?{emoji:Game.mineSecretPet.emoji, name:Game.mineSecretPet.name}:null, mp:false});
+  if(!SAVE.mineBest || dg.deepest>SAVE.mineBest){ SAVE.mineBest=dg.deepest; if(typeof persist==='function') persist(); }
+  if(Game.multiplayer && typeof mpSendFinish==='function') mpSendFinish();
+  if(SFX && SFX.win) SFX.win();
+  if(Game.onLevelComplete) Game.onLevelComplete(1, dg.coins, true,
+    {mine:true, depth:dg.deepest, coins:dg.coins, pets:dg.pets, gems:dg.gems,
+     foundPets:dg.foundPets.map(pp=>({emoji:pp.emoji, name:pp.name})), mp:Game.multiplayer});
 }
-function drawMine(ctx){
-  const w=Game.world; if(!w) return;
-  // spikes on spiked ledges + markers on bank / secret ledges
-  for(const pl of w.platforms){
-    if(pl.spike){
-      ctx.fillStyle='#e0526a';
-      const n=Math.max(2,Math.floor(pl.w/16));
-      for(let i=0;i<n;i++){ const sx=pl.x + i*(pl.w/n);
-        ctx.beginPath(); ctx.moveTo(sx, pl.y); ctx.lineTo(sx+pl.w/n/2, pl.y-13); ctx.lineTo(sx+pl.w/n, pl.y); ctx.closePath(); ctx.fill(); }
-    } else if(pl.bank){
-      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
-      ctx.fillText('🏦', pl.x+pl.w/2, pl.y-2);
-      if(!pl.done){ ctx.fillStyle='rgba(120,255,170,'+(0.3+0.25*Math.abs(Math.sin(Game.t/300)))+')';
-        roundRect(ctx, pl.x, pl.y-4, pl.w, 6, 3); ctx.fill(); }
-    } else if(pl.secretLedge){
-      ctx.fillStyle='rgba(255,220,120,'+(0.25+0.2*Math.abs(Math.sin(Game.t/220)))+')';
-      roundRect(ctx, pl.x-6, pl.y-4, pl.w+12, 10, 6); ctx.fill();
+function drawDig(ctx){
+  const dg=Game.dig; const W=Game.W, H=Game.H;
+  if(!dg){ ctx.fillStyle='#241a2e'; ctx.fillRect(0,0,W,H); return; }
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#8fd0ff'); grad.addColorStop(Math.max(0.02,Math.min(0.4,(150-dg.camY)/H)),'#caa06a'); grad.addColorStop(1,'#1c1428');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+  const gx=digGridX(dg);
+  const r0=Math.max(0, Math.floor((dg.camY-150)/dg.cell)-1);
+  const r1=r0 + Math.ceil(H/dg.cell)+2;
+  digEnsure(dg, r1);
+  for(let r=r0;r<=r1;r++){ const row=dg.rows[r]; if(!row) continue;
+    const sy=digCellWY(dg,r)-dg.camY-dg.cell/2;
+    for(let c=0;c<dg.cols;c++){ const cell=row[c]; const sx=gx+c*dg.cell;
+      if(!cell){ ctx.fillStyle='rgba(8,6,14,.5)'; ctx.fillRect(sx,sy,dg.cell,dg.cell); continue; }
+      ctx.fillStyle=cell.mat.col; ctx.fillRect(sx,sy,dg.cell,dg.cell);
+      ctx.fillStyle=cell.mat.top; ctx.fillRect(sx,sy,dg.cell,6);
+      ctx.strokeStyle='rgba(0,0,0,.22)'; ctx.lineWidth=1; ctx.strokeRect(sx+0.5,sy+0.5,dg.cell-1,dg.cell-1);
+      const dmg=1-cell.hp/cell.max;
+      if(dmg>0.02){ ctx.strokeStyle='rgba(0,0,0,.5)'; ctx.lineWidth=2; ctx.beginPath();
+        ctx.moveTo(sx+dg.cell*0.5,sy+6); ctx.lineTo(sx+dg.cell*0.38,sy+dg.cell*0.55);
+        if(dmg>0.5){ ctx.moveTo(sx+dg.cell*0.55,sy+dg.cell*0.2); ctx.lineTo(sx+dg.cell*0.72,sy+dg.cell*0.8); } ctx.stroke(); }
     }
   }
-  // ore
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(const o of w.ore){ if(o.taken) continue;
-    const bob=Math.sin(Game.t/300 + o.x)*2;
-    if(o.kind==='secret'){
-      ctx.save();
-      const g=ctx.createRadialGradient(o.x+o.w/2,o.y+o.h/2,4,o.x+o.w/2,o.y+o.h/2,42);
-      const hue=(Game.t/12)%360; g.addColorStop(0,`hsla(${hue},100%,75%,.8)`); g.addColorStop(1,'hsla(0,0%,100%,0)');
-      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(o.x+o.w/2,o.y+o.h/2,42,0,6.28); ctx.fill();
-      ctx.font='40px serif'; ctx.fillText('🥚', o.x+o.w/2, o.y+o.h/2+bob);
-      ctx.font='14px serif'; ctx.fillText('✨', o.x+o.w/2-22, o.y-6); ctx.fillText('✨', o.x+o.w/2+22, o.y+8);
-      ctx.restore();
-    } else {
-      ctx.font='23px serif';
-      ctx.fillText(o.kind==='bag'?'💰':o.kind==='gem'?'💎':'🪙', o.x+o.w/2, o.y+o.h/2+bob);
-    }
-  }
+  // reach highlights on the blocks you can tap
+  const neigh=[[dg.pc,dg.pr+1],[dg.pc-1,dg.pr],[dg.pc+1,dg.pr]];
+  ctx.strokeStyle='rgba(255,238,150,'+(0.5+0.3*Math.sin(Game.t/200))+')'; ctx.lineWidth=3;
+  for(const [c,r] of neigh){ if(c<0||c>=dg.cols||r<0||!dg.rows[r]||!dg.rows[r][c]) continue;
+    ctx.strokeRect(gx+c*dg.cell+2, digCellWY(dg,r)-dg.camY-dg.cell/2+2, dg.cell-4, dg.cell-4); }
+  // particles
+  for(const f of dg.fx){ ctx.globalAlpha=Math.max(0,f.life); ctx.fillStyle=f.col||'#8a5a30'; ctx.fillRect(f.x-2, f.y-dg.camY-2, 4, 4); }
+  ctx.globalAlpha=1;
+  // co-op friends
+  if(Game.multiplayer){ for(const rr of mpRemoteList()){ if(typeof rr.digC!=='number') continue;
+    const fx=digCellCX(dg,rr.digC), fy=digCellWY(dg,rr.digR)-dg.camY;
+    if(typeof drawCharacter==='function') drawCharacter(ctx, fx, fy, 32, {skin:rr.skin||'#74a8ff', face:'classic', facing:1, t:Game.t});
+    ctx.font='15px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('⛏️', fx+14, fy-14);
+    if(typeof drawNameTag==='function') drawNameTag(ctx, fx, fy-20, rr.name||'Pal');
+  } }
+  // me
+  const px=dg.px, py=dg.py-dg.camY;
+  if(typeof drawCharacter==='function') drawCharacter(ctx, px, py, 34, {skin:SAVE.skin, accessory:SAVE.accessory, face:SAVE.face, facing:1, t:Game.t, petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin)});
+  ctx.font='19px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('⛏️', px+16, py-15);
+  // HUD strip
+  ctx.fillStyle='rgba(20,14,30,.55)'; ctx.fillRect(0,0,W,42);
+  ctx.fillStyle='#ffe6a8'; ctx.font='bold 16px Nunito'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillText('⛏️ '+dg.deepest+' deep · 🪙'+dg.coins+(dg.pets?(' · 🐾'+dg.pets):''), 14, 22);
+  // Done button
+  const b=digButtonRect();
+  ctx.fillStyle='#ffd36b'; roundRect(ctx,b.x,b.y,b.w,b.h,10); ctx.fill();
+  ctx.fillStyle='#6a4a12'; ctx.font='bold 16px Nunito'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('🏁 Done', b.x+b.w/2, b.y+b.h/2);
 }
+
 function drawFire(ctx){
   ctx.textAlign='center'; ctx.textBaseline='middle';
   for(const f of Game.fire){ if(Game.t<f.born) continue;
@@ -2680,6 +2761,7 @@ function nextLevel(){
 function render(){
   const ctx=Game.ctx; if(!ctx) return;
   ctx.clearRect(0,0,Game.W,Game.H);
+  if(Game.mine){ drawDig(ctx); return; }         // the Coin Mine has its own grid renderer
   const s=gameScale();
   const shx = Game.shakeMag ? (Math.random()*2-1)*Game.shakeMag : 0;
   const shy = Game.shakeMag ? (Math.random()*2-1)*Game.shakeMag : 0;
@@ -2694,7 +2776,6 @@ function render(){
   for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else drawPlatform(ctx,pl); }
   if(Game.colorTag) drawColorPads(ctx);
   if(Game.copsRob) drawMoney(ctx);       // 💰 bags across the bank
-  if(Game.mine) drawMine(ctx);           // ⛏️ ore, spikes, banks & the secret
 
   // floating collectible coins
   for(const c of plats){
@@ -3172,8 +3253,9 @@ function updateHudLive(){
   const done=Game.hitCheckpoints.size;
   const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
   if(Game.mine){
-    const cp=document.getElementById('hudCp');
-    cp.textContent='⛏️ '+Game.mineDepth+'m · 💰'+Game.mineHaul+' (🏦'+Game.mineBanked+')';
+    // the Coin Mine draws its own on-canvas HUD; just keep the top bar in sync
+    const dg=Game.dig, cp=document.getElementById('hudCp');
+    if(dg) cp.textContent='⛏️ '+dg.deepest+' deep · 🪙'+dg.coins+(dg.pets?(' · 🐾'+dg.pets):'');
     document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
     const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
     return;

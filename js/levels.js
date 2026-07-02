@@ -693,71 +693,11 @@ function maybeExtendTower(){
   if(Game.player.y - w._topY < 1700) towerFloor(w);
 }
 
-/* ===== COIN MINE (endless descent) =====
-   Drop down a bottomless shaft. Ore (🪙 coins, 💎 gems, 💰 bags) gets denser
-   and more valuable the deeper you go, but spiked ledges get more common.
-   Bank ledges 🏦 lock in your haul; super deep down waits a secret pet. */
-const MINE_SECRET_DEPTH = 6000;   // world-px down before the secret pet appears
+/* ===== COIN MINE stub =====
+   The Coin Mine is a self-contained grid-digging game (see game.js). loadLevel
+   still wants a valid world object, so we hand it a tiny placeholder. */
 function generateMine(seed){
-  const W=820;
-  const platforms=[];
-  platforms.push({id:0, x:W/2-130, y:120, w:260, h:24, type:'normal', mine:true});   // the mouth of the mine
-  const world={
-    level:1, seed, mode:'mine', mine:true,
-    width:W, height:700, platforms, ore:[], checkpoints:[], hazards:[],
-    start:{x:W/2, y:120}, finishY:-1e9,
-    _y:120, _prevX:W/2, _row:0, _botY:120, _secretPlaced:false, _secretY:null,
-  };
-  for(let i=0;i<8;i++) mineSection(world);   // pre-build the top of the shaft
-  return world;
+  return { mode:'mine', mine:true, level:1, seed, width:900, height:900,
+           platforms:[], checkpoints:[], hazards:[], start:{x:450, y:100}, finishY:-1e9 };
 }
-function mineSection(world){
-  const r=world._row;
-  const rnd=mulberry32((world.seed*1000 + r*137 + 91)|0);
-  const rint=(a,b)=>Math.floor(a+rnd()*(b-a+1));
-  const W=world.width;
-  const tier=Math.floor(r/8);                          // richer + harder every 8 rows
-  const valMul=1+tier;
-  const spikeChance=Math.min(0.55, 0.08+tier*0.05);
-  let y=world._y + rint(120,170);
-  const nLedges = rnd()<0.45?1:2;
-  let lastX=world._prevX;
-  for(let k=0;k<nLedges;k++){
-    const w=rint(90,150);
-    const x=rint(46, W-46-w);
-    const ly=y + (k?rint(-16,16):0);
-    // spikes only ever go on the 2nd ledge of a pair, so every row keeps a safe landing
-    const spike = (r>3 && nLedges===2 && k===1 && rnd()<spikeChance);
-    const pl={id:world.platforms.length, x, y:ly, w, h:18, type:'normal', mine:true};
-    if(spike) pl.spike=true;
-    world.platforms.push(pl);
-    lastX=x+w/2;
-    if(!spike && rnd()<0.85){
-      const roll=rnd();
-      const kind = roll<0.62?'coin' : roll<0.9?'gem' : 'bag';
-      const base = kind==='coin'?1 : kind==='gem'?6 : 14;
-      world.ore.push({x:x+w/2-13, y:ly-34, w:26, h:26, kind, val:base*valMul, taken:false});
-    }
-  }
-  // a safe bank ledge every 6 rows
-  if(r>0 && r%6===0){
-    const bw=190; y+=rint(120,150);
-    const bx=Math.max(46, Math.min(W-46-bw, lastX-95));
-    world.platforms.push({id:world.platforms.length, x:bx, y, w:bw, h:22, type:'normal', mine:true, bank:true});
-    lastX=bx+bw/2;
-  }
-  world._prevX=lastX; world._y=y; world._row++; world._botY=y; world.height=y+600;
-  // the secret pet, once, super-duper deep
-  if(!world._secretPlaced && (y - world.start.y) >= MINE_SECRET_DEPTH){
-    world._secretPlaced=true; y+=rint(150,190);
-    const sw=230, sx=Math.max(46, Math.min(W-46-sw, Math.round(W/2-sw/2)));
-    world.platforms.push({id:world.platforms.length, x:sx, y, w:sw, h:26, type:'normal', mine:true, secretLedge:true});
-    world.ore.push({x:sx+sw/2-23, y:y-66, w:46, h:46, kind:'secret', val:0, taken:false});
-    world._prevX=sx+sw/2; world._y=y; world._botY=y; world._secretY=y; world.height=y+600;
-  }
-}
-function maybeExtendMine(){
-  const w=Game.world; if(!w || !w.mine) return;
-  let guard=0;
-  while(w._botY - Game.player.y < 1900 && guard++<40) mineSection(w);
-}
+

@@ -599,6 +599,7 @@ const ROOM_MODE_DESC = {
   roomtag: '🛋️ Room Tag: tag in a big furniture room — jump on the furniture to escape the tagger!',
   colortag:'🌈 Colour Tag: the IT calls a rainbow colour — stand on it or get tagged (then YOU are IT)!',
   copsrobbers:'🚓 Cops & Robbers: the robber grabs all the 💰 in the big bank while the cop chases — get tagged and it\'s 10s in jail!',
+  mine:'⛏️ Coin Mine: dig the same mine together — tap blocks to break them (deeper = harder & richer), and whatever a friend digs vanishes for everyone!',
   disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
   tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
   heist:   '💰 Gold Heist: everyone grabs gold in the same arena for 20s — most gold wins!',
@@ -801,9 +802,10 @@ function onLevelComplete(level, earned, isFinal, res){
   }
   const isMine=!!res.mine;
   if(isMine){
-    waitMsg = `<p class="timer-big">⛏️ ${res.depth}m deep!</p>
-      <p class="muted">🏦 Banked 🪙${res.banked}${res.lost?` · lost 🪙${res.lost} unbanked 💀`:''}${SAVE.mineBest?` · best ${SAVE.mineBest}m`:''}</p>
-      ${res.gotSecret&&res.secretPet?`<p class="timer-big">🌟 Dug up ${res.secretPet.emoji} ${res.secretPet.name}!</p>`:''}`;
+    const pets=(res.foundPets||[]);
+    waitMsg = `<p class="timer-big">⛏️ Dug ${res.depth} blocks deep!</p>
+      <p class="muted">🪙 ${res.coins} mined${res.gems?` · 💎${res.gems}`:''}${SAVE.mineBest?` · best ${SAVE.mineBest} deep`:''}</p>
+      ${pets.length?`<p class="timer-big">🐾 Found ${pets.map(pp=>pp.emoji).join(' ')}!</p><p class="muted">${pets.map(pp=>pp.name).join(', ')}</p>`:''}`;
   }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
@@ -833,14 +835,14 @@ function onLevelComplete(level, earned, isFinal, res){
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
                 : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))))))));
-  const heading = isMine ? (res.gotSecret?'🌟 JACKPOT!':'⛏️ Mine run over!')
+  const heading = isMine ? (res.pets?'🌟 Treasure haul!':'⛏️ Nice digging!')
                 : isCr ? (res.survived?'🚔 You win!':'😢 You lost!')
                 : isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
                 : isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
                 : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isMine?(res.gotSecret?'🌟🥚':'⛏️💰'):isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isMine?(res.pets?'🌟🐾':'⛏️💰'):isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
     ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag&&!isCr&&!isMine?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}

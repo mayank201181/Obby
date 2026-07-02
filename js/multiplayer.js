@@ -196,6 +196,11 @@ function mpOnMessage(conn,msg){
       if(msg.from!==MP.selfId && typeof onMoneyNet==='function') onMoneyNet(msg.i);
       break;
     }
+    case 'dig': {     // coin mine co-op: a friend dug a block
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onDigNet==='function') onDigNet(msg.c, msg.r);
+      break;
+    }
     case 'crwin': {   // cops & robbers: the robber looted the whole bank
       if(MP.isHost) mpRelay(conn,msg);
       if(msg.from!==MP.selfId && typeof onCopsWinNet==='function') onCopsWinNet();
@@ -353,6 +358,8 @@ function mpSendMorph(targetId, d){ mpSend({t:'morph', from:MP.selfId, target:tar
   emoji:d.emoji, grant:d.grant, face:d.face, acc:d.acc, kind:d.kind}); }
 /* Hyena: broadcast a dropped poop pile */
 function mpSendPoop(d){ mpSend({t:'poop', from:MP.selfId, d}); }
+/* Coin Mine co-op: broadcast a block I fully dug (it vanishes for everyone) */
+function mpSendDig(c, r){ mpSend({t:'dig', from:MP.selfId, c, r}); }
 /* Cops & Robbers: broadcast a grabbed money bag / a robber victory */
 function mpSendMoney(i){ mpSend({t:'money', from:MP.selfId, i}); }
 function mpSendCopsWin(){ mpSend({t:'crwin', from:MP.selfId}); }
