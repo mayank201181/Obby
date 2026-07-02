@@ -19,6 +19,7 @@ const RARITY_INFO = {
 const ABILITY_INFO = {
   speed1:     'Move a bit faster',
   speed2:     'Move much faster',
+  speed3:     'Move super fast!',
   glide:      'Fall slower (float)',
   glideStrong:'Float gently down',
   platform:   'Place a platform (tap the ✨ button!)',
@@ -33,7 +34,7 @@ const ABILITY_INFO = {
   firebreath: '🐉 Fire Breath! Blast a huge jet of fire that torches blocks & hammers the boss',
   freeze:     '🧊 Deep Freeze! Freeze every enemy, hazard & rival solid for a few seconds',
   phase:      '👻 Ghost Phase! Go invincible & drift through all hazards for a few seconds',
-  teleport:   '🌈 Blink! Instantly teleport far forward through walls',
+  teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for several seconds',
   stomp:      '🦕 Mega Stomp! Crash down with a shockwave that flattens & stuns everyone near you',
@@ -100,7 +101,7 @@ const CREATURES = [
   // secret — sell 700 (the rarest!)
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['flight','tripleJump'],   sell:700 },
   { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['firebreath','tripleJump'],sell:700 },
-  { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['teleport','speed2'],     sell:700 },
+  { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['teleport','speed3','highJump'], sell:700 },
   { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['grapple','speed2'],      sell:700 },
   { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['freeze','glideStrong'],  sell:700 },
   { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['phase','glide'],         sell:700 },
@@ -437,7 +438,7 @@ function equippedAbilities(){
   const shiny = id ? isShiny(id) : false;
   const lvlBoost = (lvl-1)*0.015 + (shiny?0.06:0);   // up to +0.195 at lvl10 shiny
   const glideBoost = (lvl-1)*0.01 + (shiny?0.04:0);  // glide a touch stronger
-  const baseMove = set.has('speed2')?1.4 : set.has('speed1')?1.2 : 1;
+  const baseMove = set.has('speed3')?1.6 : set.has('speed2')?1.4 : set.has('speed1')?1.2 : 1;
   const baseFall = set.has('glideStrong')?0.55 : set.has('glide')?0.75 : 1;
   return {
     moveMul: baseMove>1 ? baseMove+lvlBoost : 1,

@@ -73,7 +73,7 @@ const POWER_META = {
   firebreath:{emoji:'🔥', label:'FIRE',   cd:2600},
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
-  teleport:  {emoji:'🌈', label:'BLINK',  cd:1600},
+  teleport:  {emoji:'🌈', label:'BLINK',  cd:3000},
   grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
   flight:    {emoji:'🦄', label:'FLY',    cd:11000},
   stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
@@ -153,6 +153,7 @@ function gameInit(){
     if(Game.copsRob && Game.cr && Game.cr.phase==='jail'){ copLaugh(); return; }  // cop taunts the jailed robber
     if(Game.disaster && Game.buildMode){ disasterBuildAt(sx,sy); return; }
     if(Game.petPower==='polymorph' && Game.running){ alienTapMorph(sx,sy); return; }  // 👽 tap a friend/boss
+    if(Game.petPower==='teleport' && Game.running){ teleportTo(sx,sy); return; }       // 🌈 tap to blink there
     if(Game.petBanana && Game.running) throwBananaAt(sx,sy);
   });
   setupTouchControls();
@@ -396,6 +397,22 @@ function alienTapMorph(screenX, screenY){
   if(!target){ if(typeof toast==='function') toast('👽 Tap right on a friend or the boss to morph them!'); return; }
   Game.powerCdUntil = Game.t + (POWER_META.polymorph?POWER_META.polymorph.cd:6000);
   if(typeof openMorphPicker==='function') openMorphPicker(target);
+}
+/* Prism: tap anywhere on the arena to BLINK right to that spot (3s cooldown) */
+function teleportTo(screenX, screenY){
+  if(!Game.running || Game.petPower!=='teleport') return;
+  const p=Game.player; if(!p) return;
+  if(Game.t < Game.powerCdUntil){ if(typeof toast==='function') toast('🌈 Blink recharging…'); return; }
+  const s=(typeof gameScale==='function')?gameScale():1;
+  const wx=(screenX-Game.W/2)/s + Game.cam.x;         // tap point -> world coords
+  const wy=(screenY-Game.H/2)/s + Game.cam.y;
+  // spark burst at the old spot
+  for(let i=0;i<8;i++) Game.abilityFx.push({kind:'spark', x:p.x+p.w/2+(Math.random()*24-12), y:p.y+p.h/2+(Math.random()*24-12), vx:0, vy:0.3, life:1, born:Game.t});
+  p.x = Math.max(0, Math.min(Game.world.width-p.w, wx - p.w/2));
+  p.y = wy - p.h/2; p.vx=0; p.vy=Math.min(p.vy,0); p.onGround=false; p.invuln=Math.max(p.invuln,300);
+  for(let i=0;i<10;i++) Game.abilityFx.push({kind:'spark', x:p.x+p.w/2+(Math.random()*24-12), y:p.y+p.h/2+(Math.random()*24-12), vx:0, vy:0.3, life:1, born:Game.t});
+  Game.powerCdUntil = Game.t + 3000;                  // 3-second cooldown
+  SFX.jump(); if(typeof toast==='function') toast('🌈 Blink!');
 }
 /* Hyena: drop a poop pile at your feet; anyone who steps in it freezes 3s */
 function dropPoop(){
