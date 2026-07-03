@@ -324,7 +324,7 @@ function renderDisasterPick(){
     DISASTERS.map(t=>`<button class="btn blue" onclick="startDisaster('${t}')">${(DISASTER_INFO[t]||{}).name||t}</button>`).join('');
 }
 function startDisaster(type){
-  SFX.click();
+  SFX.click(); closeModal('winModal');   // "Play again" restarts from the win screen
   Game.multiplayer=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };

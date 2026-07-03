@@ -217,6 +217,9 @@ function startGame(opts){
   const eb=document.getElementById('emoteBar'); if(eb){ eb.style.display = Game.multiplayer ? 'flex':'none'; if(Game.multiplayer && typeof buildEmoteBar==='function') buildEmoteBar(); }
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
   const bbar=document.getElementById('buildBar'); if(bbar){ bbar.style.display = Game.disaster ? 'flex':'none'; if(Game.disaster && typeof setupBuildBar==='function') setupBuildBar(); }
+  // Restart button: solo Easy/Hard levels + Endless Tower. It rescues you when
+  // a red (disappearing) block crumbles away and leaves the path impossible.
+  const rb=document.getElementById('restartBtn'); if(rb) rb.style.display = (!Game.multiplayer && (Game.mode==='solo' || Game.tower)) ? '' : 'none';
   if(typeof refreshCamoBar==='function') refreshCamoBar();
   if(typeof refreshColorBar==='function') refreshColorBar();
   if(typeof setSpectateChrome==='function') setSpectateChrome(false);
@@ -305,6 +308,21 @@ function respawn(){
   p.invuln=Math.max(p.invuln||0, 900);   // brief safety so turrets can't instakill on respawn
   // reset disappearing blocks so the climb is fair again
   for(const k in Game.disappear){ Game.disappear[k]={}; }
+}
+
+/* The HUD Restart button (solo Easy/Hard + Endless Tower). A crumbled red
+   block never comes back on its own, so if one vanishes while you're safe at
+   a checkpoint the path can become impossible. This brings every red block
+   back and hops you to the checkpoint you last touched — no death counted. */
+function restartFromCheckpoint(){
+  if(!Game.running || Game.finished || Game.spectating) return;
+  const p=Game.player; if(!p) return;
+  SFX.click();
+  for(const k in Game.disappear){ Game.disappear[k]={}; }
+  p.x=p.respawnX; p.y=p.respawnY; p.vx=0; p.vy=0;
+  p.invuln=Math.max(p.invuln||0, 900);
+  addShake(4);
+  if(typeof toast==='function') toast('🔁 Red blocks are back — checkpoint!');
 }
 
 /* ---------- main loop with fixed timestep ---------- */
