@@ -75,7 +75,7 @@ const POWER_META = {
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   teleport:  {emoji:'🌈', label:'BLINK',  cd:3000},
   grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
-  flight:    {emoji:'🦄', label:'FLY',    cd:11000},
+  flight:    {emoji:'🦄', label:'FLY',    cd:8000},   // Unicorn — 5s of flight + 3s cooldown after it ends
   stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
   supernova: {emoji:'🌟', label:'SUPERNOVA', cd:9000},   // Starlight signature
   cloudjump: {emoji:'☁️', label:'CLOUD',  cd:4000},       // Pegasus (mythical)
