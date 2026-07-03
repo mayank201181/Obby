@@ -2490,10 +2490,20 @@ function updateDig(dt){
     if(dg.netT>0.09){ dg.netT=0; mpSendPos({digX:Math.round(dg.px), digY:Math.round(dg.py), name:SAVE.name, skin:SAVE.skin, inShip:false, finished:false}); } }
 }
 function digButtonRect(){ return {x:Game.W-132, y:14, w:120, h:42}; }
+function digShopRect(){ return {x:Game.W-132, y:64, w:120, h:42}; }
+/* the equipped pickaxe: how much block-HP one tap smashes */
+function digPickPower(){
+  return (typeof pickaxeById==='function') ? pickaxeById(SAVE.pickaxe).power : 1;
+}
 function digTap(sx, sy){
   const dg=Game.dig; if(!dg || Game.finished) return;
   const b=digButtonRect();
   if(sx>=b.x && sx<=b.x+b.w && sy>=b.y && sy<=b.y+b.h){ finishDig(); return; }   // 🏁 Done
+  const s=digShopRect();
+  if(sx>=s.x && sx<=s.x+s.w && sy>=s.y && sy<=s.y+s.h){                          // ⛏️ Shop
+    if(typeof openPickShop==='function') openPickShop();
+    return;
+  }
   const c=digColAt(dg, sx-digGridX(dg)), r=digRowAt(sy+dg.camY);   // screen -> world
   // reach = the 3×3 of cells around the digger
   const pcc=digColAt(dg, dg.px+dg.w/2), pcr=digRowAt(dg.py+dg.h/2);
@@ -2501,7 +2511,7 @@ function digTap(sx, sy){
   if(r<0||c<0||c>=dg.cols) return;
   digGenRow(dg, r);
   const cell=dg.rows[r][c]; if(!cell) return;
-  cell.hp--;
+  cell.hp -= digPickPower();
   for(let i=0;i<5;i++) dg.fx.push({x:digCellCX(dg,c)+(Math.random()*20-10), y:digCellWY(dg,r), vx:(Math.random()*2-1)*2.4, vy:-Math.random()*3-1, life:1, col:cell.mat.top});
   if(SFX && SFX.click) SFX.click();
   if(cell.hp<=0){
@@ -2628,6 +2638,16 @@ function drawDig(ctx){
   ctx.fillStyle='#ffd36b'; roundRect(ctx,b.x,b.y,b.w,b.h,10); ctx.fill();
   ctx.fillStyle='#6a4a12'; ctx.font='bold 16px Nunito'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('🏁 Done', b.x+b.w/2, b.y+b.h/2);
+  // Pickaxe shop button (shows which pick you're holding)
+  const sb=digShopRect();
+  const pk=(typeof pickaxeById==='function')?pickaxeById(SAVE.pickaxe):null;
+  ctx.fillStyle='#c9b8ff'; roundRect(ctx,sb.x,sb.y,sb.w,sb.h,10); ctx.fill();
+  if(pk && pk.col && pk.col!=='rainbow'){ ctx.fillStyle=pk.col; roundRect(ctx,sb.x,sb.y,sb.w,5,10); ctx.fill(); }
+  else if(pk && pk.col==='rainbow'){ const g=ctx.createLinearGradient(sb.x,0,sb.x+sb.w,0);
+    ['#ff6b6b','#ffd36b','#7be0b0','#74a8ff','#c8a0ff'].forEach((cc,i,arr)=>g.addColorStop(i/(arr.length-1),cc));
+    ctx.fillStyle=g; roundRect(ctx,sb.x,sb.y,sb.w,5,10); ctx.fill(); }
+  ctx.fillStyle='#3d2a66'; ctx.font='bold 15px Nunito'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('⛏️ Shop', sb.x+sb.w/2, sb.y+sb.h/2);
 }
 
 function drawFire(ctx){

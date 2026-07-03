@@ -1,6 +1,18 @@
 /* ===== Game data + persistent storage ===== */
 const SAVE_KEY = 'obbyBlobsSave_v1';
 
+// Coin Mine pickaxes: a better pickaxe smashes more block-HP per tap, so you
+// need FEWER taps to break each block (e.g. Deeprock has 8 HP).
+// Order: Wooden < Yellow < Gold < Diamond < Rainbow.
+const PICKAXES = [
+  { id:'wood',    name:'Wooden Pickaxe',  power:1, cost:0,    rarity:'Starter',   col:'#a07850', desc:'Your trusty starter pick.' },
+  { id:'yellow',  name:'Yellow Pickaxe',  power:2, cost:100,  rarity:'Common',    col:'#ffd94d', desc:'Digs 2× per tap — a bit less tapping!' },
+  { id:'gold',    name:'Gold Pickaxe',    power:3, cost:400,  rarity:'Rare',      col:'#f7b733', desc:'Digs 3× per tap. Shiny AND strong.' },
+  { id:'diamond', name:'Diamond Pickaxe', power:5, cost:1200, rarity:'Epic',      col:'#7de3ff', desc:'Digs 5× per tap. Slices through rock!' },
+  { id:'rainbow', name:'Rainbow Pickaxe', power:8, cost:3000, rarity:'LEGENDARY', col:'rainbow', desc:'Breaks ANY block in ONE tap!' },
+];
+const pickaxeById = id => PICKAXES.find(p=>p.id===id) || PICKAXES[0];
+
 // Skin colors. Default ones are free (price 0). Others cost 10 coins.
 const SKINS = [
   { id:'mint',    color:'#9be7a0', price:0 },
@@ -224,6 +236,8 @@ function defaultSave(){
     towerBest:0,           // highest floor reached in endless Tower mode
     mineBest:0,            // deepest metres reached in Coin Mine mode
     mineSave:null,         // saved Coin Mine dig (resume your tunnels)
+    ownedPicks:['wood'],   // pickaxes bought in the Coin Mine pickaxe shop
+    pickaxe:'wood',        // equipped pickaxe id (drives digging power)
     towerFloor:0,          // saved Tower progress (resume from this floor)
     towerSeed:null,        // seed of the saved Tower run
     daily:{key:'',best:0,done:false},  // daily challenge progress for the current day

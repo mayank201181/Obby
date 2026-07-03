@@ -384,6 +384,54 @@ function startMine(resumeChoice){
   startGame({mode:'mine', seed, mineResume:resume, multiplayer:false, difficulty:'easy'});
   startMusicIfOn('game');
 }
+/* ---------------- Coin Mine pickaxe shop ---------------- */
+// Better pickaxes smash more block-HP per tap, so blocks need fewer taps.
+function openPickShop(){ renderPickShop(); openModal('pickModal'); }
+function renderPickShop(){
+  const body=document.getElementById('pickShopBody'); if(!body) return;
+  const rows=PICKAXES.map(p=>{
+    const owned=(SAVE.ownedPicks||['wood']).includes(p.id);
+    const equipped=SAVE.pickaxe===p.id;
+    const taps=Math.ceil(8/p.power);   // taps to break the toughest block (Deeprock, 8 HP)
+    const sw=p.col==='rainbow'
+      ? 'background:linear-gradient(90deg,#ff6b6b,#ffd36b,#7be0b0,#74a8ff,#c8a0ff)'
+      : 'background:'+p.col;
+    const btn=equipped
+      ? `<button class="btn ghost small" disabled>Holding ✓</button>`
+      : owned
+      ? `<button class="btn blue small" onclick="equipPick('${p.id}')">Equip</button>`
+      : `<button class="btn gold small" onclick="buyPick('${p.id}')">Buy 🪙${p.cost}</button>`;
+    return `<div style="display:flex;align-items:center;gap:10px;background:rgba(130,100,200,.14);border-radius:12px;padding:8px 10px;margin:7px 0;text-align:left">
+      <div style="width:34px;height:34px;border-radius:9px;flex:none;${sw}"></div>
+      <div style="flex:1;min-width:0">
+        <b>⛏️ ${p.name}</b> <span style="font-size:11px;opacity:.7">· ${p.rarity}</span>
+        <div style="font-size:12px;opacity:.85">${p.desc}</div>
+        <div style="font-size:12px;opacity:.85">Toughest rock: <b>${taps} tap${taps===1?'':'s'}</b> per block</div>
+      </div>${btn}</div>`;
+  }).join('');
+  body.innerHTML=`<h2>⛏️ Pickaxe Shop</h2>
+    <p class="hint">Better pickaxes = fewer taps to break each block!</p>
+    <p class="timer-big">🪙 ${SAVE.coins}</p>${rows}`;
+}
+function buyPick(id){
+  const p=pickaxeById(id);
+  SAVE.ownedPicks=SAVE.ownedPicks||['wood'];
+  if(SAVE.ownedPicks.includes(id)){ equipPick(id); return; }
+  if(SAVE.coins<p.cost){ toast('Not enough coins 🪙 — keep digging!'); SFX.click(); return; }
+  SAVE.coins-=p.cost;
+  SAVE.ownedPicks.push(id);
+  SAVE.pickaxe=id;                       // auto-equip your shiny new pick
+  persist(); updateCoinDisplays(); SFX.rare();
+  toast('⛏️ '+p.name+' — equipped!');
+  renderPickShop();
+}
+function equipPick(id){
+  if(!(SAVE.ownedPicks||[]).includes(id)) return;
+  SAVE.pickaxe=id; persist(); SFX.click();
+  toast('⛏️ Holding the '+pickaxeById(id).name+'!');
+  renderPickShop();
+}
+
 function openTagPick(){ showScreen('tagPickScreen'); }
 function startRoomTag(role){
   SFX.click(); closeModal('winModal');
@@ -821,7 +869,7 @@ function onLevelComplete(level, earned, isFinal, res){
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
     : (isMine
-        ? `<button class="btn gold" onclick="startMine()">🔁 Keep digging</button><button class="btn ghost" onclick="startMine('fresh')">🆕 New mine</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        ? `<button class="btn gold" onclick="startMine()">🔁 Keep digging</button><button class="btn blue" onclick="openPickShop()">⛏️ Pickaxe Shop</button><button class="btn ghost" onclick="startMine('fresh')">🆕 New mine</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isCr
         ? (roomMp ? `<button class="btn gold" onclick="backToLobby()">Back to Lobby</button>`
                   : `<button class="btn gold" onclick="startCopsRob('${res.role||'runner'}')">🔁 Play again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
