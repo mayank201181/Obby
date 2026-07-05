@@ -41,7 +41,7 @@ const ABILITY_INFO = {
   nightswarm: '🦇 Night Swarm! Release a burst of bats that stuns EVERY friend near you for 3 seconds and spooks the hazards',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
-  flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
+  flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 8 seconds — ready again 5s after you land',
   stomp:      '🦕 Mega Stomp! Crash down with a shockwave that flattens & stuns everyone near you',
   supernova:  '🌟 SUPERNOVA! Erupt in starlight — stun every rival, wipe nearby hazards, tame the boss & launch skyward, invincible',
   // ===== MYTHICAL activated power (strong, but below the secrets) =====

@@ -80,7 +80,7 @@ const POWER_META = {
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
   teleport:  {emoji:'🌈', label:'BLINK',  cd:3000},
   grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
-  flight:    {emoji:'🦄', label:'FLY',    cd:8000},   // Unicorn — 5s of flight + 3s cooldown after it ends
+  flight:    {emoji:'🦄', label:'FLY',    cd:13000},  // Unicorn — 8s of flight + 5s cooldown after it ends
   stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
   supernova: {emoji:'🌟', label:'SUPERNOVA', cd:9000},   // Starlight signature
   cloudjump: {emoji:'☁️', label:'CLOUD',  cd:4000},       // Pegasus (mythical)
@@ -496,7 +496,7 @@ function usePower(power){
       SFX.jump(); if(typeof toast==='function') toast('🦑 Tentacle pull!'); break;
     }
     case 'flight': {                                      // 🦄 fly + invincible
-      Game.flyUntil = Game.t + 5000; p.invuln = Math.max(p.invuln, 5000);
+      Game.flyUntil = Game.t + 8000; p.invuln = Math.max(p.invuln, 8000);
       SFX.rare(); if(typeof toast==='function') toast('🦄 Rainbow Flight! Hold JUMP to soar!'); break;
     }
     case 'phase': {                                       // 👻 intangible to hazards
