@@ -302,16 +302,20 @@ function startTower(resumeChoice){
   Game.multiplayer=false; Game.daily=false;
   Game.onLevelComplete=onLevelComplete;
   Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
-  // resume from your saved floor if you have progress (unless you chose 'fresh')
-  const canResume = (SAVE.towerFloor>0 && SAVE.towerSeed!=null);
+  // resume from your saved floor if you have progress (unless you chose 'fresh').
+  // towerBest (your record) doubles as a backup: if the saved floor was ever
+  // lost or wiped, you still resume from the highest floor you've EVER reached.
+  const savedFloor = Math.max(SAVE.towerFloor||0, SAVE.towerBest||0);
+  const canResume = savedFloor>0;
   const resume = canResume && resumeChoice!=='fresh';
-  const seed = resume ? SAVE.towerSeed : Math.floor(Math.random()*1e6);
+  const seed = (resume && SAVE.towerSeed!=null) ? SAVE.towerSeed : Math.floor(Math.random()*1e6);
   if(!resume){ SAVE.towerFloor=0; SAVE.towerSeed=seed; persist(); }
+  else if(savedFloor>(SAVE.towerFloor||0)){ SAVE.towerFloor=savedFloor; SAVE.towerSeed=seed; persist(); }  // heal the save
   // Tower has no shooting cannons — the endless ramp + crumbly/ice/wind blocks
   // are the challenge.
-  startGame({mode:'tower', seed, resumeFloor: resume?SAVE.towerFloor:0, multiplayer:false, difficulty:'easy'});
+  startGame({mode:'tower', seed, resumeFloor: resume?savedFloor:0, multiplayer:false, difficulty:'easy'});
   startMusicIfOn('tower');
-  if(resume && typeof toast==='function') toast('🏗️ Continuing from floor '+SAVE.towerFloor+'!');
+  if(resume && typeof toast==='function') toast('🏗️ Continuing from floor '+savedFloor+'!');
 }
 
 /* ---------------- Natural Disaster Survival ---------------- */
@@ -392,9 +396,11 @@ function renderPickShop(){
   const rows=PICKAXES.map(p=>{
     const owned=(SAVE.ownedPicks||['wood']).includes(p.id);
     const equipped=SAVE.pickaxe===p.id;
-    const taps=Math.ceil(8/p.power);   // taps to break the toughest block (Deeprock, 8 HP)
+    const taps=Math.ceil(20/p.power);  // taps to break the deepest block (Starrock, 20 HP)
     const sw=p.col==='rainbow'
       ? 'background:linear-gradient(90deg,#ff6b6b,#ffd36b,#7be0b0,#74a8ff,#c8a0ff)'
+      : p.col==='galaxy'
+      ? 'background:linear-gradient(135deg,#1a1440,#5b2a86,#2a86c7,#0d0b2a)'
       : 'background:'+p.col;
     const btn=equipped
       ? `<button class="btn ghost small" disabled>Holding ✓</button>`
@@ -406,7 +412,7 @@ function renderPickShop(){
       <div style="flex:1;min-width:0">
         <b>⛏️ ${p.name}</b> <span style="font-size:11px;opacity:.7">· ${p.rarity}</span>
         <div style="font-size:12px;opacity:.85">${p.desc}</div>
-        <div style="font-size:12px;opacity:.85">Toughest rock: <b>${taps} tap${taps===1?'':'s'}</b> per block</div>
+        <div style="font-size:12px;opacity:.85">Deepest rock: <b>${taps} tap${taps===1?'':'s'}</b> per block</div>
       </div>${btn}</div>`;
   }).join('');
   body.innerHTML=`<h2>⛏️ Pickaxe Shop</h2>

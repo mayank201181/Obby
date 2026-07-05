@@ -303,10 +303,12 @@ function generateTower(seed){
   return world;
 }
 
-/* resume an endless-tower run: pre-build up to `floor` and start there */
+/* resume an endless-tower run: pre-build up to `floor` and start there.
+   The guard used to stop at 600 floors, so resuming past ~597 silently
+   dropped you at the BOTTOM — that's how a floor-701 run "lost" its save. */
 function advanceTowerTo(world, floor){
   let guard=0;
-  while(world._floor < floor+3 && guard++<600) towerFloor(world);
+  while(world._floor < floor+3 && guard++<20000) towerFloor(world);
   const cp = world.platforms.find(p=>p.type==='checkpoint' && p.cpIndex===floor);
   if(cp) world.start = {x: cp.x+cp.w/2, y: cp.y};
   for(const b of world.bosses){ if(b.floorNo<=floor) b.defeated=true; }  // already-passed bosses

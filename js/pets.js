@@ -34,6 +34,7 @@ const ABILITY_INFO = {
   firebreath: '🐉 Fire Breath! Blast a huge jet of fire that torches blocks & hammers the boss',
   freeze:     '🧊 Deep Freeze! Freeze every enemy, hazard & rival solid for a few seconds',
   phase:      '👻 Ghost Phase! Go invincible & drift through all hazards for a few seconds',
+  vanish:     '👻 Vanish! Turn invisible for 6 seconds — friends can\'t see you AT ALL (you look faded on your own screen). Ready again 3s after you reappear',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
@@ -104,7 +105,7 @@ const CREATURES = [
   { id:'prism',   name:'Prism',     emoji:'🌈', rarity:'secret', abilities:['teleport','speed3','highJump'], sell:700 },
   { id:'kraken',  name:'Kraken',    emoji:'🦑', rarity:'secret', abilities:['grapple','speed2'],      sell:700 },
   { id:'yeti',    name:'Yeti',      emoji:'🧊', rarity:'secret', abilities:['freeze','glideStrong'],  sell:700 },
-  { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['phase','glide'],         sell:700 },
+  { id:'ghost',   name:'Ghost',     emoji:'👻', rarity:'secret', abilities:['vanish','glide'],        sell:700 },
   { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['polymorph','glide'], group:'troll', sell:700 },
   { id:'dino',    name:'Dino',      emoji:'🦕', rarity:'secret', abilities:['stomp','speed2'],        sell:700 },
   { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['supernova','starglow'], sell:700 },
@@ -453,7 +454,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','phase','teleport','grapple','flight','stomp','supernova','cloudjump','hop'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)

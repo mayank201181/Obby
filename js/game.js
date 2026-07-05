@@ -60,7 +60,7 @@ const Game = {
   caughtIds:null,                      // set of caught hider ids (MP hide&seek)
   moveLock:false,                      // input frozen (seeker during the hide phase)
   petPower:null, powerCdUntil:0,       // equipped SECRET pet signature power + its cooldown
-  flyUntil:0, phaseUntil:0,            // Unicorn flight / Ghost phase timers
+  flyUntil:0, phaseUntil:0, invisUntil:0,   // Unicorn flight / Ghost phase & vanish timers
   freezeEnemiesUntil:0, slowWorldUntil:0,  // Yeti freeze / Starlight slow-time timers
   fire:[],                             // Dragon fire-breath projectiles
   morph:null, morphPower:'none', morphUntil:0,   // my own transformed animal (set by an Alien)
@@ -73,6 +73,7 @@ const POWER_META = {
   firebreath:{emoji:'🔥', label:'FIRE',   cd:2600},
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
+  vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
   teleport:  {emoji:'🌈', label:'BLINK',  cd:3000},
   grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
   flight:    {emoji:'🦄', label:'FLY',    cd:8000},   // Unicorn — 5s of flight + 3s cooldown after it ends
@@ -131,6 +132,8 @@ function gameInit(){
   // never lose an in-progress dig if the tab closes / backgrounds
   window.addEventListener('beforeunload', ()=>{ if(Game.mine && Game.dig && !Game.multiplayer) saveMine(Game.dig); });
   window.addEventListener('pagehide', ()=>{ if(Game.mine && Game.dig && !Game.multiplayer) saveMine(Game.dig); });
+  // belt & braces: flush ALL progress (tower floor, coins, picks…) when the tab closes
+  window.addEventListener('pagehide', ()=>{ if(typeof persist==='function') persist(); });
   // keyboard (desktop)
   const typingInField = e => {
     const t=e.target;
@@ -248,6 +251,7 @@ function loadLevel(level){
   Game.blurUntil=0; if(Game.canvas) Game.canvas.style.filter='';
   Game.heistLoot=0; Game.heistEndT=Game.t+20000;   // 20-second heist clock
   Game.disappear={};
+  Game.activePlats=null;   // rebuilt each frame (tower anti-lag window)
   Game.hitCheckpoints=new Set();
   if(Game.tower && Game.towerResume>0){ for(let i=1;i<=Game.towerResume;i++) Game.hitCheckpoints.add(i); }
   Game.coinsThisRun=0;
@@ -259,7 +263,7 @@ function loadLevel(level){
   };
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
   Game.bananas=[]; Game.poops=[]; Game.floatUntil=0; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
-  Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.freezeEnemiesUntil=0;
+  Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.invisUntil=0; Game.freezeEnemiesUntil=0;
   Game.slowWorldUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
   Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   Game.faceMorph=null; Game.accMorph=null; Game.morphRound=false;
@@ -495,6 +499,11 @@ function usePower(power){
       Game.phaseUntil = Game.t + 4500; p.invuln = Math.max(p.invuln, 4500);
       SFX.chest(); if(typeof toast==='function') toast('👻 Ghost Phase — nothing can touch you!'); break;
     }
+    case 'vanish': {                                      // 👻 invisible: faded on your screen, GONE on friends' screens
+      Game.invisUntil = Game.t + 6000;
+      for(let i=0;i<8;i++) Game.abilityFx.push({kind:'spark', x:p.x+p.w/2+(Math.random()*26-13), y:p.y+p.h/2+(Math.random()*26-13), vx:0, vy:-0.4, life:1, born:Game.t});
+      SFX.chest(); if(typeof toast==='function') toast('👻 Vanished! Invisible for 6 seconds…'); break;
+    }
     case 'freeze': {                                      // 🧊 freeze the world's enemies
       Game.freezeEnemiesUntil = Game.t + 4500;
       if(Game.multiplayer && typeof mpSendFreeze==='function') mpSendFreeze();
@@ -660,6 +669,7 @@ function update(dt){
   if(Game.shakeMag){ Game.shakeMag*=0.86; if(Game.shakeMag<0.2) Game.shakeMag=0; }
   const GRAV=0.86, MAXFALL=18, MOVE=4.8, ACCEL=0.6, FRICT=0.72, JUMP=-14.0;
 
+  refreshActivePlats();                 // tower anti-lag: work only on nearby platforms
   updateMovers();                       // slide moving blocks before collision
   updateLifts();                        // raise co-op lifts (carries riders)
   updateTrapdoors();                    // flip trap-doors after you've stood on them
@@ -780,6 +790,7 @@ function update(dt){
       mpSendPos({x:Math.round(p.x),y:Math.round(p.y),facing:p.facing,
                  skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
                  name:SAVE.name,cp:p.cp,finished:Game.finished, inShip:false,
+                 inv:(Game.t<(Game.invisUntil||0))?1:0,   // 👻 Ghost Vanish — friends hide me entirely
                  disg:(Game.myDisguise&&Game.myDisguise.emoji)||null, morph:Game.morph||null});
     }
   }
@@ -919,8 +930,9 @@ function spectateUpdate(){
 }
 
 function moveAndCollide(p){
-  // world platforms + any active pet-placed platforms
-  const plats = Game.placedPlatforms.length ? Game.world.platforms.concat(Game.placedPlatforms) : Game.world.platforms;
+  // nearby world platforms + any active pet-placed platforms
+  const world = Game.activePlats||Game.world.platforms;
+  const plats = Game.placedPlatforms.length ? world.concat(Game.placedPlatforms) : world;
   const now=Game.t;
 
   // ---- horizontal: free movement (one-way platforms don't block sideways) ----
@@ -992,7 +1004,7 @@ function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){
 function collectCoins(p){
   const magnet = Game.t < Game.power.magnetUntil || Game.petMagnet;   // Raccoon = always magnet
   const pcx=p.x+p.w/2, pcy=p.y+p.h/2;
-  for(const c of Game.world.platforms){
+  for(const c of (Game.activePlats||Game.world.platforms)){
     if(c.taken) continue;
     if(c.type==='coin'){
       let grab = p.x < c.x+c.w && p.x+p.w > c.x && p.y < c.y+c.h && p.y+p.h > c.y;
@@ -1048,9 +1060,26 @@ function isHittable(p){ return p.invuln<=0 && Game.t>=Game.power.ghostUntil; }
 function hazardSpeed(){ return Game.t<Game.power.slowUntil ? 0.45 : 1; }
 
 /* slide moving blocks horizontally around their base position */
+/* Endless Tower anti-lag: at floor 700+ the world holds thousands of
+   platforms. Physics, coins, movers and drawing only need the ones near the
+   player/camera, so each frame we slice out that window. Movers are stateless
+   (x comes from sin(t)) so freezing off-screen ones is invisible. */
+function refreshActivePlats(){
+  const w=Game.world; if(!w){ Game.activePlats=null; return; }
+  const plats=w.platforms;
+  if(!Game.tower || plats.length<600){ Game.activePlats=plats; return; }
+  const p=Game.player;
+  const span=(Game.H/gameScale()) + 900;
+  const midA=p?p.y:Game.cam.y, midB=Game.cam.y;
+  const lo=Math.min(midA,midB)-span, hi=Math.max(midA,midB)+span;
+  const out=[];
+  for(const pl of plats){ if(pl.y>=lo && pl.y<=hi) out.push(pl); }
+  Game.activePlats=out;
+}
+
 function updateMovers(){
   if(Game.freezeHazards || !Game.world) return;
-  for(const pl of Game.world.platforms){
+  for(const pl of (Game.activePlats||Game.world.platforms)){
     if(pl.type==='mover'){
       const old=pl.x;
       pl.x = pl.base + pl.amp*Math.sin(Game.t*pl.omega + pl.phase);
@@ -1280,7 +1309,7 @@ function laserLive(pl){
 function updateLasers(){
   if(Game.freezeHazards || !Game.world) return;
   const p=Game.player; if(!p || !isHittable(p)) return;
-  for(const pl of Game.world.platforms){
+  for(const pl of (Game.activePlats||Game.world.platforms)){
     if(pl.type!=='laser' || !laserLive(pl)) continue;
     if(p.x < pl.x+pl.w && p.x+p.w > pl.x && p.y < pl.y+pl.h && p.y+p.h > pl.y){
       if(absorbWithShield()){ p.invuln=600; break; }
@@ -2362,16 +2391,37 @@ function drawJailOverlay(ctx){
 
 /* ================= COIN MINE — grid digging (Dino-Dig style) ================= */
 const DIG_COLS = 7, DIG_CELL = 58;
-// material tiers by depth — harder (more taps) but richer the deeper you dig
+// material tiers by depth — harder (more taps) but richer the deeper you dig.
+// The BEST loot lives way down low: gem/pet/secret odds and coin sizes keep
+// climbing tier after tier, so deep digs are where the treasure is.
 const DIG_TIERS = [
-  {name:'Soil',    taps:2, col:'#7b4e2e', top:'#8f5d38', coin:[1,2],   gem:0.03, pet:0,     secret:0},
-  {name:'Dirt',    taps:3, col:'#8a5a30', top:'#9d6b3c', coin:[2,4],   gem:0.05, pet:0.006, secret:0},
-  {name:'Clay',    taps:4, col:'#9a6a4a', top:'#b07d58', coin:[3,6],   gem:0.07, pet:0.012, secret:0.0004},
-  {name:'Stone',   taps:5, col:'#6f757f', top:'#848b96', coin:[5,9],   gem:0.09, pet:0.02,  secret:0.001},
-  {name:'Rock',    taps:6, col:'#565c68', top:'#6a7180', coin:[8,14],  gem:0.11, pet:0.03,  secret:0.002},
-  {name:'Deeprock',taps:8, col:'#3c3550', top:'#4d4468', coin:[12,22], gem:0.13, pet:0.045, secret:0.004},
+  {name:'Soil',    taps:2,  col:'#7b4e2e', top:'#8f5d38', coin:[1,2],    gem:0.03, pet:0,     secret:0},
+  {name:'Dirt',    taps:3,  col:'#8a5a30', top:'#9d6b3c', coin:[2,4],    gem:0.05, pet:0.006, secret:0},
+  {name:'Clay',    taps:4,  col:'#9a6a4a', top:'#b07d58', coin:[3,6],    gem:0.07, pet:0.012, secret:0.0004},
+  {name:'Stone',   taps:5,  col:'#6f757f', top:'#848b96', coin:[5,9],    gem:0.09, pet:0.02,  secret:0.001},
+  {name:'Rock',    taps:6,  col:'#565c68', top:'#6a7180', coin:[8,14],   gem:0.11, pet:0.03,  secret:0.002},
+  {name:'Deeprock',taps:8,  col:'#3c3550', top:'#4d4468', coin:[12,22],  gem:0.13, pet:0.045, secret:0.004},
+  {name:'Crystal', taps:10, col:'#1f4e5e', top:'#2f7085', coin:[18,30],  gem:0.16, pet:0.055, secret:0.006},
+  {name:'Magma',   taps:12, col:'#6e2b1a', top:'#914022', coin:[26,42],  gem:0.19, pet:0.065, secret:0.008},
+  {name:'Obsidian',taps:14, col:'#241a2e', top:'#382747', coin:[36,58],  gem:0.22, pet:0.075, secret:0.011},
+  {name:'Frostium',taps:16, col:'#27496e', top:'#356a99', coin:[48,76],  gem:0.25, pet:0.085, secret:0.014},
+  {name:'Voidrock',taps:18, col:'#161226', top:'#262045', coin:[64,100], gem:0.28, pet:0.095, secret:0.018},
+  {name:'Starrock',taps:20, col:'#2c1a4d', top:'#432a70', coin:[85,130], gem:0.32, pet:0.105, secret:0.024},
 ];
-function digTier(r){ return DIG_TIERS[Math.min(DIG_TIERS.length-1, Math.floor(r/7))]; }
+// below the last tier the rock stays Starrock-rich, but the colours keep on
+// changing forever so the deep mine never looks samey
+const DIG_DEEP_COLS = [
+  ['#4d1a3d','#742a5e'], ['#1a4d33','#2a744e'], ['#4d3d1a','#74602a'],
+  ['#1a2e4d','#2a4874'], ['#3d1a4d','#5e2a74'], ['#4d1a1a','#742a2a'],
+  ['#1a4d4d','#2a7474'], ['#33334d','#4d4d74'],
+];
+function digTier(r){
+  const i=Math.floor(r/7);
+  if(i<DIG_TIERS.length) return DIG_TIERS[i];
+  const base=DIG_TIERS[DIG_TIERS.length-1];
+  const cols=DIG_DEEP_COLS[(i-DIG_TIERS.length) % DIG_DEEP_COLS.length];
+  return Object.assign({}, base, {name:'Mystery Rock', col:cols[0], top:cols[1]});
+}
 // deterministic per-cell rng so co-op players reveal the SAME loot from a block
 function digCellRng(seed, r, c){ return mulberry32(((seed*73856093) ^ ((r+9)*19349663) ^ ((c+3)*83492791))>>>0); }
 function digGenRow(dg, r){
@@ -2642,10 +2692,12 @@ function drawDig(ctx){
   const sb=digShopRect();
   const pk=(typeof pickaxeById==='function')?pickaxeById(SAVE.pickaxe):null;
   ctx.fillStyle='#c9b8ff'; roundRect(ctx,sb.x,sb.y,sb.w,sb.h,10); ctx.fill();
-  if(pk && pk.col && pk.col!=='rainbow'){ ctx.fillStyle=pk.col; roundRect(ctx,sb.x,sb.y,sb.w,5,10); ctx.fill(); }
-  else if(pk && pk.col==='rainbow'){ const g=ctx.createLinearGradient(sb.x,0,sb.x+sb.w,0);
-    ['#ff6b6b','#ffd36b','#7be0b0','#74a8ff','#c8a0ff'].forEach((cc,i,arr)=>g.addColorStop(i/(arr.length-1),cc));
+  if(pk && (pk.col==='rainbow' || pk.col==='galaxy')){ const g=ctx.createLinearGradient(sb.x,0,sb.x+sb.w,0);
+    const cols = pk.col==='rainbow' ? ['#ff6b6b','#ffd36b','#7be0b0','#74a8ff','#c8a0ff']
+                                    : ['#1a1440','#5b2a86','#2a86c7','#0d0b2a'];
+    cols.forEach((cc,i,arr)=>g.addColorStop(i/(arr.length-1),cc));
     ctx.fillStyle=g; roundRect(ctx,sb.x,sb.y,sb.w,5,10); ctx.fill(); }
+  else if(pk && pk.col){ ctx.fillStyle=pk.col; roundRect(ctx,sb.x,sb.y,sb.w,5,10); ctx.fill(); }
   ctx.fillStyle='#3d2a66'; ctx.font='bold 15px Nunito'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText('⛏️ Shop', sb.x+sb.w/2, sb.y+sb.h/2);
 }
@@ -2919,7 +2971,7 @@ function render(){
 
   drawWorldBackdrop(ctx);
 
-  const plats=Game.world.platforms;
+  const plats=Game.activePlats||Game.world.platforms;
   for(const pl of plats){ if(pl.furni) drawFurni(ctx,pl); else if(pl.type==='cpad'){} else drawPlatform(ctx,pl); }
   if(Game.colorTag) drawColorPads(ctx);
   if(Game.copsRob) drawMoney(ctx);       // 💰 bags across the bank
@@ -2973,6 +3025,7 @@ function render(){
     const hsSeek = Game.room && Game.roomMode==='hideseek';
     for(const r of mpRemoteList()){
       if(typeof r.x!=='number') continue;
+      if(r.inv) continue;                 // 👻 a Vanished friend is completely invisible
       const caught = Game.caughtIds && Game.caughtIds.has(r.id);
       const isSeeker = hsSeek && MP.itId===r.id;
       if(r.morph){
@@ -3028,10 +3081,12 @@ function render(){
   } else if(!Game.spectating){
     const mySkin = Game.myColor || SAVE.skin;
     const ghosting = Game.t < Game.power.ghostUntil;
+    const vanished = Game.t < (Game.invisUntil||0);   // 👻 Vanish: faded for you, gone for friends
     const blink = p.invuln>0 && Math.floor(Game.t/90)%2===0;
-    if(Game.petGlow) drawStarGlow(ctx, p.x+p.w/2, p.y+p.h/2);   // Starlight pretty aura
+    if(Game.petGlow && !vanished) drawStarGlow(ctx, p.x+p.w/2, p.y+p.h/2);   // Starlight pretty aura
     ctx.save();
-    if(ghosting) ctx.globalAlpha=0.45;
+    if(vanished) ctx.globalAlpha=0.30;
+    else if(ghosting) ctx.globalAlpha=0.45;
     else if(blink) ctx.globalAlpha=0.4;
     drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:Game.accMorph||SAVE.accessory,face:Game.faceMorph||SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
                   petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
