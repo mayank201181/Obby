@@ -70,7 +70,11 @@ const Game = {
 // SECRET pet signature powers — button emoji/label + cooldown (ms)
 const POWER_META = {
   polymorph: {emoji:'👽', label:'MORPH',  cd:6000},
-  firebreath:{emoji:'🔥', label:'FIRE',   cd:2600},
+  firebreath:{emoji:'🔥', label:'FIRE',   cd:5000},   // Dragon — 5s cooldown; fireballs stun friends 3s
+  lightning: {emoji:'⚡', label:'ZAP',    cd:4500},   // Thunderbird — mega dash that stuns friends you zap past
+  rocket:    {emoji:'🚀', label:'ROCKET', cd:5000},   // Mecha-Blob — blast sky-high with a hover landing
+  slowtime:  {emoji:'⏳', label:'SLOW',   cd:8000},   // Wizard — slow the whole world down
+  nightswarm:{emoji:'🦇', label:'BATS',   cd:7000},   // Vampire Bat — bat swarm stuns every friend near you
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
@@ -509,9 +513,35 @@ function usePower(power){
       if(Game.multiplayer && typeof mpSendFreeze==='function') mpSendFreeze();
       addShake(4); SFX.hit(); if(typeof toast==='function') toast('🧊 Deep Freeze!'); break;
     }
-    case 'slowtime': {                                    // 🌟 slow everything else
+    case 'slowtime': {                                    // 🧙 slow everything else
       Game.slowWorldUntil = Game.t + 4500;
-      SFX.rare(); if(typeof toast==='function') toast('🌟 Star Time — the world slows down!'); break;
+      SFX.rare(); if(typeof toast==='function') toast('⏳ Time Warp — the world slows down!'); break;
+    }
+    case 'lightning': {                                   // ⚡ Thunderbird — zap forward, stunning friends in your path
+      p.vx = p.facing*26; p.invuln = Math.max(p.invuln, 900);
+      Game.power.dashUntil = Math.max(Game.power.dashUntil||0, Game.t+900);
+      if(Game.multiplayer){
+        for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+          const dx=(r.x+17)-(p.x+p.w/2), dy=(r.y+17)-(p.y+p.h/2);
+          if(Math.abs(dy)<80 && dx*p.facing>-30 && Math.abs(dx)<320 && typeof mpSendStun==='function') mpSendStun(r.id); } }
+      for(let i=0;i<12;i++) Game.abilityFx.push({kind:'emoji', e:'⚡', x:p.x+p.w/2+p.facing*i*24, y:p.y+p.h/2+(Math.random()*30-15), vx:p.facing*2, vy:0, life:1, born:Game.t});
+      addShake(4); SFX.jump(); if(typeof toast==='function') toast('⚡ LIGHTNING DASH!'); break;
+    }
+    case 'rocket': {                                      // 🚀 Mecha-Blob — blast WAY up, hover on the way down
+      p.vy = -24; p.onGround=false; p.jumps=0; p.squash=-1.3;
+      Game.floatUntil = Game.t + 1600;                    // hover so the landing is easy to aim
+      p.invuln = Math.max(p.invuln, 600);
+      for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🔥', x:p.x+p.w/2+(Math.random()*22-11), y:p.y+p.h+i*8, vx:(Math.random()*2-1)*1.2, vy:1.5, life:1, born:Game.t});
+      addShake(5); SFX.jump(); if(typeof toast==='function') toast('🚀 ROCKET BLAST!'); break;
+    }
+    case 'nightswarm': {                                  // 🦇 Vampire Bat — bats stun every friend near you
+      if(Game.multiplayer){
+        for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+          if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<420 && typeof mpSendStun==='function') mpSendStun(r.id); } }
+      Game.freezeEnemiesUntil = Math.max(Game.freezeEnemiesUntil||0, Game.t+2000);   // bats spook hazards too
+      for(let i=0;i<16;i++){ const a=i/16*Math.PI*2;
+        Game.abilityFx.push({kind:'emoji', e:'🦇', x:p.x+p.w/2, y:p.y+p.h/2, vx:Math.cos(a)*(2.5+Math.random()*2), vy:Math.sin(a)*2-1, life:1.2, born:Game.t}); }
+      addShake(4); SFX.chest(); if(typeof toast==='function') toast('🦇 NIGHT SWARM!'); break;
     }
     case 'firebreath': {                                  // 🐉 fire jet forward
       for(let i=0;i<5;i++) Game.fire.push({ x:p.x+p.w/2, y:p.y+p.h/2, vx:p.facing*(9+i*0.6), vy:(Math.random()*2-1)*1.4, r:15, born:Game.t+i*40 });
@@ -655,6 +685,14 @@ function updatePowers(dt){
     if(Game.disaster && Game.dz && Game.dz.zombies){
       for(let k=Game.dz.zombies.length-1;k>=0;k--){ const z=Game.dz.zombies[k];
         if(f.x>z.x-f.r && f.x<z.x+z.w+f.r && f.y>z.y-f.r && f.y<z.y+z.h+f.r){ Game.dz.zombies.splice(k,1); done=true; break; } } }
+    if(done){ Game.fire.splice(i,1); continue; }
+    // 🐉 a fireball that hits a FRIEND bursts on them and stuns them for 3s
+    if(Game.multiplayer){
+      for(const r of mpRemoteList()){ if(typeof r.x!=='number' || r.finished) continue;
+        if(f.x>r.x-f.r && f.x<r.x+34+f.r && f.y>r.y-f.r && f.y<r.y+34+f.r){
+          if(typeof mpSendStun==='function') mpSendStun(r.id);
+          for(let s=0;s<6;s++) Game.abilityFx.push({kind:'emoji', e:'🔥', x:r.x+17+(Math.random()*24-12), y:r.y+17+(Math.random()*24-12), vx:(Math.random()*2-1)*1.5, vy:-Math.random()*1.5, life:1, born:Game.t});
+          done=true; break; } } }
     if(done){ Game.fire.splice(i,1); continue; }
     for(let k=Game.bossShots.length-1;k>=0;k--){ const s=Game.bossShots[k];
       if(Math.abs(s.x-f.x)<s.r+f.r && Math.abs(s.y-f.y)<s.r+f.r){ Game.bossShots.splice(k,1); } }
@@ -1498,6 +1536,7 @@ function drawAbilityFx(ctx){
     ctx.globalAlpha=Math.max(0,f.life)*0.7;
     if(f.kind==='dust'){ ctx.fillStyle='#e8dcc8'; ctx.beginPath(); ctx.arc(f.x,f.y,4*(1.4-f.life)+2,0,6.283); ctx.fill(); }
     else if(f.kind==='star'){ ctx.font='14px serif'; ctx.textAlign='center'; ctx.fillText('🌟', f.x, f.y); }
+    else if(f.kind==='emoji'){ ctx.font='16px serif'; ctx.textAlign='center'; ctx.fillText(f.e||'✨', f.x, f.y); }
     else { ctx.font='12px serif'; ctx.textAlign='center'; ctx.fillText('✨', f.x, f.y); }
   }
   ctx.globalAlpha=1;

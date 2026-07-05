@@ -31,10 +31,14 @@ const ABILITY_INFO = {
   hop:        '🐰 Mega Hop! Tap 🥕 to spring high into the air and refill your jumps',
   // ===== SECRET pet signature powers (one each, no repeats) =====
   polymorph:  '👽 Morph! Touch a friend or boss — turn them into ANY animal, face or accessory you own for the whole round!',
-  firebreath: '🐉 Fire Breath! Blast a huge jet of fire that torches blocks & hammers the boss',
+  firebreath: '🐉 Fire Breath! Blast a fire jet that hammers the boss, roasts zombies — and STUNS any friend it hits for 3 seconds',
   freeze:     '🧊 Deep Freeze! Freeze every enemy, hazard & rival solid for a few seconds',
   phase:      '👻 Ghost Phase! Go invincible & drift through all hazards for a few seconds',
   vanish:     '👻 Vanish! Turn invisible for 6 seconds — friends can\'t see you AT ALL (you look faded on your own screen). Ready again 3s after you reappear',
+  lightning:  '⚡ Lightning Dash! Zap forward at crazy speed, invincible — any friend you blast past is stunned for 3 seconds',
+  rocket:     '🚀 Rocket Blast! Launch WAY up into the sky, then hover gently down to nail the landing',
+  slowtime:   '⏳ Time Warp! Slow the whole world down for a few seconds while you move at full speed',
+  nightswarm: '🦇 Night Swarm! Release a burst of bats that stuns EVERY friend near you for 3 seconds and spooks the hazards',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
@@ -109,6 +113,10 @@ const CREATURES = [
   { id:'alien',   name:'Alien',     emoji:'👽', rarity:'secret', abilities:['polymorph','glide'], group:'troll', sell:700 },
   { id:'dino',    name:'Dino',      emoji:'🦕', rarity:'secret', abilities:['stomp','speed2'],        sell:700 },
   { id:'starlight',name:'Starlight',emoji:'🌟', rarity:'secret', abilities:['supernova','starglow'], sell:700 },
+  { id:'thunderbird',name:'Thunderbird',emoji:'⚡', rarity:'secret', abilities:['lightning','speed2'],    sell:700 },
+  { id:'mecha',   name:'Mecha-Blob',emoji:'🤖', rarity:'secret', abilities:['rocket','highJump'],        sell:700 },
+  { id:'wizard',  name:'Wizard',    emoji:'🧙', rarity:'secret', abilities:['slowtime','doubleJump'],    sell:700 },
+  { id:'vampire', name:'Vampire Bat',emoji:'🦇', rarity:'secret', abilities:['nightswarm','glideStrong'], sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
@@ -136,7 +144,8 @@ const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'ch
   eagle:'berry', octopus:'banana', kraken:'carrot', giraffe:'apple', elephant:'peach', chick:'banana',
   monkey:'banana', raccoon:'berry', turtle:'corn', penguin:'strawberry', hedgehog:'apple', pegasus:'honey',
   hyena:'corn', puppy:'biscuit', bee:'honey', otter:'berry', koala:'apple', kangaroo:'carrot', bear:'honey',
-  panda:'corn', rhino:'apple', swan:'berry', narwhal:'strawberry', dino:'corn', starlight:'honey' };
+  panda:'corn', rhino:'apple', swan:'berry', narwhal:'strawberry', dino:'corn', starlight:'honey',
+  thunderbird:'berry', mecha:'biscuit', wizard:'honey', vampire:'strawberry' };
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
 function petOkFoods(id){
@@ -454,7 +463,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','cloudjump','hop'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)
