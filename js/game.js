@@ -61,7 +61,8 @@ const Game = {
   moveLock:false,                      // input frozen (seeker during the hide phase)
   petPower:null, powerCdUntil:0,       // equipped SECRET pet signature power + its cooldown
   flyUntil:0, phaseUntil:0, invisUntil:0,   // Unicorn flight / Ghost phase & vanish timers
-  freezeEnemiesUntil:0, slowWorldUntil:0,  // Yeti freeze / Starlight slow-time timers
+  freezeEnemiesUntil:0, slowWorldUntil:0,  // Yeti freeze / Wizard slow-time timers
+  slowMoveUntil:0,              // a Wizard slowed ME down -> I move in slow motion
   fire:[],                             // Dragon fire-breath projectiles
   morph:null, morphPower:'none', morphUntil:0,   // my own transformed animal (set by an Alien)
   morphMoveMul:1, morphJumpMul:1, morphFly:false,
@@ -73,14 +74,14 @@ const POWER_META = {
   firebreath:{emoji:'🔥', label:'FIRE',   cd:5000},   // Dragon — 5s cooldown; fireballs stun friends 3s
   lightning: {emoji:'⚡', label:'ZAP',    cd:4500},   // Thunderbird — mega dash that stuns friends you zap past
   rocket:    {emoji:'🚀', label:'ROCKET', cd:5000},   // Mecha-Blob — blast sky-high with a hover landing
-  slowtime:  {emoji:'⏳', label:'SLOW',   cd:8000},   // Wizard — slow the whole world down
+  slowtime:  {emoji:'⏳', label:'SLOW',   cd:8000},   // Wizard — 5s slow-motion for everyone else + 3s cooldown after
   nightswarm:{emoji:'🦇', label:'BATS',   cd:7000},   // Vampire Bat — bat swarm stuns every friend near you
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
   teleport:  {emoji:'🌈', label:'BLINK',  cd:3000},
   grapple:   {emoji:'🦑', label:'GRAPPLE',cd:2200},
-  flight:    {emoji:'🦄', label:'FLY',    cd:13000},  // Unicorn — 8s of flight + 5s cooldown after it ends
+  flight:    {emoji:'🦄', label:'FLY',    cd:8000},   // Unicorn — 5s of flight + 3s cooldown after it ends
   stomp:     {emoji:'🦕', label:'STOMP',  cd:3200},
   supernova: {emoji:'🌟', label:'SUPERNOVA', cd:9000},   // Starlight signature
   cloudjump: {emoji:'☁️', label:'CLOUD',  cd:4000},       // Pegasus (mythical)
@@ -268,7 +269,7 @@ function loadLevel(level){
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
   Game.bananas=[]; Game.poops=[]; Game.floatUntil=0; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
   Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.invisUntil=0; Game.freezeEnemiesUntil=0;
-  Game.slowWorldUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
+  Game.slowWorldUntil=0; Game.slowMoveUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
   Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   Game.faceMorph=null; Game.accMorph=null; Game.morphRound=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
@@ -496,7 +497,7 @@ function usePower(power){
       SFX.jump(); if(typeof toast==='function') toast('🦑 Tentacle pull!'); break;
     }
     case 'flight': {                                      // 🦄 fly + invincible
-      Game.flyUntil = Game.t + 8000; p.invuln = Math.max(p.invuln, 8000);
+      Game.flyUntil = Game.t + 5000; p.invuln = Math.max(p.invuln, 5000);
       SFX.rare(); if(typeof toast==='function') toast('🦄 Rainbow Flight! Hold JUMP to soar!'); break;
     }
     case 'phase': {                                       // 👻 intangible to hazards
@@ -513,9 +514,10 @@ function usePower(power){
       if(Game.multiplayer && typeof mpSendFreeze==='function') mpSendFreeze();
       addShake(4); SFX.hit(); if(typeof toast==='function') toast('🧊 Deep Freeze!'); break;
     }
-    case 'slowtime': {                                    // 🧙 slow everything else
-      Game.slowWorldUntil = Game.t + 4500;
-      SFX.rare(); if(typeof toast==='function') toast('⏳ Time Warp — the world slows down!'); break;
+    case 'slowtime': {                                    // 🧙 slow everything else — including your FRIENDS
+      Game.slowWorldUntil = Game.t + 5000;
+      if(Game.multiplayer && typeof mpSendSlow==='function') mpSendSlow();   // friends crawl for 5s on their screens too
+      SFX.rare(); if(typeof toast==='function') toast('⏳ Time Warp — everyone else slows down!'); break;
     }
     case 'lightning': {                                   // ⚡ Thunderbird — zap forward, stunning friends in your path
       p.vx = p.facing*26; p.invuln = Math.max(p.invuln, 900);
@@ -722,7 +724,8 @@ function update(dt){
   // horizontal (pet speed boost) — ice makes you slip (low grip, slow stop)
   const dashing = Game.t < Game.power.dashUntil;
   const flying = Game.t < (Game.flyUntil||0);            // 🦄 rainbow flight / morphed eagle
-  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1);
+  const wizSlowed = Game.t < (Game.slowMoveUntil||0);   // a Wizard time-warped me
+  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1)*(wizSlowed?0.35:1);
   const target=dir*move;
   const grip = p.onIce ? 0.09 : 0.35;
   p.vx += (target-p.vx)*grip;
@@ -734,7 +737,7 @@ function update(dt){
   if(Game.input.jump && !stunned){
     if(flying){ p.vy=-9; p.onGround=false; p.squash=-1; SFX.jump(); }
     else {
-      const jv = JUMP*Game.petJumpMul*(Game.morphJumpMul||1);
+      const jv = JUMP*Game.petJumpMul*(Game.morphJumpMul||1)*(wizSlowed?0.8:1);
       if(p.onGround){ p.vy=jv; p.onGround=false; p.jumps=1; p.squash=-1; SFX.jump(); }
       else if(p.jumps < Game.petMaxJumps){ p.vy=jv; p.jumps++; p.squash=-1; SFX.jump(); }
     }
@@ -1590,6 +1593,14 @@ function onBoostFrom(senderId){
   }
 }
 
+/* a Wizard time-warped me -> I move in slow motion for 5 seconds */
+function onSlowedNet(){
+  if(!Game.running) return;
+  Game.slowMoveUntil = Game.t + 5000;
+  const p=Game.player;
+  if(p) for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'⏳', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h/2+(Math.random()*30-15), vx:0, vy:-0.5, life:1, born:Game.t});
+  SFX.hit(); if(typeof toast==='function') toast('⏳ A Wizard slowed you down!');
+}
 /* a Yeti froze me solid */
 function onFreezeNet(){
   if(!Game.running) return;

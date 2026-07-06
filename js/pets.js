@@ -37,11 +37,11 @@ const ABILITY_INFO = {
   vanish:     '👻 Vanish! Turn invisible for 6 seconds — friends can\'t see you AT ALL (you look faded on your own screen). Ready again 3s after you reappear',
   lightning:  '⚡ Lightning Dash! Zap forward at crazy speed, invincible — any friend you blast past is stunned for 3 seconds',
   rocket:     '🚀 Rocket Blast! Launch WAY up into the sky, then hover gently down to nail the landing',
-  slowtime:   '⏳ Time Warp! Slow the whole world down for a few seconds while you move at full speed',
+  slowtime:   '⏳ Time Warp! For 5 seconds the whole world — hazards AND your friends — moves in slow motion while you run at full speed. Ready again 3s after it ends',
   nightswarm: '🦇 Night Swarm! Release a burst of bats that stuns EVERY friend near you for 3 seconds and spooks the hazards',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
-  flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 8 seconds — ready again 5s after you land',
+  flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
   stomp:      '🦕 Mega Stomp! Crash down with a shockwave that flattens & stuns everyone near you',
   supernova:  '🌟 SUPERNOVA! Erupt in starlight — stun every rival, wipe nearby hazards, tame the boss & launch skyward, invincible',
   // ===== MYTHICAL activated power (strong, but below the secrets) =====

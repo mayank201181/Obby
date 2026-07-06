@@ -216,6 +216,11 @@ function mpOnMessage(conn,msg){
       if(msg.from!==MP.selfId && typeof onFreezeNet==='function') onFreezeNet();
       break;
     }
+    case 'slow': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onSlowedNet==='function') onSlowedNet();
+      break;
+    }
     case 'morph': {
       if(MP.isHost) mpRelay(conn,msg);
       const rr=MP.remote[msg.target];
@@ -353,6 +358,8 @@ function mpSendCaught(targetId){ mpSend({t:'caught', from:MP.selfId, target:targ
 function mpSendTagColor(color){ mpSend({t:'tcol', from:MP.selfId, color}); }
 /* Yeti: freeze every other player */
 function mpSendFreeze(){ mpSend({t:'freeze', from:MP.selfId}); }
+/* Wizard: time-warp every other player into slow motion for 5s */
+function mpSendSlow(){ mpSend({t:'slow', from:MP.selfId}); }
 /* Alien: morph a specific friend into an animal / face / accessory for the round */
 function mpSendMorph(targetId, d){ mpSend({t:'morph', from:MP.selfId, target:targetId,
   emoji:d.emoji, grant:d.grant, face:d.face, acc:d.acc, kind:d.kind}); }
