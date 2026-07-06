@@ -182,7 +182,7 @@ function mpOnMessage(conn,msg){
     }
     case 'stun': {
       if(MP.isHost) mpRelay(conn,msg);          // pass it along to the target
-      if(msg.target===MP.selfId && typeof onStunned==='function') onStunned(msg.from);
+      if(msg.target===MP.selfId && typeof onStunned==='function') onStunned(msg.from, msg.secs);
       break;
     }
     case 'caught': {
@@ -351,7 +351,7 @@ function mpSendBoost(){ mpSend({t:'boost', id:MP.selfId}); }
 /* Tag mode: announce who is now "it" (everyone, host relays) */
 function mpSendIt(id){ MP.itId=id; mpSend({t:'it', id}); }
 /* Monkey banana: tell a specific friend they got splatted (they freeze 3s) */
-function mpSendStun(targetId){ mpSend({t:'stun', from:MP.selfId, target:targetId}); }
+function mpSendStun(targetId, secs){ mpSend({t:'stun', from:MP.selfId, target:targetId, secs:secs||3}); }
 /* Hide & Seek: seeker announces a hider has been caught */
 function mpSendCaught(targetId){ mpSend({t:'caught', from:MP.selfId, target:targetId}); }
 /* Colour Tag: the "it" announces the colour everyone must stand on */

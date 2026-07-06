@@ -75,7 +75,7 @@ const POWER_META = {
   lightning: {emoji:'⚡', label:'ZAP',    cd:4500},   // Thunderbird — mega dash that stuns friends you zap past
   rocket:    {emoji:'🚀', label:'ROCKET', cd:5000},   // Mecha-Blob — blast sky-high with a hover landing
   slowtime:  {emoji:'⏳', label:'SLOW',   cd:8000},   // Wizard — 5s slow-motion for everyone else + 3s cooldown after
-  nightswarm:{emoji:'🦇', label:'BATS',   cd:7000},   // Vampire Bat — bat swarm stuns every friend near you
+  nightswarm:{emoji:'🦇', label:'BATS',   cd:8000},   // Vampire Bat — 5s stun on friends + 3s cooldown after it ends
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
@@ -536,10 +536,10 @@ function usePower(power){
       for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🔥', x:p.x+p.w/2+(Math.random()*22-11), y:p.y+p.h+i*8, vx:(Math.random()*2-1)*1.2, vy:1.5, life:1, born:Game.t});
       addShake(5); SFX.jump(); if(typeof toast==='function') toast('🚀 ROCKET BLAST!'); break;
     }
-    case 'nightswarm': {                                  // 🦇 Vampire Bat — bats stun every friend near you
+    case 'nightswarm': {                                  // 🦇 Vampire Bat — bats stun every friend near you for 5s
       if(Game.multiplayer){
         for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
-          if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<420 && typeof mpSendStun==='function') mpSendStun(r.id); } }
+          if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<420 && typeof mpSendStun==='function') mpSendStun(r.id, 5); } }
       Game.freezeEnemiesUntil = Math.max(Game.freezeEnemiesUntil||0, Game.t+2000);   // bats spook hazards too
       for(let i=0;i<16;i++){ const a=i/16*Math.PI*2;
         Game.abilityFx.push({kind:'emoji', e:'🦇', x:p.x+p.w/2, y:p.y+p.h/2, vx:Math.cos(a)*(2.5+Math.random()*2), vy:Math.sin(a)*2-1, life:1.2, born:Game.t}); }
@@ -1607,13 +1607,14 @@ function onFreezeNet(){
   Game.stunUntil = Math.max(Game.stunUntil||0, Game.t+2500);
   SFX.hit(); if(typeof toast==='function') toast('🧊 Frozen solid!');
 }
-/* a friend's banana splatted me -> freeze for 3 seconds */
-function onStunned(senderId){
+/* a friend's power got me -> frozen in place (3s default, bats hold you 5s) */
+function onStunned(senderId, secs){
   const p=Game.player; if(!p || !Game.running) return;
-  Game.stunUntil = Game.t + 3000;
+  const s = Math.max(1, Math.min(8, secs||3));
+  Game.stunUntil = Game.t + s*1000;
   p.vx=0;
   addShake(5); SFX.hit();
-  if(typeof toast==='function') toast('😵 Splatted! Stunned for 3s');
+  if(typeof toast==='function') toast('😵 Splatted! Stunned for '+s+'s');
 }
 
 /* ---- spectate a friend after you finish a multiplayer race ---- */

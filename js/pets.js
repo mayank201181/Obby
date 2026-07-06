@@ -38,7 +38,7 @@ const ABILITY_INFO = {
   lightning:  '⚡ Lightning Dash! Zap forward at crazy speed, invincible — any friend you blast past is stunned for 3 seconds',
   rocket:     '🚀 Rocket Blast! Launch WAY up into the sky, then hover gently down to nail the landing',
   slowtime:   '⏳ Time Warp! For 5 seconds the whole world — hazards AND your friends — moves in slow motion while you run at full speed. Ready again 3s after it ends',
-  nightswarm: '🦇 Night Swarm! Release a burst of bats that stuns EVERY friend near you for 3 seconds and spooks the hazards',
+  nightswarm: '🦇 Night Swarm! Release a burst of bats that stuns EVERY friend near you for 5 seconds and spooks the hazards. Ready again 3s after the stun ends',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
@@ -116,7 +116,7 @@ const CREATURES = [
   { id:'thunderbird',name:'Thunderbird',emoji:'⚡', rarity:'secret', abilities:['lightning','speed2'],    sell:700 },
   { id:'mecha',   name:'Mecha-Blob',emoji:'🤖', rarity:'secret', abilities:['rocket','highJump'],        sell:700 },
   { id:'wizard',  name:'Wizard',    emoji:'🧙', rarity:'secret', abilities:['slowtime','doubleJump'],    sell:700 },
-  { id:'vampire', name:'Vampire Bat',emoji:'🦇', rarity:'secret', abilities:['nightswarm','glideStrong'], sell:700 },
+  { id:'vampire', name:'Vampire Bat',emoji:'🦇', rarity:'secret', abilities:['nightswarm','speed2','doubleJump','glideStrong'], sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
