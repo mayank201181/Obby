@@ -725,7 +725,8 @@ function update(dt){
   const dashing = Game.t < Game.power.dashUntil;
   const flying = Game.t < (Game.flyUntil||0);            // 🦄 rainbow flight / morphed eagle
   const wizSlowed = Game.t < (Game.slowMoveUntil||0);   // a Wizard time-warped me
-  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1)*(wizSlowed?0.35:1);
+  const warping = Game.t < (Game.slowWorldUntil||0);    // I'M the Wizard mid Time Warp -> extra zoom
+  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1)*(wizSlowed?0.35:1)*(warping?1.35:1);
   const target=dir*move;
   const grip = p.onIce ? 0.09 : 0.35;
   p.vx += (target-p.vx)*grip;
@@ -3097,6 +3098,11 @@ function render(){
         drawNameTag(ctx, r.x+17, r.y-8, r.name||'Blob');
       }
       if(r.emote && nowMs()-r.emoteAt < 2200) drawEmoteBubble(ctx, r.x+17, r.y-22, r.emote);
+      // during MY Time Warp every friend crawls — show the hourglass over them
+      if(Game.t < (Game.slowWorldUntil||0)){
+        ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('⏳', r.x+17, r.y-24);
+      }
       if(isSeeker){ ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🔦', r.x+17, r.y-22); }
       else if(showIt && MP.itId===r.id) drawItMarker(ctx, r.x+17, r.y);
       if(caught){ ctx.font='18px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('😵', r.x+17, r.y-22); }
