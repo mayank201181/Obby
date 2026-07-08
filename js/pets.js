@@ -39,6 +39,10 @@ const ABILITY_INFO = {
   rocket:     '🚀 Rocket Blast! Launch WAY up into the sky, then hover gently down to nail the landing',
   slowtime:   '⏳ Time Warp! For 5 seconds the whole world — hazards AND your friends — crawls in slow motion (you\'ll see an ⏳ over them) while YOU get a speed boost. Ready again 3s after it ends',
   nightswarm: '🦇 Night Swarm! Release a burst of bats that stuns EVERY friend near you for 5 seconds and spooks the hazards. Ready again 3s after the stun ends',
+  shadowdash: '🥷 Shadow Dash! Leave a fake copy of yourself standing there, turn INVISIBLE and zoom away — your friends chase the decoy while the real you sneaks off',
+  rewind:     '⏰ Rewind! Snap back to exactly where you were 3 seconds ago — missed a jump? Un-miss it!',
+  coinstorm:  '🧲 Coin Storm! Every coin near you flies straight into your pocket at once, plus a mega-magnet aura for a few seconds',
+  icebridge:  '❄️ Ice Bridge! Conjure a sparkling bridge of ice platforms in front of you to cross any gap',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
@@ -66,6 +70,9 @@ const CREATURES = [
   { id:'bee',     name:'Bee',       emoji:'🐝', rarity:'basic', abilities:['glide'],  sell:30 },
   { id:'duck',    name:'Duck',      emoji:'🦆', rarity:'basic', abilities:['glide'],  sell:30 },
   { id:'ladybug', name:'Ladybug',   emoji:'🐞', rarity:'basic', abilities:['speed1'], sell:30 },
+  { id:'fishy',   name:'Fishy',     emoji:'🐟', rarity:'basic', abilities:['glide'],  sell:30 },
+  { id:'piglet',  name:'Piglet',    emoji:'🐷', rarity:'basic', abilities:['speed1'], sell:30 },
+  { id:'snail',   name:'Snail',     emoji:'🐌', rarity:'basic', abilities:['autoshield'], sell:30 },
   // rare — sell 70
   { id:'bunny',   name:'Bunny',     emoji:'🐰', rarity:'rare', abilities:['hop','speed1'], sell:70 },
   { id:'fox',     name:'Fox',       emoji:'🦊', rarity:'rare', abilities:['speed1'], sell:70 },
@@ -76,6 +83,9 @@ const CREATURES = [
   { id:'koala',   name:'Koala',     emoji:'🐨', rarity:'rare', abilities:['glide'],  sell:70 },
   { id:'squirrel',name:'Squirrel',  emoji:'🐿️', rarity:'rare', abilities:['speed1'], sell:70 },
   { id:'crab',    name:'Crab',      emoji:'🦀', rarity:'rare', abilities:['autoshield'], sell:70 },
+  { id:'parrot',  name:'Parrot',    emoji:'🦜', rarity:'rare', abilities:['glide','speed1'], sell:70 },
+  { id:'flamingo',name:'Flamingo',  emoji:'🦩', rarity:'rare', abilities:['glide'], sell:70 },
+  { id:'dolphin', name:'Dolphin',   emoji:'🐬', rarity:'rare', abilities:['highJump'], sell:70 },
   // super rare — sell 120
   { id:'wolf',    name:'Wolf',      emoji:'🐺', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'eagle',   name:'Eagle',     emoji:'🦅', rarity:'superRare', abilities:['glide'],  sell:120 },
@@ -86,6 +96,9 @@ const CREATURES = [
   { id:'bear',    name:'Bear',      emoji:'🐻', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'peacock', name:'Peacock',   emoji:'🦚', rarity:'superRare', abilities:['glide','speed1'], sell:120 },
   { id:'boar',    name:'Boar',      emoji:'🐗', rarity:'superRare', abilities:['speed2'], sell:120 },
+  { id:'shark',   name:'Shark',     emoji:'🦈', rarity:'superRare', abilities:['speed2'], sell:120 },
+  { id:'owl',     name:'Owl',       emoji:'🦉', rarity:'superRare', abilities:['glideStrong'], sell:120 },
+  { id:'croc',    name:'Croc',      emoji:'🐊', rarity:'superRare', abilities:['speed2'], sell:120 },
   // legendary — sell 200
   { id:'lion',    name:'Lion',      emoji:'🦁', rarity:'legendary', abilities:['speed2'],   sell:200 },
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
@@ -95,6 +108,8 @@ const CREATURES = [
   { id:'rhino',   name:'Rhino',     emoji:'🦏', rarity:'legendary', abilities:['speed2'], sell:200 },
   { id:'gorilla', name:'Gorilla',   emoji:'🦍', rarity:'legendary', abilities:['speed2','highJump'], sell:200 },
   { id:'zebra',   name:'Zebra',     emoji:'🦓', rarity:'legendary', abilities:['highJump','speed1'], sell:200 },
+  { id:'trex',    name:'T-Rex',     emoji:'🦖', rarity:'legendary', abilities:['speed2','highJump'], sell:200 },
+  { id:'sloth',   name:'Sloth',     emoji:'🦥', rarity:'legendary', abilities:['autoshield','glideStrong'], sell:200 },
   // mythical — sell 320
   { id:'phoenix', name:'Phoenix',   emoji:'🔥', rarity:'mythical', abilities:['savefall','glideStrong'], sell:320 },
   { id:'butterfly',name:'Butterfly',emoji:'🦋', rarity:'mythical', abilities:['doubleJump','glide'],       sell:320 },
@@ -103,6 +118,8 @@ const CREATURES = [
   { id:'swan',    name:'Swan',      emoji:'🦢', rarity:'mythical', abilities:['glideStrong','doubleJump'], sell:320 },
   { id:'narwhal', name:'Narwhal',   emoji:'🦭', rarity:'mythical', abilities:['highJump','glide'],         sell:320 },
   { id:'whale',   name:'Whale',     emoji:'🐋', rarity:'mythical', abilities:['glideStrong','highJump'],   sell:320 },
+  { id:'mermaid', name:'Mermaid',   emoji:'🧜‍♀️', rarity:'mythical', abilities:['savefall','glide'],         sell:320 },
+  { id:'jellyfish',name:'Jellyfish',emoji:'🪼', rarity:'mythical', abilities:['glideStrong','doubleJump'],  sell:320 },
   // secret — sell 700 (the rarest!)
   { id:'unicorn', name:'Unicorn',   emoji:'🦄', rarity:'secret', abilities:['flight','tripleJump'],   sell:700 },
   { id:'dragon',  name:'Dragon',    emoji:'🐉', rarity:'secret', abilities:['firebreath','tripleJump'],sell:700 },
@@ -117,6 +134,10 @@ const CREATURES = [
   { id:'mecha',   name:'Mecha-Blob',emoji:'🤖', rarity:'secret', abilities:['rocket','highJump'],        sell:700 },
   { id:'wizard',  name:'Wizard',    emoji:'🧙', rarity:'secret', abilities:['slowtime','doubleJump'],    sell:700 },
   { id:'vampire', name:'Vampire Bat',emoji:'🦇', rarity:'secret', abilities:['nightswarm','speed2','doubleJump','glideStrong'], sell:700 },
+  { id:'ninja',   name:'Ninja',     emoji:'🥷', rarity:'secret', abilities:['shadowdash','speed2','doubleJump'], sell:700 },
+  { id:'chrono',  name:'Chrono',    emoji:'⏰', rarity:'secret', abilities:['rewind','speed2'],       sell:700 },
+  { id:'magnetron',name:'Magnetron',emoji:'🧲', rarity:'secret', abilities:['coinstorm','coinmagnet','speed1'], sell:700 },
+  { id:'frostfairy',name:'Frost Fairy',emoji:'❄️', rarity:'secret', abilities:['icebridge','glideStrong','doubleJump'], sell:700 },
 ];
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
@@ -145,7 +166,10 @@ const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'ch
   monkey:'banana', raccoon:'berry', turtle:'corn', penguin:'strawberry', hedgehog:'apple', pegasus:'honey',
   hyena:'corn', puppy:'biscuit', bee:'honey', otter:'berry', koala:'apple', kangaroo:'carrot', bear:'honey',
   panda:'corn', rhino:'apple', swan:'berry', narwhal:'strawberry', dino:'corn', starlight:'honey',
-  thunderbird:'berry', mecha:'biscuit', wizard:'honey', vampire:'strawberry' };
+  thunderbird:'berry', mecha:'biscuit', wizard:'honey', vampire:'strawberry',
+  fishy:'corn', piglet:'apple', snail:'berry', parrot:'banana', flamingo:'strawberry', dolphin:'cheese',
+  shark:'cheese', owl:'berry', croc:'corn', trex:'biscuit', sloth:'honey', mermaid:'strawberry',
+  jellyfish:'berry', ninja:'biscuit', chrono:'apple', magnetron:'cheese', frostfairy:'strawberry' };
 function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 function petFav(id){ return PET_FAVS[id] || FOODS[hashStr(id)%FOODS.length].id; }
 function petOkFoods(id){
@@ -463,7 +487,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','cloudjump','hop'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)

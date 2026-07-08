@@ -76,6 +76,10 @@ const POWER_META = {
   rocket:    {emoji:'🚀', label:'ROCKET', cd:5000},   // Mecha-Blob — blast sky-high with a hover landing
   slowtime:  {emoji:'⏳', label:'SLOW',   cd:8000},   // Wizard — 5s slow-motion for everyone else + 3s cooldown after
   nightswarm:{emoji:'🦇', label:'BATS',   cd:8000},   // Vampire Bat — 5s stun on friends + 3s cooldown after it ends
+  shadowdash:{emoji:'🥷', label:'SNEAK',  cd:6000},   // Ninja — decoy + invisibility + speed burst
+  rewind:    {emoji:'⏰', label:'REWIND', cd:5000},   // Chrono — snap back to 3 seconds ago
+  coinstorm: {emoji:'🧲', label:'MAGNET', cd:6000},   // Magnetron — vacuum every coin near you
+  icebridge: {emoji:'❄️', label:'BRIDGE', cd:5000},   // Frost Fairy — conjure an ice bridge ahead
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
@@ -270,6 +274,7 @@ function loadLevel(level){
   Game.bananas=[]; Game.poops=[]; Game.floatUntil=0; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
   Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.invisUntil=0; Game.freezeEnemiesUntil=0;
   Game.slowWorldUntil=0; Game.slowMoveUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
+  Game.decoy=null; Game.posTrail=[]; Game.trailT=0;   // Ninja decoy + Chrono rewind history
   Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   Game.faceMorph=null; Game.accMorph=null; Game.morphRound=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
@@ -536,6 +541,47 @@ function usePower(power){
       for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🔥', x:p.x+p.w/2+(Math.random()*22-11), y:p.y+p.h+i*8, vx:(Math.random()*2-1)*1.2, vy:1.5, life:1, born:Game.t});
       addShake(5); SFX.jump(); if(typeof toast==='function') toast('🚀 ROCKET BLAST!'); break;
     }
+    case 'shadowdash': {                                  // 🥷 Ninja — decoy + invisibility + burst of speed
+      Game.decoy = {x:p.x, y:p.y, facing:p.facing, until:Game.t+4000};
+      Game.invisUntil = Math.max(Game.invisUntil||0, Game.t+2500);   // friends see only the decoy
+      p.vx = p.facing*16; Game.power.dashUntil = Math.max(Game.power.dashUntil||0, Game.t+800);
+      for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'💨', x:p.x+p.w/2+(Math.random()*26-13), y:p.y+p.h/2+(Math.random()*26-13), vx:-p.facing*1.5, vy:-0.3, life:1, born:Game.t});
+      SFX.jump(); if(typeof toast==='function') toast('🥷 Shadow Dash — they\'re chasing your decoy!'); break;
+    }
+    case 'rewind': {                                      // ⏰ Chrono — snap back to 3 seconds ago
+      const past = Game.posTrail && Game.posTrail[0];
+      if(!past){ Game.powerCdUntil = Game.t + 400; return; }   // nothing recorded yet — refund
+      for(let i=0;i<6;i++) Game.abilityFx.push({kind:'emoji', e:'⏰', x:p.x+p.w/2+(Math.random()*24-12), y:p.y+p.h/2+(Math.random()*24-12), vx:0, vy:-0.5, life:1, born:Game.t});
+      p.x=past.x; p.y=past.y; p.vx=0; p.vy=0; p.invuln=Math.max(p.invuln,800);
+      for(let i=0;i<6;i++) Game.abilityFx.push({kind:'spark', x:p.x+p.w/2+(Math.random()*24-12), y:p.y+p.h/2+(Math.random()*24-12), vx:0, vy:0.3, life:1, born:Game.t});
+      SFX.chest(); if(typeof toast==='function') toast('⏰ Rewound 3 seconds!'); break;
+    }
+    case 'coinstorm': {                                   // 🧲 Magnetron — vacuum every coin nearby
+      const cx=p.x+p.w/2, cy=p.y+p.h/2; let got=0;
+      for(const c of (Game.activePlats||Game.world.platforms)){
+        if(c.type!=='coin' || c.taken) continue;
+        if(Math.hypot((c.x+c.w/2)-cx, (c.y+c.h/2)-cy) > 700) continue;
+        c.taken=true; got++;
+        Game.abilityFx.push({kind:'emoji', e:'🪙', x:c.x+c.w/2, y:c.y+c.h/2, vx:(cx-c.x)/30, vy:(cy-c.y)/30, life:1, born:Game.t});
+      }
+      if(got){
+        const gain = (Game.t<Game.power.x2Until?2:1)*got;
+        Game.runCoins+=gain;
+        if(Game.heist){ Game.heistLoot += gain; } else { addCoins(gain); SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+gain; persist(); }
+        if(typeof questEvent==='function') questEvent('coins',gain);
+        SFX.coin();
+      }
+      Game.power.magnetUntil = Math.max(Game.power.magnetUntil||0, Game.t+4000);   // mega-magnet aura after the storm
+      if(typeof toast==='function') toast(got ? ('🧲 Coin Storm! +🪙'+got) : '🧲 Magnet aura on!'); break;
+    }
+    case 'icebridge': {                                   // ❄️ Frost Fairy — 3 ice steps across the gap ahead
+      for(let i=0;i<3;i++){
+        Game.placedPlatforms.push({ type:'placed', w:92, h:16,
+          x: p.x + p.facing*(70+i*95) - 46, y: p.y + p.h + 4 - i*10, until: Game.t + 6000 });
+        Game.abilityFx.push({kind:'emoji', e:'❄️', x:p.x+p.w/2+p.facing*(70+i*95), y:p.y+p.h, vx:0, vy:-0.5, life:1, born:Game.t});
+      }
+      SFX.checkpoint(); if(typeof toast==='function') toast('❄️ Ice Bridge!'); break;
+    }
     case 'nightswarm': {                                  // 🦇 Vampire Bat — bats stun every friend near you for 5s
       if(Game.multiplayer){
         for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
@@ -716,6 +762,14 @@ function update(dt){
   if(Game.placedPlatforms.length) Game.placedPlatforms = Game.placedPlatforms.filter(pp=>pp.until>Game.t);
   if(p.invuln>0) p.invuln-=dt*1000;
 
+  // breadcrumb trail for the Chrono pet's ⏰ Rewind (last ~3 seconds)
+  Game.trailT=(Game.trailT||0)+dt;
+  if(Game.trailT>0.1){ Game.trailT=0;
+    (Game.posTrail||(Game.posTrail=[])).push({x:p.x, y:p.y, t:Game.t});
+    while(Game.posTrail.length && Game.t-Game.posTrail[0].t>3100) Game.posTrail.shift();
+  }
+  if(Game.decoy && Game.t>Game.decoy.until) Game.decoy=null;   // ninja decoy fades away
+
   if(p.onGround) p.jumps=0;              // reset jump count when grounded
 
   const beamed = Game.disaster && Game.dz && Game.dz.beamed;   // caught in an alien tractor beam
@@ -833,6 +887,7 @@ function update(dt){
                  skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,petSkin:SAVE.petSkin,
                  name:SAVE.name,cp:p.cp,finished:Game.finished, inShip:false,
                  inv:(Game.t<(Game.invisUntil||0))?1:0,   // 👻 Ghost Vanish — friends hide me entirely
+                 dcy:(Game.decoy && Game.t<Game.decoy.until)?{x:Math.round(Game.decoy.x), y:Math.round(Game.decoy.y), f:Game.decoy.facing}:null,   // 🥷 Ninja decoy
                  disg:(Game.myDisguise&&Game.myDisguise.emoji)||null, morph:Game.morph||null});
     }
   }
@@ -3077,6 +3132,12 @@ function render(){
     const hsSeek = Game.room && Game.roomMode==='hideseek';
     for(const r of mpRemoteList()){
       if(typeof r.x!=='number') continue;
+      // 🥷 a friend's ninja decoy — draw it BEFORE the invisibility skip so the
+      // decoy is all you see while the real ninja sneaks away
+      if(r.dcy){
+        drawCharacter(ctx, r.dcy.x+17, r.dcy.y+17, 34, {skin:r.skin,accessory:r.accessory,face:r.face,facing:r.dcy.f||1,t:1000, petSkin:r.petSkin});
+        drawNameTag(ctx, r.dcy.x+17, r.dcy.y-8, r.name||'Blob');
+      }
       if(r.inv) continue;                 // 👻 a Vanished friend is completely invisible
       const caught = Game.caughtIds && Game.caughtIds.has(r.id);
       const isSeeker = hsSeek && MP.itId===r.id;
@@ -3136,6 +3197,12 @@ function render(){
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-10, 'You');
   } else if(!Game.spectating){
+    // 🥷 my own shadow decoy (shown faded so I can tell which one is fake)
+    if(Game.decoy && Game.t < Game.decoy.until){
+      ctx.save(); ctx.globalAlpha=0.55;
+      drawCharacter(ctx, Game.decoy.x+17, Game.decoy.y+17, 34, {skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:Game.decoy.facing,t:1000, petSkin:SAVE.petSkin});
+      ctx.restore();
+    }
     const mySkin = Game.myColor || SAVE.skin;
     const ghosting = Game.t < Game.power.ghostUntil;
     const vanished = Game.t < (Game.invisUntil||0);   // 👻 Vanish: faded for you, gone for friends
