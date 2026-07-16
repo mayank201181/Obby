@@ -428,14 +428,14 @@ function buyPick(id){
   SAVE.ownedPicks.push(id);
   SAVE.pickaxe=id;                       // auto-equip your shiny new pick
   persist(); updateCoinDisplays(); SFX.rare();
-  toast('⛏️ '+p.name+' — equipped!');
-  renderPickShop();
+  toast('⛏️ '+p.name+' — equipped! Happy digging!');
+  closeModal('pickModal');               // you picked your axe — straight back to mining!
 }
 function equipPick(id){
   if(!(SAVE.ownedPicks||[]).includes(id)) return;
   SAVE.pickaxe=id; persist(); SFX.click();
-  toast('⛏️ Holding the '+pickaxeById(id).name+'!');
-  renderPickShop();
+  toast('⛏️ Holding the '+pickaxeById(id).name+' — happy digging!');
+  closeModal('pickModal');               // picked your axe — straight back to mining!
 }
 
 function openTagPick(){ showScreen('tagPickScreen'); }
