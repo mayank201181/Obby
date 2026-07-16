@@ -231,6 +231,11 @@ function mpOnMessage(conn,msg){
       if(msg.target===MP.selfId && typeof onConfusedNet==='function') onConfusedNet();
       break;
     }
+    case 'clash': {
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.from!==MP.selfId && typeof onClashNet==='function') onClashNet(msg);
+      break;
+    }
     case 'morph': {
       if(MP.isHost) mpRelay(conn,msg);
       const rr=MP.remote[msg.target];

@@ -364,6 +364,12 @@
         <button class="btn ghost small" data-mode="tower" onclick="selectRoomMode('tower')">🏗️ Tower</button>
         <button class="btn ghost small" data-mode="mine" onclick="selectRoomMode('mine')">⛏️ Coin Mine</button>
         <button class="btn ghost small" data-mode="heist" onclick="selectRoomMode('heist')">💰 Heist</button>
+        <button class="btn ghost small" data-mode="clash" onclick="selectRoomMode('clash')">🏰 Area Clash</button>
+      </div>
+      <div class="row" id="clashMinsRow" style="display:none">
+        <button class="btn ghost small" data-cmins="1" onclick="selectClashMins(1)">⏱ 1 min</button>
+        <button class="btn ghost small" data-cmins="3" onclick="selectClashMins(3)">⏱ 3 min</button>
+        <button class="btn ghost small" data-cmins="5" onclick="selectClashMins(5)">⏱ 5 min</button>
       </div>
       <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
       <p class="hint">Difficulty:</p>

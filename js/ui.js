@@ -674,12 +674,20 @@ const ROOM_MODE_DESC = {
   disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
   tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
   heist:   '💰 Gold Heist: everyone grabs gold in the same arena for 20s — most gold wins!',
+  clash:   '🏰 Area Clash (1v1): both build a castle & hide a ball, then raid each other — steal their 🏀 and carry it home to win 🪙500! Pick a build time below.',
 };
+let pendingClashMins=1;
+function selectClashMins(m){
+  pendingClashMins=m; SFX.click();
+  document.querySelectorAll('#clashMinsRow .btn').forEach(b=>b.classList.toggle('pink',+b.dataset.cmins===m));
+}
 function selectRoomMode(m){
   pendingRoomMode=m;
   document.querySelectorAll('#modeBtns .btn').forEach(b=>b.classList.toggle('blue',b.dataset.mode===m));
   const d=document.getElementById('modeDesc');
   if(d) d.textContent = ROOM_MODE_DESC[m] || ROOM_MODE_DESC.race;
+  const cr=document.getElementById('clashMinsRow');
+  if(cr){ cr.style.display = m==='clash' ? 'flex' : 'none'; if(m==='clash') selectClashMins(pendingClashMins); }
 }
 function wireRoomCallbacks(){
   MP.onRosterChange=refreshRoster;
@@ -689,7 +697,7 @@ function wireRoomCallbacks(){
     Game.onLevelComplete=onLevelComplete;
     Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
     startGame({level:config.level, seed:config.seed, mode:config.mode, arena:config.arena, disasterType:config.disasterType,
-               multiplayer:true, difficulty:config.difficulty||'hard'});
+               buildMs:config.buildMs, multiplayer:true, difficulty:config.difficulty||'hard'});
     startMusicIfOn('game');
     if(MP.isHost && (config.mode==='tag' || config.disasterType==='killer')) setTimeout(()=>mpSendIt(MP.selfId), 600);  // host starts as "it"
   };
@@ -774,6 +782,10 @@ function hostStart(){
     cfg.disasterType = pool[Math.floor(Math.random()*pool.length)];
   }
   if(pendingRoomMode==='tower' || pendingRoomMode==='heist') cfg.difficulty='easy';  // no cannons
+  if(pendingRoomMode==='clash'){
+    if(mpPlayerCount()!==2){ toast('🏰 Area Clash is 1v1 — you need exactly 2 players!'); return; }
+    cfg.difficulty='easy'; cfg.buildMs=pendingClashMins*60000;
+  }
   mpStart(cfg);
 }
 // restart the SAME multiplayer room in the SAME mode (no need to make a new room)
@@ -882,7 +894,7 @@ function onLevelComplete(level, earned, isFinal, res){
   if(isClash){
     waitMsg = res.survived
       ? `<p class="timer-big">🏀 You stole their ball and brought it HOME!</p><p class="muted">Castle raided, prize claimed. +🪙${CLASH.WIN_COINS}!</p>`
-      : `<p class="timer-big">😱 The Builder Bot escaped with your ball!</p><p class="muted">Hide it somewhere sneakier next time…</p>`;
+      : `<p class="timer-big">😱 ${Game.multiplayer?'Your friend escaped with your ball!':'The Builder Bot escaped with your ball!'}</p><p class="muted">Hide it somewhere sneakier next time…</p>`;
   }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
@@ -893,7 +905,9 @@ function onLevelComplete(level, earned, isFinal, res){
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
     : (isClash
-        ? `<button class="btn gold" onclick="startClash(window._clashMins||1)">🔁 Rematch</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+        ? (Game.multiplayer
+            ? `<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Rematch':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+            : `<button class="btn gold" onclick="startClash(window._clashMins||1)">🔁 Rematch</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`)
     : (isMine
         ? `<button class="btn gold" onclick="startMine()">🔁 Keep digging</button><button class="btn blue" onclick="openPickShop()">⛏️ Pickaxe Shop</button><button class="btn ghost" onclick="startMine('fresh')">🆕 New mine</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isCr
