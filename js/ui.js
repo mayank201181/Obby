@@ -296,6 +296,18 @@ function startSoloLevel(level){
   startMusicIfOn('game');
 }
 
+/* ---------------- Area Clash ---------------- */
+function openClashPick(){ SFX.click(); showScreen('clashPickScreen'); updateCoinDisplays(); }
+function startClash(mins){
+  SFX.click(); closeModal('winModal');
+  window._clashMins = mins;
+  Game.multiplayer=false; Game.daily=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'clash', buildMs:mins*60000, seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
+}
+
 /* ---------------- Endless Tower ---------------- */
 function startTower(resumeChoice){
   SFX.click();
@@ -866,14 +878,22 @@ function onLevelComplete(level, earned, isFinal, res){
       <p class="muted">🪙 ${res.coins} mined${res.gems?` · 💎${res.gems}`:''}${SAVE.mineBest?` · best ${SAVE.mineBest} deep`:''}</p>
       ${pets.length?`<p class="timer-big">🐾 Found ${pets.map(pp=>pp.emoji).join(' ')}!</p><p class="muted">${pets.map(pp=>pp.name).join(', ')}</p>`:''}`;
   }
+  const isClash=!!res.clash;
+  if(isClash){
+    waitMsg = res.survived
+      ? `<p class="timer-big">🏀 You stole their ball and brought it HOME!</p><p class="muted">Castle raided, prize claimed. +🪙${CLASH.WIN_COINS}!</p>`
+      : `<p class="timer-big">😱 The Builder Bot escaped with your ball!</p><p class="muted">Hide it somewhere sneakier next time…</p>`;
+  }
   const roomMp=!!res.mp;
   const stillRacing = Game.multiplayer && mpRemoteList().some(r=>!r.finished && typeof r.x==='number');
-  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag && !isCr && !isMine;
+  const showStats = !Game.multiplayer && !isHeist && !isDisaster && !isRoom && !isColorTag && !isCr && !isMine && !isClash;
   const starsRow = showStats ? `<div class="stars-row">${
     [1,2,3].map(i=>`<span class="${i<=res.stars?'star on':'star'}">★</span>`).join('')}</div>` : '';
   const timeRow = showStats ? `<p class="muted">Time ${fmtTime(res.timeMs)} · ${res.deaths} death${res.deaths===1?'':'s'}${res.coins?` · 🪙${res.coins} grabbed`:''}${res.newRecord?' · <b style="color:#46c98c">NEW RECORD! 🎉</b>':''}</p>` : '';
   const nav = Game.multiplayer
     ? `${stillRacing?`<button class="btn blue" onclick="watchFriends()">👁 Watch friends</button>`:''}<button class="btn gold" onclick="mpPlayAgain()">${MP.isHost?'🔁 Play again':'⏳ Wait for host'}</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
+    : (isClash
+        ? `<button class="btn gold" onclick="startClash(window._clashMins||1)">🔁 Rematch</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
     : (isMine
         ? `<button class="btn gold" onclick="startMine()">🔁 Keep digging</button><button class="btn blue" onclick="openPickShop()">⛏️ Pickaxe Shop</button><button class="btn ghost" onclick="startMine('fresh')">🆕 New mine</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
         : (isCr
@@ -893,15 +913,16 @@ function onLevelComplete(level, earned, isFinal, res){
             ? `<button class="btn gold" onclick="startDaily()">🔁 Try again</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
             : (isFinal
                 ? `<button class="btn gold" onclick="backToMap()">🗺️ Level Map</button><button class="btn ghost" onclick="backToLobby()">Lobby</button>`
-                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`))))))));
-  const heading = isMine ? (res.pets?'🌟 Treasure haul!':'⛏️ Nice digging!')
+                : `<button class="btn" onclick="goNextLevel()">Next Level →</button><button class="btn ghost" onclick="backToMap()">🗺️ Map</button>`)))))))));
+  const heading = isClash ? (res.survived?'🏆 CASTLE CHAMPION!':'🏰 Ball stolen!')
+                : isMine ? (res.pets?'🌟 Treasure haul!':'⛏️ Nice digging!')
                 : isCr ? (res.survived?'🚔 You win!':'😢 You lost!')
                 : isColorTag ? (res.survived?'🌈 Nice!':'😈 Tagged!')
                 : isRoom ? (res.survived?(hsRoom?'🎉 Hidden!':'🎉 You survived!'):(hsRoom?'🔦 Caught!':'😈 Tagged!'))
                 : isDisaster ? (res.survived?'🎉 Survivor!':'💀 Wiped out') : isHeist ? '💰 Heist complete!' : res.daily ? '🗓️ Daily done!' : (isFinal?'YOU DID IT!':'Level '+level+' complete!');
   body.innerHTML=`<div class="confetti-box" id="confettiBox"></div>
     <canvas id="winDance" class="win-dance"></canvas>
-    <div class="win-emoji" style="font-size:30px">${isMine?(res.pets?'🌟🐾':'⛏️💰'):isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
+    <div class="win-emoji" style="font-size:30px">${isClash?(res.survived?'🏰🎉':'🏰💔'):isMine?(res.pets?'🌟🐾':'⛏️💰'):isCr?(res.survived?'🚓🎉':'🚔😢'):isColorTag?(res.survived?'🌈🎉':'🎨😈'):isRoom?(res.survived?(hsRoom?'🙈🎉':'🏃🎉'):(hsRoom?'🔦':'😈')):isDisaster?(res.survived?'🌪️🎉':'🌪️💀'):isHeist?'💰✨':res.daily?'🗓️✨':(isFinal?'🏆🌈':'🎉')}</div>
     <h2>${heading}</h2>
     ${isFinal&&!res.daily&&!isHeist&&!isDisaster&&!isRoom&&!isColorTag&&!isCr&&!isMine?`<p>You climbed all ${TOTAL_LEVELS} levels!</p>`:''}
     ${starsRow}${timeRow}

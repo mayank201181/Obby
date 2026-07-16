@@ -72,6 +72,22 @@
   </div>
 </section>
 
+<!-- ============ AREA CLASH PICK ============ -->
+<section class="screen" id="clashPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🏰 Area Clash</h2>
+    <p class="hint">Build your castle from coloured bricks and hide your 🏀 ball inside. Cannons 💣, traps 🪤 and breaches ⛏️ cost 🪙10. When the timer ends it's BATTLE — steal their ball and carry it home to win <b>🪙500</b>! Tag the thief to get your ball back.</p>
+    <h3 style="margin:10px 0 4px">⏱ How long to build?</h3>
+    <button class="btn blue" onclick="startClash(1)">⏱ 1 minute<br><span style="font-size:12px;font-weight:700">quick scrap</span></button>
+    <button class="btn pink" onclick="startClash(3)">⏱ 3 minutes<br><span style="font-size:12px;font-weight:700">proper castle</span></button>
+    <button class="btn gold" onclick="startClash(5)">⏱ 5 minutes<br><span style="font-size:12px;font-weight:700">mega fortress</span></button>
+  </div>
+</section>
+
 <!-- ============ LEVEL MAP ============ -->
 <section class="screen" id="levelMapScreen">
   <div class="topbar">
@@ -251,6 +267,7 @@
     <button class="btn blue" onclick="openTagPick()">🏃 Tag<br><span style="font-size:12px;font-weight:700">obby or furniture room!</span></button>
     <button class="btn gold" onclick="openColorTagPick()">🌈 Colour Tag<br><span style="font-size:12px;font-weight:700">stand on the called colour!</span></button>
     <button class="btn pink" onclick="openRolePick('copsrobbers')">🚓 Cops &amp; Robbers<br><span style="font-size:12px;font-weight:700">rob the bank or catch the robber!</span></button>
+    <button class="btn gold" onclick="openClashPick()">🏰 Area Clash<br><span style="font-size:12px;font-weight:700">build a castle, hide your ball &amp; raid theirs!</span></button>
 
     <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
 
@@ -404,6 +421,9 @@
       <button class="btn ghost small" id="lavaProofBtn" onclick="toggleLavaProof()">🔥 Lava-proof 🪙20</button>
     </div>
 
+    <div class="build-bar" id="clashBar" style="display:none"></div>
+    <button class="btn gold" id="clashActBtn" onclick="clashAction()"
+      style="display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:132px;width:auto;padding:12px 22px;pointer-events:auto;z-index:5"></button>
     <div class="camo-bar" id="camoBar" style="display:none"></div>
     <div class="color-bar" id="colorBar" style="display:none"></div>
   </div>
@@ -445,6 +465,7 @@
 <script src="js/multiplayer.js"></script>
 <script src="js/controls.js"></script>
 <script src="js/game.js"></script>
+<script src="js/clash.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

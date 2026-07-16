@@ -172,6 +172,7 @@ function gameInit(){
     if(Game.ship){ shipTap(sx,sy); return; }                 // tap a trapped friend to free you both
     if(Game.copsRob && Game.cr && Game.cr.phase==='jail'){ copLaugh(); return; }  // cop taunts the jailed robber
     if(Game.disaster && Game.buildMode){ disasterBuildAt(sx,sy); return; }
+    if(Game.areaClash && Game.running){ clashTap(sx,sy); return; }   // 🏰 Area Clash build/fight taps
     if(Game.petPower==='polymorph' && Game.running){ alienTapMorph(sx,sy); return; }  // 👽 tap a friend/boss
     if(Game.petPower==='teleport' && Game.running){ teleportTo(sx,sy); return; }       // 🌈 tap to blink there
     if(Game.petBanana && Game.running) throwBananaAt(sx,sy);
@@ -212,10 +213,12 @@ function startGame(opts){
   Game.room = (opts.mode==='roomtag' || (opts.mode==='tag' && Game.tagArena==='room'));
   Game.roomMode = opts.mode==='roomtag' ? 'tag' : null;
   Game.copsRob = (opts.mode==='copsrobbers');
+  Game.areaClash = (opts.mode==='clash');
+  Game.clashBuildMs = opts.buildMs||60000;
   // solo-vs-AI only for the single-player room modes; MP uses real players
   Game.roomSolo = !Game.multiplayer && (opts.mode==='roomtag' || opts.mode==='colortag' || opts.mode==='copsrobbers');
   Game.soloRole = opts.role==='tagger' ? 'tagger' : 'runner';
-  if(Game.room || Game.colorTag || Game.copsRob || Game.mine) Game.difficulty='easy';   // no cannons in these arenas
+  if(Game.room || Game.colorTag || Game.copsRob || Game.mine || Game.areaClash) Game.difficulty='easy';   // no cannons in these arenas
   Game.disasterTypeForce = opts.disasterType || null;   // host can force the disaster in MP
   Game.spectating=false; Game.spectateId=null; Game.myEmote=null; Game.racePlace=0;
   // Team colour: host = pink, joiner = blue (only colour-codes in coop mode)
@@ -237,6 +240,8 @@ function startGame(opts){
   const eb=document.getElementById('emoteBar'); if(eb){ eb.style.display = Game.multiplayer ? 'flex':'none'; if(Game.multiplayer && typeof buildEmoteBar==='function') buildEmoteBar(); }
   const bb=document.getElementById('boostBtn'); if(bb) bb.style.display = (Game.multiplayer && Game.mode==='coop') ? 'flex':'none';
   const bbar=document.getElementById('buildBar'); if(bbar){ bbar.style.display = Game.disaster ? 'flex':'none'; if(Game.disaster && typeof setupBuildBar==='function') setupBuildBar(); }
+  const clb=document.getElementById('clashBar'); if(clb) clb.style.display = Game.areaClash ? 'flex':'none';
+  const cab=document.getElementById('clashActBtn'); if(cab) cab.style.display='none';
   // Restart button: solo Easy/Hard levels + Endless Tower. It rescues you when
   // a red (disappearing) block crumbles away and leaves the path impossible.
   const rb=document.getElementById('restartBtn'); if(rb) rb.style.display = (!Game.multiplayer && (Game.mode==='solo' || Game.tower)) ? '' : 'none';
@@ -254,6 +259,7 @@ function loadLevel(level){
              : Game.colorTag ? generateColorArena(Game.seed, Game.colorArena)
              : Game.room ? generateRoom(Game.seed)
              : Game.disaster ? generateDisaster(Game.seed)
+             : Game.areaClash ? generateClash(Game.seed)
              : Game.heist ? generateHeist(Game.seed)
              : Game.tower ? generateTower(Game.seed)
              : generateLevel(level, Game.seed, Game.mode);
@@ -265,6 +271,7 @@ function loadLevel(level){
     Game.disasterType = Game.disasterTypeForce || DISASTERS[Math.floor(Math.random()*DISASTERS.length)];
     Game.ship=null;
   }
+  if(Game.areaClash && typeof initClash==='function') initClash();
   Game.blurUntil=0; if(Game.canvas) Game.canvas.style.filter='';
   Game.heistLoot=0; Game.heistEndT=Game.t+20000;   // 20-second heist clock
   Game.disappear={};
@@ -938,6 +945,7 @@ function update(dt){
     if(Game.disasterPhase==='build'){ if(Game.t>=Game.disasterPhaseT && drives) startDisasterActive(); }
     else if(Game.disasterPhase==='active'){ updateDisaster(dt); if(Game.t>=Game.disasterPhaseT && drives) nextDisaster(); }
   }
+  if(Game.areaClash && !Game.finished && typeof updateClash==='function') updateClash(dt);
   if(Game.copsRob && !Game.finished){ if(Game.multiplayer) updateCopsRobMP(dt); else updateCopsRob(dt); }
   else if(Game.room && Game.roomSolo && !Game.finished) updateRoom(dt);
   else if(Game.room && Game.multiplayer && !Game.finished) updateRoomMP(dt);
@@ -945,7 +953,7 @@ function update(dt){
 
   // conveyor push handled in collision (sets p.vx target)
   // camera follow (smooth)
-  const flatArena = Game.room || Game.copsRob || (Game.colorTag && Game.colorArena==='room');
+  const flatArena = Game.room || Game.copsRob || Game.areaClash || (Game.colorTag && Game.colorArena==='room');
   const camTX=p.x, camTY=flatArena ? Game.world.height/2 - 20 : p.y-40;
   Game.cam.x += (camTX-Game.cam.x)*0.12;
   Game.cam.y += (camTY-Game.cam.y)*0.12;
@@ -3218,6 +3226,7 @@ function render(){
   // solo dodge hazards (pendulums / spikes / laser gates)
   drawSoloHazards(ctx);
   if(Game.bananas.length) drawBananas(ctx);
+  if(Game.areaClash && typeof drawClash==='function') drawClash(ctx);
   if(Game.fire.length) drawFire(ctx);
   if(Game.disaster) drawDisaster(ctx);
 
@@ -3503,6 +3512,12 @@ function drawNameTag(ctx,cx,cy,name){
 
 function drawPlatform(ctx,pl){
   const r=8;
+  if(pl.type==='brick'){   // Area Clash castle brick — player-chosen colour
+    ctx.fillStyle=pl.col||'#cdb8ff'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,5); ctx.fill();
+    ctx.globalAlpha=0.25; ctx.fillStyle='#000';
+    roundRect(ctx,pl.x+3,pl.y+pl.h-7,pl.w-6,4,2); ctx.fill(); ctx.globalAlpha=1;
+    return;
+  }
   let fill='#fff', top='#f3ecff', edge='#d9c6ff';
   switch(pl.type){
     case 'big': fill='#cdb8ff'; edge='#a98fff'; break;
@@ -3696,6 +3711,12 @@ function updateHud(){
 function updateHudLive(){
   const done=Game.hitCheckpoints.size;
   const clock=ms=>{ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); };
+  if(Game.areaClash){
+    // Area Clash writes its own hudCp/hudLevel text (clashSetHud)
+    document.getElementById('hudCoins').textContent='🪙 '+SAVE.coins;
+    const hp=document.getElementById('hudPower'); if(hp) hp.style.display='none';
+    return;
+  }
   if(Game.mine){
     // the Coin Mine draws its own on-canvas HUD; just keep the top bar in sync
     const dg=Game.dig, cp=document.getElementById('hudCp');
