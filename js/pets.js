@@ -43,6 +43,11 @@ const ABILITY_INFO = {
   rewind:     '⏰ Rewind! Snap back to exactly where you were 3 seconds ago — missed a jump? Un-miss it!',
   coinstorm:  '🧲 Coin Storm! Every coin near you flies straight into your pocket at once, plus a mega-magnet aura for a few seconds',
   icebridge:  '❄️ Ice Bridge! Conjure a sparkling bridge of ice platforms in front of you to cross any gap',
+  blackhole:  '🕳️ BLACK HOLE! Every coin on the WHOLE MAP flies into your pocket, every friend everywhere is stunned for 4s and all hazards freeze. The most greedy power in the game',
+  goldrush:   '🤑 GOLD RUSH! Instantly pocket 25 coins, DOUBLE every coin you grab for 20 seconds, and a mega-magnet aura pulls loot to you the whole time',
+  herotime:   '🦸 HERO TIME! For 6 seconds you are invincible, super fast and can jump INFINITELY — basically flying with style',
+  eruption:   '🌋 ERUPTION! Explode a ring of fireballs in every direction — roasts zombies, hammers the boss and stuns every friend the flames touch',
+  miracle:    '👼 MIRACLE! 8 seconds of invincibility while you float like a feather — nothing can hurt you, and falls barely matter',
   teleport:   '🌈 Blink! Tap anywhere to teleport right there — plus super speed & a higher jump',
   grapple:    '🦑 Tentacle! Fling way up and reel yourself onto a high ledge',
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
@@ -138,7 +143,105 @@ const CREATURES = [
   { id:'chrono',  name:'Chrono',    emoji:'⏰', rarity:'secret', abilities:['rewind','speed2'],       sell:700 },
   { id:'magnetron',name:'Magnetron',emoji:'🧲', rarity:'secret', abilities:['coinstorm','coinmagnet','speed1'], sell:700 },
   { id:'frostfairy',name:'Frost Fairy',emoji:'❄️', rarity:'secret', abilities:['icebridge','glideStrong','doubleJump'], sell:700 },
+  // ===== the OP secrets — absolutely wild signature powers =====
+  { id:'voidblob',  name:'Void Blob',  emoji:'🕳️', rarity:'secret', abilities:['blackhole','speed2','doubleJump'],   sell:700 },
+  { id:'moneyking', name:'Money King', emoji:'🤑', rarity:'secret', abilities:['goldrush','coinmagnet','speed2'],    sell:700 },
+  { id:'superblob', name:'Super Blob', emoji:'🦸', rarity:'secret', abilities:['herotime','speed2','doubleJump'],    sell:700 },
+  { id:'volcano',   name:'Volcano',    emoji:'🌋', rarity:'secret', abilities:['eruption','speed2','highJump'],      sell:700 },
+  { id:'angel',     name:'Angel',      emoji:'👼', rarity:'secret', abilities:['miracle','glideStrong','tripleJump'],sell:700 },
 ];
+
+/* ===== the mega-roster: every pet below has its OWN unique signature perk —
+   a one-of-a-kind stat mix (speed / jump / float), so no two pets play the
+   same. Rows: [id, name, emoji, rarity, perk name]. ===== */
+const MEGA_PETS = [
+  // ---- basic ----
+  ['cow','Cow','🐄','basic','Moo Muscle'], ['horse','Horse','🐎','basic','Gallop'],
+  ['sheep','Sheep','🐑','basic','Wool Bounce'], ['goat','Goat','🐐','basic','Cliff Hooves'],
+  ['rooster','Rooster','🐓','basic','Dawn Sprint'], ['turkey','Turkey','🦃','basic','Gobble Waddle'],
+  ['dove','Dove','🕊️','basic','Feather Drift'], ['goose','Goose','🪿','basic','Honk Hustle'],
+  ['rat','Rat','🐀','basic','Alley Dash'], ['boarlet','Hog','🐖','basic','Mud Skid'],
+  ['caterpillar','Caterpillar','🐛','basic','Inchworm Wiggle'], ['ant','Ant','🐜','basic','Mighty Carry'],
+  ['cricket','Cricket','🦗','basic','Chirp Hop'], ['beetle','Beetle','🪲','basic','Shell Shuffle'],
+  ['worm','Wormy','🪱','basic','Soil Slide'], ['seal','Seal','🦭','basic','Belly Slide'],
+  ['shrimp','Shrimp','🦐','basic','Tail Flick'], ['oyster','Oyster','🦪','basic','Pearl Poise'],
+  ['mosquito','Mozzie','🦟','basic','Buzz Bob'], ['fly','Buzzy','🪰','basic','Loop-de-loop'],
+  ['pretzel','Pretzel','🥨','basic','Salty Twist'], ['toast','Toasty','🍞','basic','Crumb Scoot'],
+  ['cookie','Cookie','🍪','basic','Choc-chip Zip'], ['donut','Donut','🍩','basic','Sprinkle Roll'],
+  ['cupcake','Cupcake','🧁','basic','Frosting Float'], ['lolly','Lolly','🍭','basic','Sugar Rush'],
+  ['melon','Melon','🍉','basic','Seed Spit Skip'], ['strawb','Berry Bud','🍓','basic','Berry Bounce'],
+  ['pineapple','Piney','🍍','basic','Spiky Strut'], ['avocado','Avo','🥑','basic','Good Fat Float'],
+  // ---- rare ----
+  ['deer','Deer','🦌','rare','Forest Leap'], ['llama','Llama','🦙','rare','Spit Take'],
+  ['camel','Camel','🐪','rare','Desert Stride'], ['hippo','Hippo','🦛','rare','Splash Stomp'],
+  ['badger','Badger','🦡','rare','Burrow Burst'], ['beaver','Beaver','🦫','rare','Dam Builder'],
+  ['skunk','Skunk','🦨','rare','Stinky Speed'], ['chipmunk','Chipmunk','🐿️','rare','Cheek Boost'],
+  ['blackcat','Shadow Cat','🐈‍⬛','rare','Nine Lives'], ['poodle','Poodle','🐩','rare','Fancy Prance'],
+  ['snake','Noodle','🐍','rare','Slither Slide'], ['lizard','Lizzy','🦎','rare','Wall Scamper'],
+  ['scorpion','Sting','🦂','rare','Tail Spring'], ['spider','Webster','🕷️','rare','Web Swing'],
+  ['pufferfish','Puffy','🐡','rare','Puff Up'], ['tropicalfish','Coral','🐠','rare','Reef Rush'],
+  ['lobster','Pinchy','🦞','rare','Claw Snap'], ['squid','Inky','🦑','rare','Ink Jet'],
+  ['pizza','Pizza Pal','🍕','rare','Pepperoni Power'], ['burger','Burger Bud','🍔','rare','Double Stack'],
+  ['taco','Taco','🌮','rare','Crunchy Shell'], ['icecream','Scoop','🍦','rare','Brain Freeze Breeze'],
+  ['cactus','Cactus','🌵','rare','Prickle Guard'], ['mushroom','Shroomy','🍄','rare','Spore Spring'],
+  ['clover','Lucky','🍀','rare','Four-leaf Luck'], ['balloon','Bally','🎈','rare','Helium Lift'],
+  ['kite','Kitey','🪁','rare','Wind Rider'], ['yoyo','Yo-yo','🪀','rare','Snapback'],
+  // ---- superRare ----
+  ['orangutan','Orangutan','🦧','superRare','Vine King'], ['gibbon','Gibbon','🐒','superRare','Branch Blitz'],
+  ['mammoth','Mammoth','🦣','superRare','Ice Age Charge'], ['dodo','Dodo','🦤','superRare','Un-extinct Energy'],
+  ['panther','Panther','🐅','superRare','Night Prowl'], ['husky','Husky','🐕','superRare','Sled Sprint'],
+  ['snowman','Frosty','⛄','superRare','Snowball Roll'], ['pumpkin','Pumpkin','🎃','superRare','Spooky Spring'],
+  ['moon','Moony','🌙','superRare','Low Gravity'], ['sun','Sunny','☀️','superRare','Solar Flare Feet'],
+  ['star','Twinkle','⭐','superRare','Stardust Step'], ['planet','Ringo','🪐','superRare','Orbit Glide'],
+  ['dice','Dicey','🎲','superRare','Lucky Roll'], ['gamepad','Gamer','🎮','superRare','Combo Move'],
+  ['teddy','Teddy','🧸','superRare','Soft Landing'], ['tophat','Sir Hat','🎩','superRare','Dapper Dash'],
+  ['guitar','Shredder','🎸','superRare','Power Chord'], ['drum','Boomer','🥁','superRare','Beat Bounce'],
+  ['racecar','Zoomer','🏎️','superRare','Nitro'], ['rocketship','Cosmo','🛸','superRare','Anti-gravity'],
+  ['anchor','Anchor','⚓','superRare','Heavy Drop'], ['crystal','Crystal','🔮','superRare','Future Sight'],
+  ['bolt','Volt','🔋','superRare','Full Charge'], ['magnet2','Maggie','🧿','superRare','Charm Pull'],
+  // ---- legendary ----
+  ['direwolf','Dire Wolf','🐺','legendary','Alpha Howl'], ['griffin','Griffin','🦅','legendary','Sky Talons'],
+  ['bigfoot','Bigfoot','🦶','legendary','Mega Stride'], ['genie','Genie','🧞','legendary','Wish Wind'],
+  ['knight','Sir Blob','🛡️','legendary','Shield Wall'], ['pirate','Captain','🏴‍☠️','legendary','Sea Legs'],
+  ['viking','Viking','⚔️','legendary','Berserk Bounce'], ['samurai','Ronin','🗡️','legendary','Blade Step'],
+  ['crown','His Majesty','👑','legendary','Royal Decree'], ['gem','Gemmy','💎','legendary','Facet Flash'],
+  ['trophy','Champ','🏆','legendary','Winner Wings'], ['comet','Comet','☄️','legendary','Tail Blaze'],
+  ['rainbowfish','Prism Fin','🐬','legendary','Rainbow Wake'], ['thunder','Rumble','🌩️','legendary','Storm Step'],
+  ['tornado2','Twisty','🌪️','legendary','Cyclone Spin'], ['wave','Tsunami','🌊','legendary','Tidal Surge'],
+  // ---- mythical ----
+  ['fairy','Fairy','🧚','mythical','Pixie Dust'], ['elf','Elf','🧝','mythical','Elven Grace'],
+  ['merman','Merman','🧜‍♂️','mythical','Trident Tide'], ['vampire2','Count Blob','🧛','mythical','Midnight Glide'],
+  ['zombie','Zomblob','🧟','mythical','Unstoppable Shamble'], ['djinn','Djinn','🧞‍♀️','mythical','Sand Whirl'],
+  ['seahorse','Seapony','🌊','mythical','Current Rider'], ['shootingstar','Wisher','🌠','mythical','Wish Trail'],
+  ['aurora','Aurora','🌌','mythical','Northern Lights'], ['blossom','Blossom','🌸','mythical','Petal Storm'],
+  ['snowflake','Flurry','❄️','mythical','Whiteout Waltz'], ['candle','Glow','🕯️','mythical','Wax Wings'],
+  ['galaxia','Galaxia','🌀','mythical','Spiral Spin'],
+  // ---- the last batch to make it a nice round 200 ----
+  ['birdie','Birdie','🐦','basic','Tweet Trot'], ['grape','Grapey','🍇','basic','Bunch Bounce'],
+  ['orange','Zesty','🍊','basic','Citrus Zing'], ['lemon2','Sour','🍋','basic','Pucker Power'],
+  ['pepper','Spicy','🌶️','rare','Hot Feet'], ['broc','Broc','🥦','rare','Veggie Vigor'],
+  ['corncob','Cobby','🌽','rare','Popcorn Pop'], ['satellite','Sputnik','🛰️','superRare','Orbit Boost'],
+  ['bomb','Boomy','💣','superRare','Short Fuse'], ['disco','Disco','🪩','superRare','Groove Glide'],
+  ['dragonfruit','Dragon Fruit','🐲','legendary','Fruit Fury'], ['medal','Medalist','🥇','legendary','Gold Standard'],
+];
+(function(){
+  const SELL={basic:30, rare:70, superRare:120, legendary:200, mythical:320};
+  const SIZE={basic:0.5, rare:0.8, superRare:1.1, legendary:1.4, mythical:1.8};
+  MEGA_PETS.forEach((row,i)=>{
+    const [id,name,emoji,rarity,perkName]=row;
+    // unique stat split per pet: three co-prime cycles guarantee no two pets
+    // share the same (speed, jump, float) mix; rarity scales the total size
+    const a=1+(i%11), b=1+(i%17), c2=1+(i%23), tot=a+b+c2, t=SIZE[rarity];
+    CREATURES.push({ id, name, emoji, rarity, sell:SELL[rarity], abilities:[],
+      perk:{ name:perkName, mods:{
+        // the tiny i-scaled nudge keeps every single combo distinct even
+        // after rounding — truly no two pets play the same
+        move:+(1+0.18*t*(a/tot) + i*0.0004).toFixed(4),
+        jump:+(1+0.11*t*(b/tot)).toFixed(4),
+        fall:+(1-0.32*t*(c2/tot)).toFixed(4),
+      }}});
+  });
+})();
 
 const creatureById = id => CREATURES.find(c=>c.id===id);
 const creaturesOfRarity = r => CREATURES.filter(c=>c.rarity===r);
@@ -208,9 +311,9 @@ function ensurePetFeed(){
     if(SAVE.foods.meat){ SAVE.foods.corn=(SAVE.foods.corn||0)+SAVE.foods.meat; delete SAVE.foods.meat; }
   }
   const now=nowMs();
-  const ids=new Set([...Object.keys(SAVE.pets||{}), ...Object.keys(SAVE.shinies||{})]);
+  const ids=new Set([...Object.keys(SAVE.pets||{}), ...Object.keys(SAVE.shinies||{}), ...Object.keys(SAVE.diamonds||{})]);
   let changed=false;
-  for(const id of ids){ if((SAVE.pets[id]||0)>0 || (SAVE.shinies&&SAVE.shinies[id]>0)){
+  for(const id of ids){ if((SAVE.pets[id]||0)>0 || (SAVE.shinies&&SAVE.shinies[id]>0) || (SAVE.diamonds&&SAVE.diamonds[id]>0)){
     if(SAVE.petFeed[id]==null){ SAVE.petFeed[id]=now + Math.round(petCapacityH(id)*0.3)*3600*1000; changed=true; }  // start ~30% full (room to feed)
     if(SAVE.petMood[id]==null){ SAVE.petMood[id]={h:80, t:now}; changed=true; }   // start fairly happy
     else tickMood(id);
@@ -302,7 +405,7 @@ const DEX_MILESTONES = [
   { id:'own20', need:20,               reward:1000, label:'Collect 20 different pets' },
   { id:'all',   need:CREATURES.length, reward:3000, label:'Complete the Blob-Dex!' },
 ];
-function dexOwnedCount(){ return CREATURES.filter(c=>(SAVE.pets[c.id]||0)>0 || (SAVE.shinies&&SAVE.shinies[c.id]>0)).length; }
+function dexOwnedCount(){ return CREATURES.filter(c=>ownsAnyForm(c.id)).length; }
 function dexMilestoneDone(m){ return dexOwnedCount()>=m.need; }
 function dexMilestoneClaimed(id){ return (SAVE.dexClaimed||[]).includes(id); }
 function claimDexMilestone(id){
@@ -380,7 +483,7 @@ function sellDuplicate(id){
 }
 
 function equipPet(id){
-  if(!ownsPet(id) && !isShiny(id)) return false;   // a shiny-only copy counts too
+  if(!ownsAnyForm(id)) return false;   // a shiny- or diamond-only copy counts too
   SAVE.equippedPet = (SAVE.equippedPet===id) ? null : id;  // tap again to unequip
   persist();
   return true;
@@ -432,6 +535,22 @@ function makeShiny(id){
   return { creature:c };
 }
 
+/* ---- diamond pets: fuse 2 SHINIES of one pet into a diamond version ----
+   Diamonds glow icy-bright when worn as a skin, give a bigger stat bonus
+   than shinies, and their signature power recharges 1 second faster. */
+function isDiamond(id){ return !!(SAVE.diamonds && SAVE.diamonds[id]>0); }
+function makeDiamond(id){
+  const c=creatureById(id); if(!c) return {error:'?'};
+  if(!SAVE.shinies || (SAVE.shinies[id]||0) < 2) return {error:'Need 2 shinies'};
+  SAVE.shinies[id]-=2; if(SAVE.shinies[id]<=0) delete SAVE.shinies[id];
+  if(!SAVE.diamonds) SAVE.diamonds={};
+  SAVE.diamonds[id]=(SAVE.diamonds[id]||0)+1;
+  persist();
+  return { creature:c };
+}
+/* do I own this pet in ANY form (copies, shiny or diamond)? */
+function ownsAnyForm(id){ return ownsPet(id) || isShiny(id) || isDiamond(id); }
+
 /* ---- rarity fusion: 3 pets of one rarity -> 1 random pet of the next rarity ---- */
 function rarityCopies(rarity){
   let n=0; for(const c of creaturesOfRarity(rarity)) n += (SAVE.pets[c.id]||0); return n;
@@ -451,7 +570,7 @@ function fuseRarity(rarity){
     while(toRemove>0 && (SAVE.pets[c.id]||0)>0){ SAVE.pets[c.id]--; toRemove--; if(SAVE.pets[c.id]<=0){ delete SAVE.pets[c.id]; break; } }
     if(toRemove<=0) break;
   }
-  if(SAVE.equippedPet && !ownsPet(SAVE.equippedPet) && !isShiny(SAVE.equippedPet)) SAVE.equippedPet=null;
+  if(SAVE.equippedPet && !ownsAnyForm(SAVE.equippedPet)) SAVE.equippedPet=null;
   // roll a random pet of the next rarity
   const pool=creaturesOfRarity(nr);
   const creature=pool[Math.floor(Math.random()*pool.length)];
@@ -469,16 +588,19 @@ function equippedAbilities(){
   const c = id ? creatureById(id) : null;
   const set = new Set(c ? c.abilities : []);
   const lvl = id ? petLevel(id) : 1;
-  const shiny = id ? isShiny(id) : false;
-  const lvlBoost = (lvl-1)*0.015 + (shiny?0.06:0);   // up to +0.195 at lvl10 shiny
-  const glideBoost = (lvl-1)*0.01 + (shiny?0.04:0);  // glide a touch stronger
+  const dia = id ? isDiamond(id) : false;
+  const shiny = (id ? isShiny(id) : false) || dia;   // diamond includes the shiny bonus
+  const lvlBoost = (lvl-1)*0.015 + (dia?0.10 : shiny?0.06 : 0);   // diamonds hit harder
+  const glideBoost = (lvl-1)*0.01 + (dia?0.06 : shiny?0.04 : 0);
   const baseMove = set.has('speed3')?1.6 : set.has('speed2')?1.4 : set.has('speed1')?1.2 : 1;
   const baseFall = set.has('glideStrong')?0.55 : set.has('glide')?0.75 : 1;
+  // unique per-pet signature perk (generated pets): small stat mods on top
+  const pm = (c && c.perk && c.perk.mods) || null;
   return {
-    moveMul: baseMove>1 ? baseMove+lvlBoost : 1,
-    jumpMul: (set.has('highJump')||set.has('highJump2'))? 1.2 + (lvl-1)*0.008 + (shiny?0.03:0)
-           : set.has('highJump1')?1.1 : 1,
-    fallMul: baseFall<1 ? Math.max(0.45, baseFall-glideBoost) : 1,
+    moveMul: (baseMove>1 ? baseMove+lvlBoost : 1) * (pm?pm.move:1),
+    jumpMul: ((set.has('highJump')||set.has('highJump2'))? 1.2 + (lvl-1)*0.008 + (shiny?0.03:0)
+           : set.has('highJump1')?1.1 : 1) * (pm?pm.jump:1),
+    fallMul: Math.max(0.4, (baseFall<1 ? Math.max(0.45, baseFall-glideBoost) : 1) * (pm?pm.fall:1)),
     maxJumps: set.has('tripleJump')?3 : set.has('doubleJump')?2 : 1,
     canPlatform: set.has('platform'),
     canSaveFall: set.has('savefall'),
@@ -487,7 +609,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','cloudjump','hop'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','blackhole','goldrush','herotime','eruption','miracle','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)

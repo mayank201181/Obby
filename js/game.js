@@ -80,6 +80,11 @@ const POWER_META = {
   rewind:    {emoji:'⏰', label:'REWIND', cd:5000},   // Chrono — snap back to 3 seconds ago
   coinstorm: {emoji:'🧲', label:'MAGNET', cd:6000},   // Magnetron — vacuum every coin near you
   icebridge: {emoji:'❄️', label:'BRIDGE', cd:5000},   // Frost Fairy — conjure an ice bridge ahead
+  blackhole: {emoji:'🕳️', label:'VOID',   cd:12000},  // Void Blob — steal every coin on the map + stun everyone
+  goldrush:  {emoji:'🤑', label:'GOLD',   cd:25000},  // Money King — +25 coins, 20s double coins + magnet
+  herotime:  {emoji:'🦸', label:'HERO',   cd:11000},  // Super Blob — 6s invincible + infinite jumps
+  eruption:  {emoji:'🌋', label:'ERUPT',  cd:6000},   // Volcano — ring of fireballs in every direction
+  miracle:   {emoji:'👼', label:'HALO',   cd:14000},  // Angel — 8s invincible feather-float
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
@@ -275,6 +280,7 @@ function loadLevel(level){
   Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.invisUntil=0; Game.freezeEnemiesUntil=0;
   Game.slowWorldUntil=0; Game.slowMoveUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
   Game.decoy=null; Game.posTrail=[]; Game.trailT=0;   // Ninja decoy + Chrono rewind history
+  Game.heroUntil=0;                                    // Super Blob hero-time timer
   Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   Game.faceMorph=null; Game.accMorph=null; Game.morphRound=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
@@ -489,7 +495,9 @@ function usePower(power){
   const meta=POWER_META[power]; if(!meta) return;
   if(Game.t < Game.powerCdUntil) return;                 // still cooling down
   const p=Game.player; if(!p) return;
-  Game.powerCdUntil = Game.t + meta.cd;
+  // 💎 diamond pets recharge their power 1 second faster
+  const diaCut = (typeof isDiamond==='function' && SAVE.equippedPet && isDiamond(SAVE.equippedPet)) ? 1000 : 0;
+  Game.powerCdUntil = Game.t + Math.max(500, meta.cd - diaCut);
   switch(power){
     case 'teleport': {                                    // 🌈 blink forward through walls
       p.x = Math.max(0, Math.min(Game.world.width-p.w, p.x + p.facing*230));
@@ -581,6 +589,52 @@ function usePower(power){
         Game.abilityFx.push({kind:'emoji', e:'❄️', x:p.x+p.w/2+p.facing*(70+i*95), y:p.y+p.h, vx:0, vy:-0.5, life:1, born:Game.t});
       }
       SFX.checkpoint(); if(typeof toast==='function') toast('❄️ Ice Bridge!'); break;
+    }
+    case 'blackhole': {                                   // 🕳️ Void Blob — the greediest power in the game
+      let sucked=0;
+      for(const c of Game.world.platforms){               // EVERY coin on the whole map
+        if(c.type!=='coin' || c.taken) continue;
+        c.taken=true; sucked++;
+        Game.abilityFx.push({kind:'emoji', e:'🪙', x:c.x+c.w/2, y:c.y+c.h/2, vx:(p.x-c.x)/40, vy:(p.y-c.y)/40, life:1, born:Game.t});
+      }
+      if(sucked){
+        const gain=(Game.t<Game.power.x2Until?2:1)*sucked;
+        Game.runCoins+=gain;
+        if(Game.heist){ Game.heistLoot+=gain; } else { addCoins(gain); SAVE.lvlCoinsCollected=(SAVE.lvlCoinsCollected||0)+gain; persist(); }
+        if(typeof questEvent==='function') questEvent('coins',gain);
+      }
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x==='number' && typeof mpSendStun==='function') mpSendStun(r.id, 4); } }
+      Game.freezeEnemiesUntil = Math.max(Game.freezeEnemiesUntil||0, Game.t+4000);
+      for(let i=0;i<16;i++){ const an=i/16*Math.PI*2;
+        Game.abilityFx.push({kind:'emoji', e:'🕳️', x:p.x+p.w/2+Math.cos(an)*60, y:p.y+p.h/2+Math.sin(an)*60, vx:-Math.cos(an)*2, vy:-Math.sin(an)*2, life:1, born:Game.t}); }
+      addShake(8); SFX.rare(); if(typeof toast==='function') toast('🕳️ BLACK HOLE!'+(sucked?' +🪙'+sucked:'')); break;
+    }
+    case 'goldrush': {                                    // 🤑 Money King — instant riches
+      const bonus=25;
+      Game.runCoins+=bonus;
+      if(Game.heist){ Game.heistLoot+=bonus; } else { addCoins(bonus); }
+      Game.power.x2Until = Math.max(Game.power.x2Until||0, Game.t+20000);      // double coins 20s
+      Game.power.magnetUntil = Math.max(Game.power.magnetUntil||0, Game.t+20000);
+      for(let i=0;i<12;i++) Game.abilityFx.push({kind:'emoji', e:'🪙', x:p.x+p.w/2+(Math.random()*60-30), y:p.y-20-Math.random()*40, vx:(Math.random()*2-1)*1.5, vy:1+Math.random(), life:1.2, born:Game.t});
+      SFX.coin(); SFX.rare(); if(typeof toast==='function') toast('🤑 GOLD RUSH! +🪙25 and DOUBLE coins for 20s!'); break;
+    }
+    case 'herotime': {                                    // 🦸 Super Blob — invincible + infinite jumps
+      Game.heroUntil = Game.t + 6000;
+      p.invuln = Math.max(p.invuln, 6000);
+      for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'💥', x:p.x+p.w/2+(Math.random()*50-25), y:p.y+p.h/2+(Math.random()*50-25), vx:0, vy:-0.6, life:1, born:Game.t});
+      addShake(5); SFX.rare(); if(typeof toast==='function') toast('🦸 HERO TIME! Infinite jumps, invincible!'); break;
+    }
+    case 'eruption': {                                    // 🌋 Volcano — fireballs in every direction
+      for(let i=0;i<12;i++){ const an=i/12*Math.PI*2;
+        Game.fire.push({ x:p.x+p.w/2, y:p.y+p.h/2, vx:Math.cos(an)*8, vy:Math.sin(an)*6-2, r:15, born:Game.t+((i%3)*40) }); }
+      p.invuln = Math.max(p.invuln, 800);
+      addShake(9); SFX.hit(); if(typeof toast==='function') toast('🌋 ERUPTION!'); break;
+    }
+    case 'miracle': {                                     // 👼 Angel — untouchable feather-float
+      p.invuln = Math.max(p.invuln, 8000);
+      Game.floatUntil = Math.max(Game.floatUntil||0, Game.t+8000);
+      for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🪽', x:p.x+p.w/2+(Math.random()*50-25), y:p.y+p.h/2+(Math.random()*40-20), vx:0, vy:-0.5, life:1.2, born:Game.t});
+      SFX.checkpoint(); if(typeof toast==='function') toast('👼 MIRACLE — untouchable for 8 seconds!'); break;
     }
     case 'nightswarm': {                                  // 🦇 Vampire Bat — bats stun every friend near you for 5s
       if(Game.multiplayer){
@@ -771,6 +825,7 @@ function update(dt){
   if(Game.decoy && Game.t>Game.decoy.until) Game.decoy=null;   // ninja decoy fades away
 
   if(p.onGround) p.jumps=0;              // reset jump count when grounded
+  if(Game.t < (Game.heroUntil||0)) p.jumps=0;   // 🦸 Hero Time: jumps never run out
 
   const beamed = Game.disaster && Game.dz && Game.dz.beamed;   // caught in an alien tractor beam
   const stunned = Game.t < (Game.stunUntil||0) || Game.moveLock;   // banana stun or seeker-blind
@@ -780,7 +835,8 @@ function update(dt){
   const flying = Game.t < (Game.flyUntil||0);            // 🦄 rainbow flight / morphed eagle
   const wizSlowed = Game.t < (Game.slowMoveUntil||0);   // a Wizard time-warped me
   const warping = Game.t < (Game.slowWorldUntil||0);    // I'M the Wizard mid Time Warp -> extra zoom
-  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1)*(wizSlowed?0.35:1)*(warping?1.35:1);
+  const hero = Game.t < (Game.heroUntil||0);            // 🦸 Hero Time speed boost
+  const move = MOVE*Game.petMoveMul*(Game.morphMoveMul||1)*(dashing?1.5:1)*(wizSlowed?0.35:1)*(warping?1.35:1)*(hero?1.45:1);
   const target=dir*move;
   const grip = p.onIce ? 0.09 : 0.35;
   p.vx += (target-p.vx)*grip;
@@ -3213,7 +3269,7 @@ function render(){
     else if(ghosting) ctx.globalAlpha=0.45;
     else if(blink) ctx.globalAlpha=0.4;
     drawCharacter(ctx, p.x+p.w/2, p.y+p.h/2, 34, {skin:mySkin,accessory:Game.accMorph||SAVE.accessory,face:Game.faceMorph||SAVE.face,facing:p.facing,t:Game.t,squash:p.squash,
-                  petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
+                  petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), diamond:SAVE.petSkin&&isDiamond(SAVE.petSkin), ring:Game.myColor&&SAVE.petSkin?Game.myColor:null});
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-8, SAVE.name||'You');
     if(Game.t < (Game.stunUntil||0)){   // dizzy stars while stunned by a friend's banana

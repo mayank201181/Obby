@@ -40,7 +40,7 @@ function startPreview(canvasId){
   cancelAnimationFrame(previewRaf);
   const loop=t=>{
     ctx.clearRect(0,0,size,size);
-    drawCharacter(ctx,size/2,size/2+6,72,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:1,t,petSkin:SAVE.petSkin,shiny:SAVE.petSkin&&isShiny(SAVE.petSkin)});
+    drawCharacter(ctx,size/2,size/2+6,72,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,facing:1,t,petSkin:SAVE.petSkin,shiny:SAVE.petSkin&&isShiny(SAVE.petSkin),diamond:SAVE.petSkin&&isDiamond(SAVE.petSkin)});
     previewRaf=requestAnimationFrame(loop);
   };
   previewRaf=requestAnimationFrame(loop);
@@ -924,7 +924,7 @@ function startWinDance(){
     const sq=Math.sin(t/110)*0.5, tilt=Math.sin(t/190)*0.2, hop=Math.abs(Math.sin(t/110))*6;
     ctx.save(); ctx.translate(size/2, size/2+6-hop); ctx.rotate(tilt);
     drawCharacter(ctx,0,0,56,{skin:SAVE.skin,accessory:SAVE.accessory,face:SAVE.face,
-      facing:(Math.sin(t/300)>0?1:-1), t, squash:sq, petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin)});
+      facing:(Math.sin(t/300)>0?1:-1), t, squash:sq, petSkin:SAVE.petSkin, shiny:SAVE.petSkin&&isShiny(SAVE.petSkin), diamond:SAVE.petSkin&&isDiamond(SAVE.petSkin)});
     ctx.restore();
     winDanceRaf=requestAnimationFrame(loop);
   };
@@ -1028,6 +1028,7 @@ function openPlayground(){
   const ids=[];
   for(const id in (SAVE.pets||{})) if(SAVE.pets[id]>0) ids.push(id);
   for(const id in (SAVE.shinies||{})) if(SAVE.shinies[id]>0 && !ids.includes(id)) ids.push(id);
+  for(const id in (SAVE.diamonds||{})) if(SAVE.diamonds[id]>0 && !ids.includes(id)) ids.push(id);
   document.getElementById('playgroundHint').textContent = ids.length
     ? 'Tap your pets to play with them! 🐾' : 'Get pets from chests — then play with them here!';
   const pets = ids.slice(0,12).map(id=>{ const c=creatureById(id);
@@ -1094,7 +1095,7 @@ function renderCafe(){
     <div class="swatch food-cell" onclick="addToTray('${f.id}')">
       <span style="font-size:26px">${f.emoji}</span><span class="count-badge">${foodCount(f.id)}</span>
     </div>`).join('') : `<p class="hint" style="grid-column:1/-1">No food yet — play Food Hunt to catch some! 🍽️</p>`;
-  const ownedPets=CREATURES.filter(c=>ownsPet(c.id)||isShiny(c.id));
+  const ownedPets=CREATURES.filter(c=>ownsAnyForm(c.id));
   // default the feed target to the equipped pet (or the first owned)
   if(!feedPetId || !ownedPets.some(c=>c.id===feedPetId))
     feedPetId = (SAVE.equippedPet && ownedPets.some(c=>c.id===SAVE.equippedPet)) ? SAVE.equippedPet : (ownedPets[0]&&ownedPets[0].id) || null;
@@ -1401,7 +1402,18 @@ function doOpenGoldVault(){
   openModal('petModal');
 }
 function rarityBadge(r){ const i=RARITY_INFO[r]; return `<span class="rarity-badge" style="background:${i.color}">${i.label}</span>`; }
-function abilityText(c){ return c.abilities.length? c.abilities.map(a=>ABILITY_INFO[a]).join(' + ') : 'No special power'; }
+function perkText(c){
+  const m=c.perk.mods, bits=[];
+  if(m.move>1.001) bits.push('+'+Math.round((m.move-1)*100)+'% speed');
+  if(m.jump>1.001) bits.push('+'+Math.round((m.jump-1)*100)+'% jump');
+  if(m.fall<0.999) bits.push('floats '+Math.round((1-m.fall)*100)+'% slower');
+  return '\u2b50 '+c.perk.name+': '+(bits.join(', ')||'a one-of-a-kind vibe');
+}
+function abilityText(c){
+  const parts=c.abilities.length? c.abilities.map(a=>ABILITY_INFO[a]).join(' + ') : '';
+  const p=c.perk ? perkText(c) : '';
+  return parts&&p ? parts+' + '+p : (parts||p||'No special power');
+}
 
 function showPetReveal(c, count){
   const dup = count>1;
@@ -1447,10 +1459,10 @@ function renderCollectionTab(body){
   }).join('');
   html+=`<p class="hint">Equipped: ${eq?eq.emoji+' '+eq.name:'none'}</p>`;
   const petCellHtml=(c, rc)=>{
-    const owns=ownsPet(c.id)||isShiny(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
-    const shiny=isShiny(c.id); const lvl=owns?petLevel(c.id):1;
-    return `<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''} ${shiny?'shiny':''}" style="--rc:${rc}" onclick="${owns?`showPetActions('${c.id}')`:''}">
-      <div class="pet-emoji">${owns?c.emoji:'❓'}${shiny?'<span class="shiny-star">🌟</span>':''}</div>
+    const owns=ownsAnyForm(c.id); const eqd=SAVE.equippedPet===c.id; const n=petCount(c.id);
+    const shiny=isShiny(c.id); const dia=isDiamond(c.id); const lvl=owns?petLevel(c.id):1;
+    return `<div class="pet-cell ${owns?'':'locked'} ${eqd?'equipped':''} ${(shiny||dia)?'shiny':''}" style="--rc:${rc}" onclick="${owns?`showPetActions('${c.id}')`:''}">
+      <div class="pet-emoji">${owns?c.emoji:'❓'}${dia?'<span class="shiny-star">💎</span>':shiny?'<span class="shiny-star">🌟</span>':''}</div>
       <div class="pet-name">${owns?c.name:'???'}</div>
       ${owns?`<span class="lvl-badge">L${lvl}</span>`:''}
       ${owns&&n>1?`<span class="count-badge">x${n}</span>`:''}
@@ -1472,19 +1484,21 @@ function renderCollectionTab(body){
 }
 function showPetActions(id){
   const c=creatureById(id); const n=petCount(id);
-  const shiny=isShiny(id); const xi=petXpInfo(id);
+  const shiny=isShiny(id); const dia=isDiamond(id); const xi=petXpInfo(id);
+  const shinyN=(SAVE.shinies&&SAVE.shinies[id])||0;
   const pct=xi.max?100:Math.round(xi.into/xi.need*100);
   const body=document.getElementById('petModalBody');
   body.innerHTML=`
-    <div class="pet-big ${shiny?'shiny-big':''}" style="--rc:${RARITY_INFO[c.rarity].color}">${c.emoji}${shiny?' 🌟':''}</div>
-    <h2 style="margin:4px 0">${shiny?'Shiny ':''}${c.name} ${rarityBadge(c.rarity)}</h2>
-    <p class="muted" style="font-size:13px">✨ ${abilityText(c)}${shiny?' · <b style="color:#e0a01a">golden bonus!</b>':''}</p>
+    <div class="pet-big ${(shiny||dia)?'shiny-big':''}" style="--rc:${RARITY_INFO[c.rarity].color}">${c.emoji}${dia?' 💎':shiny?' 🌟':''}</div>
+    <h2 style="margin:4px 0">${dia?'💎 Diamond ':shiny?'Shiny ':''}${c.name} ${rarityBadge(c.rarity)}</h2>
+    <p class="muted" style="font-size:13px">✨ ${abilityText(c)}${dia?' · <b style="color:#4dd7ff">diamond bonus: bigger boost + powers recharge 1s faster!</b>':shiny?' · <b style="color:#e0a01a">golden bonus!</b>':''}</p>
     <div class="lvl-row"><span>Lv ${xi.lvl}${xi.max?' (MAX)':''}</span>
       <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div></div>
-    <p class="hint">You own ${n}${shiny?' + 1 shiny ✨':''}${n>1?' · duplicates sell for 🪙'+c.sell+' each':''}</p>
+    <p class="hint">You own ${n}${shinyN?' + '+shinyN+' shiny 🌟':''}${dia?' + 💎 diamond':''}${n>1?' · duplicates sell for 🪙'+c.sell+' each':''}</p>
     <button class="btn pink" onclick="doEquip('${c.id}')">${SAVE.equippedPet===c.id?'✓ Power equipped (tap to remove)':'Use power'}</button>
     <button class="btn blue" onclick="doWearPet('${c.id}')">${SAVE.petSkin===c.id?'✓ Worn as skin (tap to remove)':'👕 Wear as skin'}</button>
     ${n>=3?`<button class="btn gold" onclick="doMakeShiny('${c.id}')">🌟 Make Shiny (uses 3)</button>`:''}
+    ${shinyN>=2?`<button class="btn gold" onclick="doMakeDiamond('${c.id}')">💎 Make Diamond (uses 2 shinies)</button>`:''}
     ${n>1?`<button class="btn ghost" onclick="doSell('${c.id}')">Sell duplicate (🪙${c.sell})</button>`:''}
     <button class="btn ghost" onclick="closeModal('petModal')">Close</button>`;
   openModal('petModal');
@@ -1493,6 +1507,12 @@ function doMakeShiny(id){
   const r=makeShiny(id); if(r.error){ toast(r.error); return; }
   SFX.rare(); const c=creatureById(id);
   toast('🌟 Forged a shiny '+c.name+'!');
+  renderPets(); showPetActions(id);
+}
+function doMakeDiamond(id){
+  const r=makeDiamond(id); if(r.error){ toast(r.error); return; }
+  SFX.rare(); const c=creatureById(id);
+  toast('💎 Forged a DIAMOND '+c.name+'!');
   renderPets(); showPetActions(id);
 }
 
@@ -1523,7 +1543,19 @@ function renderFuseTab(body){
     </div>`;
   }
 
+  // diamond upgrades: any pet with 2+ shinies
+  const diamondable = CREATURES.filter(c=>((SAVE.shinies&&SAVE.shinies[c.id])||0)>=2);
+  const diamondHtml = diamondable.length
+    ? diamondable.map(c=>`<div class="chest-row">
+        <div class="chest-ico">${c.emoji}</div>
+        <div class="chest-info"><b>${c.name}</b>
+          <div class="muted" style="font-size:11px">You own ${SAVE.shinies[c.id]} shinies · fuse 2 into a 💎 diamond</div></div>
+        <button class="btn blue small" onclick="doMakeDiamond('${c.id}')">💎 Forge</button>
+      </div>`).join('')
+    : `<p class="hint">Forge 2 shinies of the SAME pet, then fuse them into a 💎 diamond — icy glow, a bigger boost, and its power recharges 1 second faster!</p>`;
+
   body.innerHTML = `<div class="rar-head">🌟 Forge a Shiny</div>${shinyHtml}
+    <div class="rar-head" style="margin-top:14px">💎 Forge a Diamond</div>${diamondHtml}
     <div class="rar-head" style="margin-top:14px">🧬 Rarity Fusion</div>
     <p class="hint" style="margin-top:0">Combine 3 pets of one rarity into a random pet of the next rarity up!</p>
     ${mergeHtml}`;

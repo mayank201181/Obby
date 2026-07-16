@@ -56,8 +56,17 @@ function drawCharacter(ctx, cx, cy, size, opts){
       ctx.beginPath();ctx.ellipse(0,h*0.55,w*0.42,h*0.12,0,0,Math.PI*2);ctx.fill();
       ctx.globalAlpha=1;
       if(opts.ring){ ctx.fillStyle=opts.ring; ctx.beginPath();ctx.arc(0,0,w*0.62,0,Math.PI*2);ctx.fill(); }
-      // shiny (golden) pets get a glowing aura + sparkles
-      if(opts.shiny){
+      // diamond pets shine with an icy-bright halo; shiny (golden) pets glow gold
+      if(opts.diamond){
+        const dg=ctx.createRadialGradient(0,0,w*0.2, 0,0,w*0.85);
+        dg.addColorStop(0,'rgba(190,240,255,.95)'); dg.addColorStop(0.6,'rgba(120,215,255,.5)'); dg.addColorStop(1,'rgba(120,215,255,0)');
+        ctx.fillStyle=dg; ctx.beginPath();ctx.arc(0,0,w*0.85,0,Math.PI*2);ctx.fill();
+        ctx.font=`${Math.round(size*0.32)}px serif`;
+        const tw=(t||0)/220;
+        ctx.fillText('💎', Math.cos(tw)*w*0.55, -h*0.38+Math.sin(tw)*4);
+        ctx.fillText('✨', Math.cos(tw+2.1)*w*0.55, h*0.22+Math.sin(tw+2.1)*4);
+        ctx.fillText('✨', Math.cos(tw+4.2)*w*0.55, -h*0.05+Math.sin(tw+4.2)*4);
+      } else if(opts.shiny){
         const gg=ctx.createRadialGradient(0,0,w*0.2, 0,0,w*0.75);
         gg.addColorStop(0,'rgba(255,224,120,.85)'); gg.addColorStop(1,'rgba(255,200,60,0)');
         ctx.fillStyle=gg; ctx.beginPath();ctx.arc(0,0,w*0.75,0,Math.PI*2);ctx.fill();
