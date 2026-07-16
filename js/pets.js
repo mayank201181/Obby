@@ -429,8 +429,10 @@ const CHESTS = {
   basic:     { label:'Basic Chest',     cost:150, emoji:'📦',
     weights:{ basic:70, rare:24, superRare:5,  legendary:0,  mythical:0,  secret:1 } },
   rare:      { label:'Rare Chest',      cost:250, emoji:'🎁',
+    trollChance:0.02,   // a very small bonus chance to pop a 😜 troll pet
     weights:{ basic:38, rare:34, superRare:18, legendary:7,  mythical:2.5,secret:0.5 } },
   legendary: { label:'Legendary Chest', cost:350, emoji:'🏆',
+    trollChance:0.06,   // a bit higher troll chance than the Rare Chest
     weights:{ basic:0, rare:0, superRare:0, legendary:62, mythical:30, secret:8 } },
   // top-secret contents — don't spoil the surprise in the UI!
   mystery:   { label:'Gold Exclusive Chest', cost:10000, emoji:'👑', exclusive:true, mystery:true },
@@ -489,6 +491,16 @@ function openPetChest(chestId){
   if(!chest) return {error:'Unknown chest'};
   if(SAVE.coins < chest.cost) return {error:'Not enough coins'};
   SAVE.coins -= chest.cost;
+  // bonus roll first: Rare & Legendary chests can pop a 😜 troll pet
+  if(chest.trollChance && Math.random() < chest.trollChance){
+    const trolls = CREATURES.filter(c=>c.group==='troll');
+    const tc = trolls[Math.floor(Math.random()*trolls.length)];
+    const thad = SAVE.pets[tc.id]||0;
+    SAVE.pets[tc.id] = thad+1;
+    if(thad===0 && !SAVE.equippedPet) SAVE.equippedPet = tc.id;
+    persist();
+    return { creature:tc, isNew:thad===0, count:SAVE.pets[tc.id], troll:true };
+  }
   const rarity = rollRarity(chest.weights);
   const pool = creaturesOfRarity(rarity);
   const creature = pool[Math.floor(Math.random()*pool.length)];

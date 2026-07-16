@@ -1374,7 +1374,7 @@ function renderChestsTab(body){
     return `<div class="chest-row">
       <div class="chest-ico">${c.emoji}</div>
       <div class="chest-info"><b>${c.label}</b>
-        <div class="muted" style="font-size:11px;line-height:1.35">${oddsLine(c.weights)}</div></div>
+        <div class="muted" style="font-size:11px;line-height:1.35">${oddsLine(c.weights)}${c.trollChance?` · <b style="color:#8ad06b">😜 Troll ${Math.round(c.trollChance*100)}%</b>`:''}</div></div>
       <button class="btn gold small" ${can?'':'disabled'} onclick="doOpenChest('${id}')">🪙${c.cost}</button>
     </div>`;
   }).join('') + `<p class="hint">Better chests = better odds for rare pets. Save up for the 🌟 Gold Vault! Equip a pet to use its power in the obby!</p>`;
@@ -1384,8 +1384,9 @@ function doOpenChest(id){
   if(id==='mystery'){ doOpenMysteryChest(); return; }
   const res=openPetChest(id);
   if(res.error){ toast(res.error); return; }
-  const rare = ['legendary','mythical','secret'].includes(res.creature.rarity);
+  const rare = res.troll || ['legendary','mythical','secret'].includes(res.creature.rarity);
   rare ? SFX.rare() : SFX.chest();
+  if(res.troll) toast('😜 A TROLL PET popped out!');
   if(res.creature.rarity==='secret') unlockAchievement('secret');
   checkPetAchievements();
   updateCoinDisplays(); renderPets();
