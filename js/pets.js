@@ -57,6 +57,9 @@ const ABILITY_INFO = {
   cloudjump:  '☁️ Cloud Leap! Launch high off a cloud and refill your jumps in mid-air',
   // ===== TROLL powers =====
   poop:       '💩 Poop! Drop a stinky pile (tap 💩) — anyone who steps in it is frozen for 3 seconds!',
+  swap:       '🥸 Switcheroo! Instantly SWAP places with the nearest friend — steal their spot right before the finish line!',
+  honk:       '🤡 HONK! Every friend near you gets REVERSED controls for 4 seconds — left is right, right is left, chaos guaranteed!',
+  eggsplat:   '🐔 Egg Splat! Hurl 3 eggs in a spread — any friend they splat on gets stunned. Bok bok!',
   // ===== passive glow =====
   starglow:   '✨ Starglow: your blob shimmers with a gorgeous rainbow-star aura',
   coinmagnet: 'Coins are always pulled to you',
@@ -97,6 +100,8 @@ const CREATURES = [
   { id:'tiger',   name:'Tiger',     emoji:'🐯', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'raccoon', name:'Raccoon',   emoji:'🦝', rarity:'superRare', abilities:['coinmagnet','speed1'], sell:120 },
   { id:'hyena',   name:'Hyena',     emoji:'🐆', rarity:'superRare', abilities:['poop','highJump'], group:'troll', sell:120 },
+  { id:'mrswap',  name:'Mr. Swap',  emoji:'🥸', rarity:'superRare', abilities:['swap','speed1'],    group:'troll', sell:120 },
+  { id:'chicken', name:'Chicken',   emoji:'🐔', rarity:'superRare', abilities:['eggsplat','glide'], group:'troll', sell:120 },
   { id:'kangaroo',name:'Kangaroo',  emoji:'🦘', rarity:'superRare', abilities:['highJump'], sell:120 },
   { id:'bear',    name:'Bear',      emoji:'🐻', rarity:'superRare', abilities:['speed2'], sell:120 },
   { id:'peacock', name:'Peacock',   emoji:'🦚', rarity:'superRare', abilities:['glide','speed1'], sell:120 },
@@ -109,6 +114,7 @@ const CREATURES = [
   { id:'elephant',name:'Elephant',  emoji:'🐘', rarity:'legendary', abilities:['platform'], sell:200 },
   { id:'giraffe', name:'Giraffe',   emoji:'🦒', rarity:'legendary', abilities:['glideStrong'], sell:200 },
   { id:'monkey',  name:'Monkey',    emoji:'🐵', rarity:'legendary', abilities:['banana'], group:'troll', sell:200 },
+  { id:'clown',   name:'Clown',     emoji:'🤡', rarity:'legendary', abilities:['honk','doubleJump'], group:'troll', sell:200 },
   { id:'panda',   name:'Panda',     emoji:'🐼', rarity:'legendary', abilities:['autoshield','speed1'], sell:200 },
   { id:'rhino',   name:'Rhino',     emoji:'🦏', rarity:'legendary', abilities:['speed2'], sell:200 },
   { id:'gorilla', name:'Gorilla',   emoji:'🦍', rarity:'legendary', abilities:['speed2','highJump'], sell:200 },
@@ -270,6 +276,7 @@ const PET_FAVS = { lion:'biscuit', cat:'strawberry', mouse:'cheese', hamster:'ch
   hyena:'corn', puppy:'biscuit', bee:'honey', otter:'berry', koala:'apple', kangaroo:'carrot', bear:'honey',
   panda:'corn', rhino:'apple', swan:'berry', narwhal:'strawberry', dino:'corn', starlight:'honey',
   thunderbird:'berry', mecha:'biscuit', wizard:'honey', vampire:'strawberry',
+  mrswap:'cheese', clown:'banana', chicken:'corn',
   fishy:'corn', piglet:'apple', snail:'berry', parrot:'banana', flamingo:'strawberry', dolphin:'cheese',
   shark:'cheese', owl:'berry', croc:'corn', trex:'biscuit', sloth:'honey', mermaid:'strawberry',
   jellyfish:'berry', ninja:'biscuit', chrono:'apple', magnetron:'cheese', frostfairy:'strawberry' };
@@ -425,10 +432,32 @@ const CHESTS = {
     weights:{ basic:38, rare:34, superRare:18, legendary:7,  mythical:2.5,secret:0.5 } },
   legendary: { label:'Legendary Chest', cost:350, emoji:'🏆',
     weights:{ basic:0, rare:0, superRare:0, legendary:62, mythical:30, secret:8 } },
+  // top-secret contents — don't spoil the surprise in the UI!
+  mystery:   { label:'Gold Exclusive Chest', cost:10000, emoji:'👑', exclusive:true, mystery:true },
   // exclusive fixed-reward vault — guarantees a bundle (no random roll)
   gold:      { label:'Gold Vault', cost:10000, emoji:'🌟', exclusive:true,
     grants:{ pet:'unicorn', trail:'royal', skin:'rainbow' } },
 };
+
+/* the Gold Exclusive Chest: contents are a surprise — 1 random SECRET pet,
+   1 random MYTHICAL pet and 1 random TROLL pet. The shop must never say so! */
+function openMysteryChest(){
+  const chest=CHESTS.mystery;
+  if(SAVE.coins < chest.cost) return {error:'Not enough coins'};
+  SAVE.coins -= chest.cost;
+  const pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+  const three=[ pick(creaturesOfRarity('secret')),
+                pick(creaturesOfRarity('mythical')),
+                pick(CREATURES.filter(c=>c.group==='troll')) ];
+  const out=[];
+  for(const c of three){
+    const had=SAVE.pets[c.id]||0; SAVE.pets[c.id]=had+1;
+    out.push({creature:c, isNew:had===0, count:SAVE.pets[c.id]});
+  }
+  if(!SAVE.equippedPet) SAVE.equippedPet=three[0].id;
+  persist();
+  return { pets:out };
+}
 
 /* open the exclusive Gold Vault: a guaranteed bundle, repeatable */
 function openGoldVault(){
@@ -609,7 +638,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','blackhole','goldrush','herotime','eruption','miracle','cloudjump','hop'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','blackhole','goldrush','herotime','eruption','miracle','swap','honk','eggsplat','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)

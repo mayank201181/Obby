@@ -85,6 +85,9 @@ const POWER_META = {
   herotime:  {emoji:'🦸', label:'HERO',   cd:11000},  // Super Blob — 6s invincible + infinite jumps
   eruption:  {emoji:'🌋', label:'ERUPT',  cd:6000},   // Volcano — ring of fireballs in every direction
   miracle:   {emoji:'👼', label:'HALO',   cd:14000},  // Angel — 8s invincible feather-float
+  swap:      {emoji:'🥸', label:'SWAP',   cd:7000},   // Mr. Swap — switch places with the nearest friend
+  honk:      {emoji:'🤡', label:'HONK',   cd:8000},   // Clown — reverse nearby friends' controls 4s
+  eggsplat:  {emoji:'🥚', label:'EGGS',   cd:4000},   // Chicken — throw 3 stunning eggs
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
   phase:     {emoji:'👻', label:'PHASE',  cd:9000},
   vanish:    {emoji:'👻', label:'HIDE',   cd:9000},   // Ghost — 6s invisible + 3s cooldown after it ends
@@ -281,6 +284,7 @@ function loadLevel(level){
   Game.slowWorldUntil=0; Game.slowMoveUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
   Game.decoy=null; Game.posTrail=[]; Game.trailT=0;   // Ninja decoy + Chrono rewind history
   Game.heroUntil=0;                                    // Super Blob hero-time timer
+  Game.confuseUntil=0;                                 // Clown honk (reversed controls) timer
   Game.morphMoveMul=1; Game.morphJumpMul=1; Game.morphFly=false;
   Game.faceMorph=null; Game.accMorph=null; Game.morphRound=false;
   Game.deaths=0; Game.runStartT=Game.t; Game.runCoins=0;
@@ -365,6 +369,7 @@ function readInput(){
   if(i.btnL) dir-=1;                 // on-screen left arrow held
   if(i.btnR) dir+=1;                 // on-screen right arrow held
   if(i.joyX) dir=i.joyX;             // explicit override (tests)
+  if(Game.t < (Game.confuseUntil||0)) dir=-dir;   // 🤡 a Clown honked you — controls reversed!
   return Math.max(-1,Math.min(1,dir));
 }
 
@@ -635,6 +640,35 @@ function usePower(power){
       Game.floatUntil = Math.max(Game.floatUntil||0, Game.t+8000);
       for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🪽', x:p.x+p.w/2+(Math.random()*50-25), y:p.y+p.h/2+(Math.random()*40-20), vx:0, vy:-0.5, life:1.2, born:Game.t});
       SFX.checkpoint(); if(typeof toast==='function') toast('👼 MIRACLE — untouchable for 8 seconds!'); break;
+    }
+    case 'swap': {                                        // 🥸 Mr. Swap — switcheroo with the nearest friend
+      let best=null, bd=1e9;
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        const d=Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2));
+        if(d<bd){ bd=d; best=r; } } }
+      if(!best || bd>600){ Game.powerCdUntil=Game.t+400;
+        if(typeof toast==='function') toast('🥸 Get closer to a friend to swap places!'); return; }
+      const myX=Math.round(p.x), myY=Math.round(p.y);
+      if(typeof mpSendSwap==='function') mpSendSwap(best.id, myX, myY);
+      p.x=best.x; p.y=best.y; p.vx=0; p.vy=0; p.invuln=Math.max(p.invuln,600);
+      for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'🌀', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h/2+(Math.random()*30-15), vx:0, vy:-0.4, life:1, born:Game.t});
+      SFX.jump(); if(typeof toast==='function') toast('🥸 SWITCHEROO!'); break;
+    }
+    case 'honk': {                                        // 🤡 Clown — reverse nearby friends' controls
+      let honked=0;
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<420){
+          if(typeof mpSendConfuse==='function') mpSendConfuse(r.id); honked++; } } }
+      for(let i=0;i<10;i++){ const an=i/10*Math.PI*2;
+        Game.abilityFx.push({kind:'emoji', e:'🤡', x:p.x+p.w/2, y:p.y+p.h/2, vx:Math.cos(an)*3, vy:Math.sin(an)*2-1, life:1, born:Game.t}); }
+      addShake(4); SFX.hit();
+      if(typeof toast==='function') toast(honked?('🤡 HONK! '+honked+' friend'+(honked===1?'':'s')+' got reversed controls!'):'🤡 HOOOONK!'); break;
+    }
+    case 'eggsplat': {                                    // 🐔 Chicken — 3 stunning eggs in a spread
+      for(let i=0;i<3;i++){
+        Game.bananas.push({ x:p.x+p.w/2, y:p.y+p.h/2, vx:p.facing*(7+i*1.6), vy:-5-i*1.2, r:10, born:Game.t+i*60, e:'🥚' });
+      }
+      SFX.jump(); if(typeof toast==='function') toast('🐔 Bok bok! EGGS AWAY!'); break;
     }
     case 'nightswarm': {                                  // 🦇 Vampire Bat — bats stun every friend near you for 5s
       if(Game.multiplayer){
@@ -1050,7 +1084,7 @@ function updateBananas(){
 function drawBananas(ctx){
   ctx.font='20px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
   for(const b of Game.bananas){
-    ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(Game.t/90 + b.x); ctx.fillText('🍌',0,0); ctx.restore();
+    ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(Game.t/90 + b.x); ctx.fillText(b.e||'🍌',0,0); ctx.restore();
   }
 }
 function bossReward(floorNo){
@@ -1712,6 +1746,19 @@ function onSlowedNet(){
   const p=Game.player;
   if(p) for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'⏳', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h/2+(Math.random()*30-15), vx:0, vy:-0.5, life:1, born:Game.t});
   SFX.hit(); if(typeof toast==='function') toast('⏳ A Wizard slowed you down!');
+}
+/* a Mr. Swap switcherooed me to their old spot */
+function onSwappedNet(x, y){
+  const p=Game.player; if(!p || !Game.running) return;
+  p.x=x; p.y=y; p.vx=0; p.vy=0; p.invuln=Math.max(p.invuln,600);
+  for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'🌀', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h/2+(Math.random()*30-15), vx:0, vy:-0.4, life:1, born:Game.t});
+  addShake(4); SFX.hit(); if(typeof toast==='function') toast('🥸 SWITCHEROO! You got swapped!');
+}
+/* a Clown honked me — controls reversed for 4 seconds */
+function onConfusedNet(){
+  if(!Game.running) return;
+  Game.confuseUntil = Game.t + 4000;
+  SFX.hit(); if(typeof toast==='function') toast('🤡 HONK! Your controls are REVERSED for 4s!');
 }
 /* a Yeti froze me solid */
 function onFreezeNet(){

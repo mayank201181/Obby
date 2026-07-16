@@ -1355,6 +1355,14 @@ function oddsLine(weights){
 function renderChestsTab(body){
   body.innerHTML = Object.keys(CHESTS).map(id=>{
     const c=CHESTS[id]; const can=SAVE.coins>=c.cost;
+    if(c.mystery){
+      return `<div class="chest-row gold-vault">
+        <div class="chest-ico">${c.emoji}</div>
+        <div class="chest-info"><b>${c.label} <span class="rarity-badge" style="background:#ffd36b;color:#7a5512">EXCLUSIVE</span></b>
+          <div class="muted" style="font-size:11px;line-height:1.4">Top-secret contents… THREE surprises are locked inside. No spoilers! 🤫</div></div>
+        <button class="btn gold small" ${can?'':'disabled'} onclick="doOpenChest('${id}')">🪙${c.cost}</button>
+      </div>`;
+    }
     if(c.exclusive){
       return `<div class="chest-row gold-vault">
         <div class="chest-ico">${c.emoji}</div>
@@ -1373,6 +1381,7 @@ function renderChestsTab(body){
 }
 function doOpenChest(id){
   if(id==='gold'){ doOpenGoldVault(); return; }
+  if(id==='mystery'){ doOpenMysteryChest(); return; }
   const res=openPetChest(id);
   if(res.error){ toast(res.error); return; }
   const rare = ['legendary','mythical','secret'].includes(res.creature.rarity);
@@ -1381,6 +1390,24 @@ function doOpenChest(id){
   checkPetAchievements();
   updateCoinDisplays(); renderPets();
   showPetReveal(res.creature, res.count);
+}
+function doOpenMysteryChest(){
+  const res=openMysteryChest();
+  if(res.error){ toast(res.error); return; }
+  SFX.rare(); unlockAchievement('secret'); checkPetAchievements();
+  updateCoinDisplays(); renderPets();
+  const body=document.getElementById('petModalBody');
+  body.innerHTML=`
+    <div class="muted">👑 ✨ GOLD EXCLUSIVE CHEST ✨ 👑</div>
+    <div class="pet-big" style="--rc:#ffd36b">👑</div>
+    <h2 style="margin:4px 0">SURPRISE!!!</h2>
+    <div class="vault-grid">
+      ${res.pets.map(p=>`<div class="vault-item"><div class="vi-emoji">${p.creature.emoji}</div><b>${p.creature.name}</b>
+        <div class="muted" style="font-size:11px">${RARITY_INFO[p.creature.rarity].label}${p.creature.group==='troll'?' · 😜 Troll':''}${p.isNew?' · <b style=\'color:#46c98c\'>NEW!</b>':''}</div></div>`).join('')}
+    </div>
+    <p class="hint">Equip them in the Pets tab! 🎉</p>
+    <button class="btn pink" onclick="closeModal('petModal')">AWESOME!</button>`;
+  openModal('petModal');
 }
 function doOpenGoldVault(){
   const res=openGoldVault();
