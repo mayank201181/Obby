@@ -396,7 +396,7 @@ function renderPickShop(){
   const rows=PICKAXES.map(p=>{
     const owned=(SAVE.ownedPicks||['wood']).includes(p.id);
     const equipped=SAVE.pickaxe===p.id;
-    const taps=Math.ceil(20/p.power);  // taps to break the deepest block (Starrock, 20 HP)
+    const taps=Math.max(Math.ceil(20/p.power), 4);  // deepest block (Starrock): 20 HP AND a 4-tap minimum
     const sw=p.col==='rainbow'
       ? 'background:linear-gradient(90deg,#ff6b6b,#ffd36b,#7be0b0,#74a8ff,#c8a0ff)'
       : p.col==='galaxy'

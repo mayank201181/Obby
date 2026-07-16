@@ -2611,12 +2611,12 @@ const DIG_TIERS = [
   {name:'Stone',   taps:5,  col:'#6f757f', top:'#848b96', coin:[5,9],    gem:0.09, pet:0.02,  secret:0.001},
   {name:'Rock',    taps:6,  col:'#565c68', top:'#6a7180', coin:[8,14],   gem:0.11, pet:0.03,  secret:0.002},
   {name:'Deeprock',taps:8,  col:'#3c3550', top:'#4d4468', coin:[12,22],  gem:0.13, pet:0.045, secret:0.004},
-  {name:'Crystal', taps:10, col:'#1f4e5e', top:'#2f7085', coin:[18,30],  gem:0.16, pet:0.055, secret:0.006},
-  {name:'Magma',   taps:12, col:'#6e2b1a', top:'#914022', coin:[26,42],  gem:0.19, pet:0.065, secret:0.008},
-  {name:'Obsidian',taps:14, col:'#241a2e', top:'#382747', coin:[36,58],  gem:0.22, pet:0.075, secret:0.011},
-  {name:'Frostium',taps:16, col:'#27496e', top:'#356a99', coin:[48,76],  gem:0.25, pet:0.085, secret:0.014},
-  {name:'Voidrock',taps:18, col:'#161226', top:'#262045', coin:[64,100], gem:0.28, pet:0.095, secret:0.018},
-  {name:'Starrock',taps:20, col:'#2c1a4d', top:'#432a70', coin:[85,130], gem:0.32, pet:0.105, secret:0.024},
+  {name:'Crystal', taps:10, minTaps:2, col:'#1f4e5e', top:'#2f7085', coin:[18,30],  gem:0.16, pet:0.055, secret:0.006},
+  {name:'Magma',   taps:12, minTaps:2, col:'#6e2b1a', top:'#914022', coin:[26,42],  gem:0.19, pet:0.065, secret:0.008},
+  {name:'Obsidian',taps:14, minTaps:3, col:'#241a2e', top:'#382747', coin:[36,58],  gem:0.22, pet:0.075, secret:0.011},
+  {name:'Frostium',taps:16, minTaps:3, col:'#27496e', top:'#356a99', coin:[48,76],  gem:0.25, pet:0.085, secret:0.014},
+  {name:'Voidrock',taps:18, minTaps:3, col:'#161226', top:'#262045', coin:[64,100], gem:0.28, pet:0.095, secret:0.018},
+  {name:'Starrock',taps:20, minTaps:4, col:'#2c1a4d', top:'#432a70', coin:[85,130], gem:0.32, pet:0.105, secret:0.024},
 ];
 // below the last tier the rock stays Starrock-rich, but the colours keep on
 // changing forever so the deep mine never looks samey
@@ -2642,8 +2642,8 @@ function digGenRow(dg, r){
     let loot=null; const roll=rnd();
     if(r>=2 && roll < tier.secret){ loot={kind:'secret'}; }
     else if(r>=2 && roll < tier.pet){ loot={kind:'pet'}; }
-    else if(roll < tier.gem){ loot={kind:'gem', val: tier.coin[1]*3}; }
-    else if(rnd() < 0.55){ const lo=tier.coin[0], hi=tier.coin[1]; loot={kind:'coin', val: lo+Math.floor(rnd()*(hi-lo+1))}; }
+    else if(roll < tier.gem){ loot={kind:'gem', val:100}; }                    // 💎 a diamond = 100 coins
+    else if(rnd() < 0.55){ loot={kind:'coin', val:50}; }                        // 🪙 a coin block = 50 coins
     row.push({ mat:tier, hp:tier.taps, max:tier.taps, loot });
   }
   dg.rows[r]=row; if(r>dg.builtTo) dg.builtTo=r;
@@ -2771,7 +2771,10 @@ function digTap(sx, sy){
   if(r<0||c<0||c>=dg.cols) return;
   digGenRow(dg, r);
   const cell=dg.rows[r][c]; if(!cell) return;
-  cell.hp -= digPickPower();
+  // deep rock fights back: even a top pickaxe can't break a block in fewer
+  // than its tier's minTaps hits (shallow tiers have no minimum — one-tap!)
+  const capDmg = Math.ceil(cell.max / (cell.mat.minTaps||1));
+  cell.hp -= Math.min(digPickPower(), capDmg);
   for(let i=0;i<5;i++) dg.fx.push({x:digCellCX(dg,c)+(Math.random()*20-10), y:digCellWY(dg,r), vx:(Math.random()*2-1)*2.4, vy:-Math.random()*3-1, life:1, col:cell.mat.top});
   if(SFX && SFX.click) SFX.click();
   if(cell.hp<=0){

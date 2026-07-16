@@ -432,7 +432,7 @@ const CHESTS = {
     trollChance:0.02,   // a very small bonus chance to pop a 😜 troll pet
     weights:{ basic:38, rare:34, superRare:18, legendary:7,  mythical:2.5,secret:0.5 } },
   legendary: { label:'Legendary Chest', cost:350, emoji:'🏆',
-    trollChance:0.06,   // a bit higher troll chance than the Rare Chest
+    trollChance:0.10,   // a bit higher troll chance than the Rare Chest
     weights:{ basic:0, rare:0, superRare:0, legendary:62, mythical:30, secret:8 } },
   // top-secret contents — don't spoil the surprise in the UI!
   mystery:   { label:'Gold Exclusive Chest', cost:10000, emoji:'👑', exclusive:true, mystery:true },

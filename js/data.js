@@ -12,8 +12,8 @@ const PICKAXES = [
   { id:'diamond',  name:'Diamond Pickaxe',  power:5,  cost:1200,  rarity:'Epic',      col:'#7de3ff', desc:'Digs 5× per tap. Slices through rock!' },
   { id:'ruby',     name:'Ruby Pickaxe',     power:6,  cost:2000,  rarity:'Epic',      col:'#ff5c74', desc:'Digs 6× per tap. Melts Deeprock fast.' },
   { id:'rainbow',  name:'Rainbow Pickaxe',  power:8,  cost:3000,  rarity:'LEGENDARY', col:'rainbow', desc:'One-taps everything down to Deeprock!' },
-  { id:'obsidian', name:'Obsidian Pickaxe', power:12, cost:6000,  rarity:'MYTHICAL',  col:'#3a2b4d', desc:'Digs 12× per tap. Built for the deep dark.' },
-  { id:'galaxy',   name:'Galaxy Pickaxe',   power:20, cost:12000, rarity:'SECRET',    col:'galaxy',  desc:'Breaks ANY block — even Starrock — in ONE tap!' },
+  { id:'obsidian', name:'Obsidian Pickaxe', power:12, cost:6000,  rarity:'MYTHICAL',  col:'#3a2b4d', desc:'Digs 12× per tap. Built for the deep dark (4 taps on Starrock).' },
+  { id:'galaxy',   name:'Galaxy Pickaxe',   power:20, cost:12000, rarity:'SECRET',    col:'galaxy',  desc:'One-taps easy rock — even the deepest Starrock cracks in just 4 taps!' },
 ];
 const pickaxeById = id => PICKAXES.find(p=>p.id===id) || PICKAXES[0];
 
