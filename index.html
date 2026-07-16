@@ -154,6 +154,9 @@
     <div class="grid scroll" id="cafePantry" style="max-height:24vh"></div>
 
     <h3 style="margin:14px 0 4px">🐾 Tap a pet to feed</h3>
+    <input id="cafeSearch" type="text" placeholder="🔍 Search pets… (type u for Unicorn!)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:2px solid rgba(155,107,255,.35);background:rgba(255,255,255,.08);color:inherit;font:inherit;font-size:14px;margin-bottom:6px;outline:none"
+      oninput="cafeSearchChange(this.value)">
     <div class="scroll" id="cafePets" style="max-height:32vh"></div>
     <button class="btn pink" id="feedBtn" onclick="doFeed()">🍽️ Feed <span id="feedPetName">a pet</span></button>
   </div>

@@ -1031,8 +1031,11 @@ function openPlayground(){
   for(const id in (SAVE.diamonds||{})) if(SAVE.diamonds[id]>0 && !ids.includes(id)) ids.push(id);
   document.getElementById('playgroundHint').textContent = ids.length
     ? 'Tap your pets to play with them! 🐾' : 'Get pets from chests — then play with them here!';
-  const pets = ids.slice(0,12).map(id=>{ const c=creatureById(id);
-    return { id, emoji:c?c.emoji:'🐾', shiny:isShiny(id),
+  // EVERY pet you own comes to the playground — they just get a bit smaller
+  // when the whole gang shows up so everyone fits
+  const petSize = ids.length>60?18 : ids.length>30?22 : ids.length>15?26 : 30;
+  const pets = ids.map(id=>{ const c=creatureById(id);
+    return { id, emoji:c?c.emoji:'🐾', shiny:isShiny(id), dia:isDiamond(id),
       x:24+Math.random()*(W-48), y:60+Math.random()*(H-110),
       vx:(Math.random()<0.5?-1:1)*(0.4+Math.random()*0.6), t:Math.random()*6.28, hop:0 }; });
   const hearts=[];
@@ -1055,9 +1058,11 @@ function openPlayground(){
       p.x+=p.vx; if(p.x<18||p.x>W-18) p.vx*=-1; p.x=Math.max(18,Math.min(W-18,p.x));
       p.t+=0.045; const bob=Math.sin(p.t)*3 - (p.hop>0? Math.sin((1-p.hop)*Math.PI)*16 : 0);
       if(p.hop>0) p.hop-=0.04;
-      if(p.shiny){ ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,210,90,.85)';
-        ctx.beginPath(); ctx.arc(p.x,p.y+bob,21,0,6.283); ctx.fill(); ctx.globalAlpha=1; }
-      ctx.font='30px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      if(p.dia){ ctx.globalAlpha=0.55; ctx.fillStyle='rgba(130,220,255,.9)';
+        ctx.beginPath(); ctx.arc(p.x,p.y+bob,petSize*0.72,0,6.283); ctx.fill(); ctx.globalAlpha=1; }
+      else if(p.shiny){ ctx.globalAlpha=0.5; ctx.fillStyle='rgba(255,210,90,.85)';
+        ctx.beginPath(); ctx.arc(p.x,p.y+bob,petSize*0.72,0,6.283); ctx.fill(); ctx.globalAlpha=1; }
+      ctx.font=petSize+'px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(p.emoji, p.x, p.y+bob);
     }
     for(let i=hearts.length-1;i>=0;i--){ const h=hearts[i]; h.y-=1.2; h.life-=0.02;
@@ -1070,8 +1075,12 @@ function openPlayground(){
 function closePlayground(){ cancelAnimationFrame(playgroundRaf); showScreen('lobbyScreen'); initLobby(); }
 
 /* ---------------- Pet Café (feeding) ---------------- */
-let mealTray=[], feedPetId=null;
-function openCafe(){ ensurePetFeed(); mealTray=[]; feedPetId=null; showScreen('cafeScreen'); renderCafe(); }
+let mealTray=[], feedPetId=null, cafeSearch='';
+function openCafe(){ ensurePetFeed(); mealTray=[]; feedPetId=null; cafeSearch='';
+  const si=document.getElementById('cafeSearch'); if(si) si.value='';
+  showScreen('cafeScreen'); renderCafe(); }
+/* live search: typing "u" instantly shows every pet whose name starts with U */
+function cafeSearchChange(v){ cafeSearch=(v||'').trim().toLowerCase(); renderCafe(); }
 function selectFeedPet(id){ feedPetId=id; SFX.click(); renderCafe(); }
 function fmtHunger(ms){
   if(ms<=0) return 'Hungry now!';
@@ -1099,7 +1108,15 @@ function renderCafe(){
   // default the feed target to the equipped pet (or the first owned)
   if(!feedPetId || !ownedPets.some(c=>c.id===feedPetId))
     feedPetId = (SAVE.equippedPet && ownedPets.some(c=>c.id===SAVE.equippedPet)) ? SAVE.equippedPet : (ownedPets[0]&&ownedPets[0].id) || null;
-  document.getElementById('cafePets').innerHTML = ownedPets.map(c=>{
+  // search filter: names STARTING with what you typed come first ("u" -> Unicorn),
+  // then any names that merely contain it — no need to type the whole name
+  let shownPets=ownedPets;
+  if(cafeSearch){
+    const starts=ownedPets.filter(c=>c.name.toLowerCase().startsWith(cafeSearch));
+    const contains=ownedPets.filter(c=>!c.name.toLowerCase().startsWith(cafeSearch) && c.name.toLowerCase().includes(cafeSearch));
+    shownPets=starts.concat(contains);
+  }
+  document.getElementById('cafePets').innerHTML = shownPets.map(c=>{
     const full=Math.max(0,petFullnessMs(c.id));
     const hung=petHungerPct(c.id), happy=petHappiness(c.id), sad=petIsSad(c.id);
     const hungry = petFedState(c.id)==='hungry';
@@ -1114,7 +1131,8 @@ function renderCafe(){
         <div class="meter-row"><span class="meter-lab">${sad?'😢':'💜'}</span><div class="qbar"><div class="qfill" style="width:${happy}%;background:linear-gradient(90deg,#c8a0ff,#9b6bff)"></div></div></div>
         <div class="muted" style="font-size:11px">${fmtHunger(full)} · loves ${foodById(petFav(c.id)).emoji}</div></div>
     </div>`;
-  }).join('') || '<p class="hint">Collect pets from chests first!</p>';
+  }).join('') || (cafeSearch ? '<p class="hint">No pets match \u201c'+cafeSearch+'\u201d \u2014 try fewer letters!</p>'
+                             : '<p class="hint">Collect pets from chests first!</p>');
   const fp=feedPetId?creatureById(feedPetId):null;
   document.getElementById('feedPetName').textContent = fp ? (fp.emoji+' '+fp.name) : 'a pet';
 }
