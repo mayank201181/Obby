@@ -76,7 +76,7 @@ const POWER_META = {
   rocket:    {emoji:'🚀', label:'ROCKET', cd:5000},   // Mecha-Blob — blast sky-high with a hover landing
   slowtime:  {emoji:'⏳', label:'SLOW',   cd:8000},   // Wizard — 5s slow-motion for everyone else + 3s cooldown after
   nightswarm:{emoji:'🦇', label:'BATS',   cd:8000},   // Vampire Bat — 5s stun on friends + 3s cooldown after it ends
-  shadowdash:{emoji:'🥷', label:'SNEAK',  cd:6000},   // Ninja — decoy + invisibility + speed burst
+  shadowdash:{emoji:'🥷', label:'SNEAK',  cd:5000},   // Ninja — decoy + invisibility + speed burst (💎 diamond: 3s)
   rewind:    {emoji:'⏰', label:'REWIND', cd:5000},   // Chrono — snap back to 3 seconds ago
   coinstorm: {emoji:'🧲', label:'MAGNET', cd:6000},   // Magnetron — vacuum every coin near you
   icebridge: {emoji:'❄️', label:'BRIDGE', cd:5000},   // Frost Fairy — conjure an ice bridge ahead
@@ -515,8 +515,9 @@ function usePower(power){
   const meta=POWER_META[power]; if(!meta) return;
   if(Game.t < Game.powerCdUntil) return;                 // still cooling down
   const p=Game.player; if(!p) return;
-  // 💎 diamond pets recharge their power 1 second faster
-  const diaCut = (typeof isDiamond==='function' && SAVE.equippedPet && isDiamond(SAVE.equippedPet)) ? 1000 : 0;
+  // 💎 diamond pets recharge their power 1 second faster (diamond Ninja: 2s faster, 5s → 3s)
+  const isDia = typeof isDiamond==='function' && SAVE.equippedPet && isDiamond(SAVE.equippedPet);
+  const diaCut = isDia ? (power==='shadowdash' ? 2000 : 1000) : 0;
   Game.powerCdUntil = Game.t + Math.max(500, meta.cd - diaCut);
   switch(power){
     case 'teleport': {                                    // 🌈 blink forward through walls
