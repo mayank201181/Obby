@@ -571,7 +571,7 @@ function usePower(power){
     }
     case 'shadowdash': {                                  // 🥷 Ninja — decoy + invisibility + burst of speed
       Game.decoy = {x:p.x, y:p.y, facing:p.facing, until:Game.t+4000};
-      Game.invisUntil = Math.max(Game.invisUntil||0, Game.t+2500);   // friends see only the decoy
+      Game.invisUntil = Math.max(Game.invisUntil||0, Game.t+4000);   // invisible the WHOLE time the clone stands — friends only ever see the decoy
       p.vx = p.facing*16; Game.power.dashUntil = Math.max(Game.power.dashUntil||0, Game.t+800);
       for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'💨', x:p.x+p.w/2+(Math.random()*26-13), y:p.y+p.h/2+(Math.random()*26-13), vx:-p.facing*1.5, vy:-0.3, life:1, born:Game.t});
       SFX.jump(); if(typeof toast==='function') toast('🥷 Shadow Dash — they\'re chasing your decoy!'); break;

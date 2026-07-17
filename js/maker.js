@@ -47,7 +47,7 @@ function initMaker(){
     Game.world.start={x:MAKER.ZONE_L.x0+80, y:MAKER.FLOOR_TOP-40};
     toast('▶ '+(sv.name||'Your obby')+' — reach a 🏁 to finish!');
   } else {
-    toast(mp ? '🛠️ BUILD! Your friend has the zone next door →'
+    toast(mp ? '🛠️ BUILD! Your friend is next door — you can add blocks on their side too!'
              : '🛠️ BUILD your obby! Tap a piece, then tap the world.');
   }
   renderMakerBar(); renderMakerActs();
@@ -131,19 +131,19 @@ function makerTap(sx,sy){
   if(M.mode!=='build') return true;         // no editing while testing
   const s=gameScale();
   const x=(sx-Game.W/2)/s + Game.cam.x, y=(sy-Game.H/2)/s + Game.cam.y;
-  // once combined it's ONE big obby — build anywhere on the whole map
-  const bx0 = M.combined ? 40 : M.zMe.x0, bx1 = M.combined ? MAKER.W-40 : M.zMe.x1;
-  if(!(x>=bx0 && x<=bx1) || y>MAKER.FLOOR_TOP || y<40){ toast(M.combined?'Build on the map!':'Build inside YOUR zone!'); return true; }
+  // build ANYWHERE on the map — your zone, the middle gap, or your friend's side
+  if(!(x>=40 && x<=MAKER.W-40) || y>MAKER.FLOOR_TOP || y<40){ toast('Build on the map!'); return true; }
   const g=MAKER.GRID, gx=Math.floor(x/g)*g, gy=Math.floor(y/g)*g;
   // platforms are thin (18px) — treat every piece as at least a grid cell tall
-  // so tapping just under one still counts (much easier to erase).
-  // After combining you can edit EVERY piece, even your friend's.
-  const here=M.pieces.find(p=>(M.combined || p.mine) && x>=p.x && x<=p.x+Math.max((p.ref&&p.ref.w)||g, g) && y>=p.y && y<=p.y+Math.max((p.ref&&p.ref.h)||g, g));
+  // so tapping just under one still counts (much easier to erase)
+  const hit=p=> x>=p.x && x<=p.x+Math.max((p.ref&&p.ref.w)||g, g) && y>=p.y && y<=p.y+Math.max((p.ref&&p.ref.h)||g, g);
   if(M.sel==='erase'){
+    // you can erase YOUR pieces; once combined, anyone's
+    const here=M.pieces.find(p=>(M.combined || p.mine) && hit(p));
     if(here){ makerRemove(M,here); makerSend({a:'rm', k:here.k, x:here.x, y:here.y}); SFX.click(); }
     return true;
   }
-  if(here) return true;                     // one piece per spot
+  if(M.pieces.some(hit)) return true;       // one piece per spot (yours OR your friend's)
   const w = MAKER_STRETCHY[M.sel] ? M.len : 0;
   const pc=makerPlace(M, {k:M.sel, x:gx, y:gy, col:M.color, w, mine:true});
   if(pc){ makerSend({a:'add', k:pc.k, x:pc.x, y:pc.y, col:pc.col, dir:pc.dir, w:pc.w}); SFX.click(); }
@@ -207,10 +207,17 @@ function makerDoCombine(){
 function makerCombine(M, fromNet){
   if(M.combined) return;
   M.combined=true; M.mode='test';
+  // auto-bridge the gap between the two zones with a golden platform so the
+  // course reads as ONE big obby, not two. Both players run this with the
+  // same coords, so no network message is needed — and it saves like any piece.
+  const bx = Math.round((MAKER.ZONE_L.x1+MAKER.ZONE_R.x0)/2/MAKER.GRID)*MAKER.GRID - 120, by = 440;
+  if(!M.pieces.some(p=>p.x>=bx-80 && p.x<=bx+260 && p.y>=by-60 && p.y<=by+60))
+    makerPlace(M, {k:'brick', x:bx, y:by, w:240, col:'#ffe177', mine:true}, true);
+  for(let i=0;i<10;i++) M.fx.push({e:'✨', x:bx+12+i*24, y:by-8-(i%3)*10, vy:-0.5, life:1.3});
   Game.world.start={x:MAKER.ZONE_L.x0+80, y:MAKER.FLOOR_TOP-40};
   makerRespawn();
   addShake(5); SFX.rare();
-  toast('🔗 OBBYS COMBINED! One giant course — press 🔨 to bridge them together!');
+  toast('🔗 OBBYS COMBINED! A golden bridge joins them — press 🔨 to keep building!');
   renderMakerBar(); renderMakerActs();
 }
 function makerRespawn(){
