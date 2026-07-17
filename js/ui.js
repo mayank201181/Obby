@@ -674,7 +674,7 @@ const ROOM_MODE_DESC = {
   disaster:'🌪️ Disaster: build for 5s, then everyone survives the same disaster together! (2+ players may get a Killer round)',
   tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
   heist:   '💰 Gold Heist: everyone grabs gold in the same arena for 20s — most gold wins!',
-  clash:   '🏰 Area Clash (1v1): both build a castle & hide a ball, then raid each other — steal their 🏀 and carry it home to win 🪙500! Pick a build time below.',
+  clash:   '🏰 Area Clash (1v1): both build a castle & hide a ball, then raid each other — steal their 🏀 and carry it home to win 🪙200! Pick a build time below.',
 };
 let pendingClashMins=1;
 function selectClashMins(m){

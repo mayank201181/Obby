@@ -7,7 +7,7 @@
 
    BATTLE PHASE: no more building! Cross the middle, smash enemy bricks with
    your sword (2 hits) or pay 🪙10 to breach one instantly, dodge cannons &
-   traps, grab their ball (Pick up) and carry it home (Put down) to WIN 🪙500.
+   traps, grab their ball (Pick up) and carry it home (Put down) to WIN 🪙200.
    If the owner tags the carrier, the ball flies back to its hiding spot.
 
    Multiplayer: host = LEFT castle, friend = RIGHT castle. Builds, damage,
@@ -16,7 +16,7 @@
 const CLASH = {
   GRID:40, FLOOR_TOP:516, W:2200,
   ZONE_L:{x0:40, x1:840}, ZONE_R:{x0:1360, x1:2160},
-  COST:10, WIN_COINS:500,
+  COST:10, WIN_COINS:200,
   BOT_SPEED:2.6, BOT_JUMP:-13,
 };
 
