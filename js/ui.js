@@ -296,6 +296,34 @@ function startSoloLevel(level){
   startMusicIfOn('game');
 }
 
+/* ---------------- Obby Maker ---------------- */
+function startMakerSolo(makerLoad){
+  SFX.click(); closeModal('winModal');
+  Game.multiplayer=false; Game.daily=false;
+  Game.onLevelComplete=onLevelComplete;
+  Game.onExit=()=>{ showScreen('lobbyScreen'); initLobby(); };
+  startGame({mode:'maker', makerLoad, seed:Math.floor(Math.random()*1e6), multiplayer:false, difficulty:'easy'});
+  startMusicIfOn('game');
+}
+function openMyObbys(){ SFX.click(); showScreen('myObbysScreen'); renderMyObbys(); updateCoinDisplays(); }
+function renderMyObbys(){
+  const body=document.getElementById('myObbysBody'); if(!body) return;
+  const list=SAVE.myObbys||[];
+  body.innerHTML = list.length ? list.map((o,i)=>`<div class="chest-row">
+      <div class="chest-ico">🛠️</div>
+      <div class="chest-info"><b>${escapeHtml(o.name||('Obby #'+(i+1)))}</b>
+        <div class="muted" style="font-size:11px">${o.with?('made with '+escapeHtml(o.with)+' 🧑‍🤝‍🧑 · '):''}${(o.pieces||[]).length} pieces</div></div>
+      <button class="btn pink small" onclick="startMakerSolo(${i})">▶ Play</button>
+      <button class="btn ghost small" onclick="deleteMyObby(${i})">🗑️</button>
+    </div>`).join('')
+    : '<p class="hint">No saved obbys yet — build one in 🛠️ Obby Maker and press 💾 Save!</p>';
+}
+function deleteMyObby(i){
+  if(!SAVE.myObbys || !SAVE.myObbys[i]) return;
+  SAVE.myObbys.splice(i,1); persist(); SFX.click(); toast('🗑️ Deleted');
+  renderMyObbys();
+}
+
 /* ---------------- Area Clash ---------------- */
 function openClashPick(){ SFX.click(); showScreen('clashPickScreen'); updateCoinDisplays(); }
 function startClash(mins){
@@ -675,6 +703,7 @@ const ROOM_MODE_DESC = {
   tower:   '🏗️ Endless Tower: everyone climbs the same endless tower together — see who gets highest!',
   heist:   '💰 Gold Heist: everyone grabs gold in the same arena for 20s — most gold wins!',
   clash:   '🏰 Area Clash (1v1): both build a castle & hide a ball, then raid each other — steal their 🏀 and carry it home to win 🪙200! Pick a build time below.',
+  maker:   '🛠️ Obby Maker (2 players): you each build an obby in zones next door — movers, pushers, spikes, shooters & more. Test each other\'s, then COMBINE them into one giant course and 💾 save it!',
 };
 let pendingClashMins=1;
 function selectClashMins(m){
@@ -785,6 +814,10 @@ function hostStart(){
   if(pendingRoomMode==='clash'){
     if(mpPlayerCount()!==2){ toast('🏰 Area Clash is 1v1 — you need exactly 2 players!'); return; }
     cfg.difficulty='easy'; cfg.buildMs=pendingClashMins*60000;
+  }
+  if(pendingRoomMode==='maker'){
+    if(mpPlayerCount()!==2){ toast('🛠️ Obby Maker rooms need exactly 2 players!'); return; }
+    cfg.difficulty='easy';
   }
   mpStart(cfg);
 }

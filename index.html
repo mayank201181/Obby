@@ -41,6 +41,7 @@
         <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
         <button class="btn ghost" onclick="openPlayground()">🐾 Playground</button>
         <button class="btn ghost" onclick="openCafe()">🍔 Pet Café</button>
+        <button class="btn ghost" onclick="openMyObbys()">🛠️ My Obbys</button>
       </div>
       <div class="lobby-col">
         <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
@@ -69,6 +70,20 @@
       <div class="tab" data-ptab="trade" onclick="setPetsTab('trade')">Trade 🔁</div>
     </div>
     <div class="scroll" id="petsBody"></div>
+  </div>
+</section>
+
+<!-- ============ MY OBBYS ============ -->
+<section class="screen" id="myObbysScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🛠️ My Obbys</h2>
+    <p class="hint">Every obby you saved from the Obby Maker — tap ▶ to play one!</p>
+    <div class="scroll" id="myObbysBody"></div>
+    <button class="btn pink" onclick="startMakerSolo()">➕ Build a new obby</button>
   </div>
 </section>
 
@@ -268,6 +283,7 @@
     <button class="btn gold" onclick="openColorTagPick()">🌈 Colour Tag<br><span style="font-size:12px;font-weight:700">stand on the called colour!</span></button>
     <button class="btn pink" onclick="openRolePick('copsrobbers')">🚓 Cops &amp; Robbers<br><span style="font-size:12px;font-weight:700">rob the bank or catch the robber!</span></button>
     <button class="btn gold" onclick="openClashPick()">🏰 Area Clash<br><span style="font-size:12px;font-weight:700">build a castle, hide your ball &amp; raid theirs!</span></button>
+    <button class="btn blue" onclick="startMakerSolo()">🛠️ Obby Maker<br><span style="font-size:12px;font-weight:700">build your OWN obby &amp; save it!</span></button>
 
     <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
 
@@ -365,6 +381,7 @@
         <button class="btn ghost small" data-mode="mine" onclick="selectRoomMode('mine')">⛏️ Coin Mine</button>
         <button class="btn ghost small" data-mode="heist" onclick="selectRoomMode('heist')">💰 Heist</button>
         <button class="btn ghost small" data-mode="clash" onclick="selectRoomMode('clash')">🏰 Area Clash</button>
+        <button class="btn ghost small" data-mode="maker" onclick="selectRoomMode('maker')">🛠️ Obby Maker</button>
       </div>
       <div class="row" id="clashMinsRow" style="display:none">
         <button class="btn ghost small" data-cmins="1" onclick="selectClashMins(1)">⏱ 1 min</button>
@@ -428,6 +445,8 @@
     </div>
 
     <div class="build-bar" id="clashBar" style="display:none"></div>
+    <div class="build-bar" id="makerBar" style="display:none;flex-wrap:wrap"></div>
+    <div id="makerActs" style="display:none;position:absolute;top:66px;left:50%;transform:translateX(-50%);gap:8px;z-index:5"></div>
     <button class="btn gold" id="clashActBtn" onclick="clashAction()"
       style="display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:132px;width:auto;padding:12px 22px;pointer-events:auto;z-index:5"></button>
     <div class="camo-bar" id="camoBar" style="display:none"></div>
@@ -472,6 +491,7 @@
 <script src="js/controls.js"></script>
 <script src="js/game.js"></script>
 <script src="js/clash.js"></script>
+<script src="js/maker.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

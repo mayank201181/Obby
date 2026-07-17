@@ -240,6 +240,7 @@ function defaultSave(){
     towerBest:0,           // highest floor reached in endless Tower mode
     mineBest:0,            // deepest metres reached in Coin Mine mode
     mineSave:null,         // saved Coin Mine dig (resume your tunnels)
+    myObbys:[],            // obbys built in the Obby Maker (with who you made them with)
     ownedPicks:['wood'],   // pickaxes bought in the Coin Mine pickaxe shop
     pickaxe:'wood',        // equipped pickaxe id (drives digging power)
     towerFloor:0,          // saved Tower progress (resume from this floor)
