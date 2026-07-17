@@ -61,9 +61,10 @@ function onMakerNet(msg){
   const M=Game.makerC; if(!M) return;
   switch(msg.a){
     case 'add': makerPlace(M, {k:msg.k, x:msg.x, y:msg.y, col:msg.col, dir:msg.dir, w:msg.w}, false); break;
-    case 'rm':  { const pc=M.pieces.find(p=>!p.mine && p.x===msg.x && p.y===msg.y && p.k===msg.k); if(pc) makerRemove(M,pc); break; }
+    case 'rm':  { const pc=M.pieces.find(p=>(M.combined || !p.mine) && p.x===msg.x && p.y===msg.y && p.k===msg.k); if(pc) makerRemove(M,pc); break; }
     case 'done': M.foeDone=!!msg.on; renderMakerActs();
-                 toast(msg.on ? '🎉 Your friend finished building — go try their obby!' : '🔨 Your friend is building again…'); break;
+                 toast(msg.on ? (M.combined ? '🎉 Your friend is done building!' : '🎉 Your friend finished building — go try their obby!')
+                              : '🔨 Your friend is building again…'); break;
     case 'combine': makerCombine(M, true); break;
   }
 }
@@ -130,11 +131,14 @@ function makerTap(sx,sy){
   if(M.mode!=='build') return true;         // no editing while testing
   const s=gameScale();
   const x=(sx-Game.W/2)/s + Game.cam.x, y=(sy-Game.H/2)/s + Game.cam.y;
-  if(!(x>=M.zMe.x0 && x<=M.zMe.x1) || y>MAKER.FLOOR_TOP || y<40){ toast('Build inside YOUR zone!'); return true; }
+  // once combined it's ONE big obby — build anywhere on the whole map
+  const bx0 = M.combined ? 40 : M.zMe.x0, bx1 = M.combined ? MAKER.W-40 : M.zMe.x1;
+  if(!(x>=bx0 && x<=bx1) || y>MAKER.FLOOR_TOP || y<40){ toast(M.combined?'Build on the map!':'Build inside YOUR zone!'); return true; }
   const g=MAKER.GRID, gx=Math.floor(x/g)*g, gy=Math.floor(y/g)*g;
   // platforms are thin (18px) — treat every piece as at least a grid cell tall
-  // so tapping just under one still counts (much easier to erase)
-  const here=M.pieces.find(p=>p.mine && x>=p.x && x<=p.x+Math.max((p.ref&&p.ref.w)||g, g) && y>=p.y && y<=p.y+Math.max((p.ref&&p.ref.h)||g, g));
+  // so tapping just under one still counts (much easier to erase).
+  // After combining you can edit EVERY piece, even your friend's.
+  const here=M.pieces.find(p=>(M.combined || p.mine) && x>=p.x && x<=p.x+Math.max((p.ref&&p.ref.w)||g, g) && y>=p.y && y<=p.y+Math.max((p.ref&&p.ref.h)||g, g));
   if(M.sel==='erase'){
     if(here){ makerRemove(M,here); makerSend({a:'rm', k:here.k, x:here.x, y:here.y}); SFX.click(); }
     return true;
@@ -170,7 +174,7 @@ function renderMakerActs(){
   if(M.mode==='build'){
     html += b('✅ Done — test it!','makerDone()');
   } else {
-    if(!M.combined) html += b('🔨 Keep working','makerKeepWorking()','blue');
+    html += b('🔨 Keep working','makerKeepWorking()','blue');
     if(M.mp && M.meDone && M.foeDone && !M.combined) html += b('🔗 Combine obbys!','makerDoCombine()','pink');
     html += b('💾 Save','makerSave()');
   }
@@ -184,7 +188,8 @@ function makerDone(){
   M.mode='test'; M.meDone=true;
   makerSend({a:'done', on:true});
   makerRespawn();
-  toast(M.mp ? '▶ TEST! Try yours — or walk over and try your friend\'s!' : '▶ TEST! Reach a 🏁 to finish!');
+  toast(M.combined ? '▶ TEST the giant obby! Reach a 🏁!'
+      : M.mp ? '▶ TEST! Try yours — or walk over and try your friend\'s!' : '▶ TEST! Reach a 🏁 to finish!');
   SFX.chest(); renderMakerBar(); renderMakerActs();
 }
 function makerKeepWorking(){
@@ -205,7 +210,7 @@ function makerCombine(M, fromNet){
   Game.world.start={x:MAKER.ZONE_L.x0+80, y:MAKER.FLOOR_TOP-40};
   makerRespawn();
   addShake(5); SFX.rare();
-  toast('🔗 OBBYS COMBINED! One giant course — go go go!');
+  toast('🔗 OBBYS COMBINED! One giant course — press 🔨 to bridge them together!');
   renderMakerBar(); renderMakerActs();
 }
 function makerRespawn(){
@@ -286,7 +291,8 @@ function makerSpikeH(sp, t){
 }
 function makerHud(M){
   const el=document.getElementById('hudCp'); if(!el) return;
-  const txt = M.mode==='build' ? ('🛠️ Building… '+M.pieces.filter(p=>p.mine).length+' pieces')
+  const txt = M.mode==='build' ? (M.combined ? ('🔗 Building the BIG obby… '+M.pieces.length+' pieces')
+                                             : ('🛠️ Building… '+M.pieces.filter(p=>p.mine).length+' pieces'))
             : M.combined ? '🔗 COMBINED OBBY — reach a 🏁!'
             : '▶ Testing — reach your 🏁!';
   if(txt!==M.hudTxt){ M.hudTxt=txt; el.textContent=txt; }
@@ -296,8 +302,8 @@ function makerHud(M){
 /* ---------- drawing ---------- */
 function drawMaker(ctx){
   const M=Game.makerC; if(!M) return;
-  // zone tints + labels (only interesting with a friend)
-  if(M.mp || M.combined===false){
+  // zone tints + labels — until combined; after that it's ONE big obby
+  if(!M.combined){
     ctx.globalAlpha=0.06;
     ctx.fillStyle='#74a8ff'; ctx.fillRect(M.zMe.x0,60,M.zMe.x1-M.zMe.x0,MAKER.FLOOR_TOP-60);
     if(M.mp){ ctx.fillStyle='#ffb13c'; ctx.fillRect(M.zFoe.x0,60,M.zFoe.x1-M.zFoe.x0,MAKER.FLOOR_TOP-60); }
@@ -305,6 +311,9 @@ function drawMaker(ctx){
     ctx.font='bold 22px Nunito'; ctx.textAlign='center'; ctx.fillStyle='rgba(90,80,140,.45)';
     ctx.fillText('🛠️ YOUR OBBY', (M.zMe.x0+M.zMe.x1)/2, 100);
     if(M.mp) ctx.fillText('🧑‍🤝‍🧑 FRIEND\'S OBBY', (M.zFoe.x0+M.zFoe.x1)/2, 100);
+  } else if(M.mp){
+    ctx.font='bold 22px Nunito'; ctx.textAlign='center'; ctx.fillStyle='rgba(90,80,140,.45)';
+    ctx.fillText('🔗 ONE BIG OBBY!', (MAKER.ZONE_L.x1+MAKER.ZONE_R.x0)/2, 100);
   }
   ctx.textBaseline='middle';
   // start pad
