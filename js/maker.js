@@ -71,14 +71,14 @@ function onMakerNet(msg){
 /* ---------- placing pieces ---------- */
 const MAKER_COLORS=['#cdb8ff','#ffc7e6','#9be7a0','#9cc4ff','#ffe177','#ff8f8f','#ffffff','#6b5b78'];
 const MAKER_PIECES=[
-  {k:'brick',    ico:'🧱', name:'Brick'},
+  {k:'brick',    ico:'🟦', name:'Platform'},
   {k:'mover',    ico:'↔️', name:'Mover'},
   {k:'pushR',    ico:'➡️', name:'Push'},
   {k:'pushL',    ico:'⬅️', name:'Push'},
   {k:'vanish',   ico:'🫥', name:'Vanish'},
   {k:'bouncy',   ico:'🦘', name:'Bouncy'},
-  {k:'spike',    ico:'🔺', name:'Spikes'},
-  {k:'shooter',  ico:'🔫', name:'Shooter'},
+  {k:'spike',    ico:'🔺', name:'Pop Spikes'},
+  {k:'shooter',  ico:'💣', name:'Cannon'},
   {k:'finish',   ico:'🏁', name:'Finish'},
   {k:'erase',    ico:'❌', name:'Remove'},
 ];
@@ -91,7 +91,8 @@ function makerPlace(M, pc, mineFromSave){
   if(mineFromSave===false) piece.mine=false;
   let ref=null;
   if(pc.k==='brick'){
-    ref={id:'mk'+x+'_'+y, type:'brick', x, y, w:g, h:g, col:piece.col};
+    // a real obby platform: wide, thin, jump-through from below
+    ref={id:'mk'+x+'_'+y, type:'mplat', x, y, w:100, h:18, col:piece.col};
   } else if(pc.k==='mover'){
     ref={id:'mk'+x+'_'+y, type:'mover', x, y, w:80, h:18, base:x, amp:60, omega:(2*Math.PI)/1400, phase:(x+y)%6.28, dx:0};
   } else if(pc.k==='pushR' || pc.k==='pushL'){
@@ -229,31 +230,22 @@ function updateMaker(dt){
   const M=Game.makerC; if(!M) return;
   const p=Game.player, t=Game.t;
   makerHud(M);
-  // solid bricks
-  for(const pc of M.pieces){
-    if(pc.k!=='brick' || !pc.ref) continue;
-    const b=pc.ref;
-    if(!(p.x<b.x+b.w && p.x+p.w>b.x && p.y<b.y+b.h && p.y+p.h>b.y)) continue;
-    const pushR=(b.x+b.w)-p.x, pushL=(p.x+p.w)-b.x, pushD=(b.y+b.h)-p.y, pushU=(p.y+p.h)-b.y;
-    const m=Math.min(pushR,pushL,pushD,pushU);
-    if(m===pushU){ p.y=b.y-p.h; if(p.vy>0)p.vy=0; p.onGround=true; }
-    else if(m===pushD){ p.y=b.y+b.h; if(p.vy<0)p.vy=0; }
-    else if(m===pushL){ p.x=b.x-p.w; p.vx=0; }
-    else { p.x=b.x+b.w; p.vx=0; }
-  }
   const testing = M.mode!=='build';
-  // spikes: touch = back to the start (only while testing — safe to build on)
+  // pop-up spikes: they rise and sink on a cycle, like a REAL obby — only
+  // dangerous while they're up
   if(testing) for(const sp of M.spikes){
-    if(p.x<sp.x+40 && p.x+p.w>sp.x && p.y+p.h>sp.y+14 && p.y<sp.y+40 && p.invuln<=0){
-      addShake(5); SFX.hit(); toast('🔺 Ouch! Back to the start!');
+    const h=makerSpikeH(sp, t);
+    if(h>0.6 && p.x<sp.x+40 && p.x+p.w>sp.x && p.y+p.h>sp.y+40-26 && p.y<sp.y+40 && p.invuln<=0){
+      addShake(5); SFX.hit(); toast('🔺 Spiked! Back to the start!');
       makerRespawn(); break;
     }
   }
-  // shooters fire while testing
+  // cannons fire while testing (hard-mode style)
   if(testing) for(const sh of M.shooters){
     if(t-(sh.lastFire||0)>2200){
       sh.lastFire=t;
-      M.shots.push({x:sh.x+20, y:sh.y+20, vx:(sh.dir||1)*-6, born:t});   // shoots toward the start (left)
+      M.shots.push({x:sh.x+4, y:sh.y+22, vx:-6, born:t});   // fires toward the start (left)
+      M.fx.push({e:'💨', x:sh.x-2, y:sh.y+20, vy:-0.4, life:0.7});
     }
   }
   for(let i=M.shots.length-1;i>=0;i--){ const s=M.shots[i];
@@ -274,6 +266,12 @@ function updateMaker(dt){
     }
   }
   for(let i=M.fx.length-1;i>=0;i--){ const f=M.fx[i]; f.y+=f.vy||0; f.life-=dt*1.2; if(f.life<=0) M.fx.splice(i,1); }
+}
+/* pop-spike cycle: 0 = hidden, 1 = fully out. Offset by x so rows ripple. */
+function makerSpikeH(sp, t){
+  const ph=(t + sp.x*7) % 2400;
+  if(ph<1200) return Math.min(1, ph/220);          // rising / out
+  return Math.max(0, 1-(ph-1200)/220);             // sinking / hidden
 }
 function makerHud(M){
   const el=document.getElementById('hudCp'); if(!el) return;
@@ -302,17 +300,23 @@ function drawMaker(ctx){
   ctx.font='26px serif';
   const sx = M.combined ? MAKER.ZONE_L.x0+80 : M.zMe.x0+80;
   ctx.fillText('🚩', sx+10, MAKER.FLOOR_TOP-20);
-  // spikes
+  // pop-up spikes (rise & sink)
   for(const sp of M.spikes){
-    ctx.fillStyle='#8d93a5';
+    const h=makerSpikeH(sp, Game.t), spikeLen=6+20*h;
+    // base plate so you can see where they hide
+    ctx.fillStyle='#6d7385'; ctx.fillRect(sp.x+2, sp.y+36, 36, 5);
+    ctx.fillStyle = h>0.6 ? '#e05c5c' : '#8d93a5';
     for(let i=0;i<3;i++){ const bx=sp.x+i*13+2;
-      ctx.beginPath(); ctx.moveTo(bx, sp.y+40); ctx.lineTo(bx+6, sp.y+16); ctx.lineTo(bx+12, sp.y+40); ctx.closePath(); ctx.fill(); }
+      ctx.beginPath(); ctx.moveTo(bx, sp.y+40); ctx.lineTo(bx+6, sp.y+40-spikeLen); ctx.lineTo(bx+12, sp.y+40); ctx.closePath(); ctx.fill(); }
   }
-  // shooters + shots
-  ctx.font='24px serif';
-  for(const sh of M.shooters) ctx.fillText('🔫', sh.x+20, sh.y+20);
-  ctx.font='13px serif';
-  for(const s of M.shots) ctx.fillText('⚫', s.x, s.y);
+  // cannons (hard-mode style: body + barrel) + cannonballs
+  for(const sh of M.shooters){
+    ctx.fillStyle='#4a4f63'; roundRect(ctx, sh.x+8, sh.y+14, 30, 20, 6); ctx.fill();   // body
+    ctx.fillStyle='#333748'; ctx.fillRect(sh.x-6, sh.y+18, 18, 9);                      // barrel (points left)
+    ctx.fillStyle='#6d7385'; ctx.beginPath(); ctx.arc(sh.x+23, sh.y+36, 6, 0, 6.283); ctx.fill();  // wheel
+  }
+  ctx.fillStyle='#333748';
+  for(const s of M.shots){ ctx.beginPath(); ctx.arc(s.x, s.y, 6, 0, 6.283); ctx.fill(); }
   // finish flags
   ctx.font='30px serif';
   for(const f of M.finishes) ctx.fillText('🏁', f.x+20, f.y+16);

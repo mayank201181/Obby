@@ -3522,6 +3522,12 @@ function drawNameTag(ctx,cx,cy,name){
 
 function drawPlatform(ctx,pl){
   const r=8;
+  if(pl.type==='mplat'){   // Obby Maker platform — player-chosen colour, one-way
+    ctx.fillStyle=pl.col||'#cdb8ff'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,8); ctx.fill();
+    ctx.globalAlpha=0.35; ctx.fillStyle='#fff';
+    roundRect(ctx,pl.x+3,pl.y+2,pl.w-6,5,3); ctx.fill(); ctx.globalAlpha=1;
+    return;
+  }
   if(pl.type==='brick'){   // Area Clash castle brick — player-chosen colour
     ctx.fillStyle=pl.col||'#cdb8ff'; roundRect(ctx,pl.x,pl.y,pl.w,pl.h,5); ctx.fill();
     ctx.globalAlpha=0.25; ctx.fillStyle='#000';
