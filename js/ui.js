@@ -132,52 +132,45 @@ function renderBgMaker(){
   const mix=document.getElementById('bgMkMix');
   if(bgMix.length){
     const url=bgComboUrl(bgMix,1,96);
-    mix.innerHTML=`<span style="font-size:20px">${bgMix.join(' + ')} =</span> <img src="${url}" style="width:52px;height:52px;vertical-align:middle"/>`;
+    mix.innerHTML=`<span style="font-size:20px">${bgMix.join(' + ')} =</span> <img src="${url}" style="height:44px;width:auto;vertical-align:middle"/>`;
   } else mix.innerHTML='<span class="muted">no emojis picked (plain colours)</span>';
   const pv=document.getElementById('bgMkPreview');
   const grad=`linear-gradient(105deg, ${bgL()} 0%, ${bgR()} 100%)`;
-  if(bgMix.length){ pv.style.background=`url("${bgComboUrl(bgMix,0.35)}") repeat, ${grad}`; pv.style.backgroundSize='70px 70px, cover'; }
+  if(bgMix.length){ const ts=bgTileSize(bgMix,70); pv.style.background=`url("${bgComboUrl(bgMix,0.35,70)}") repeat, ${grad}`; pv.style.backgroundSize=`${ts.w}px ${ts.h}px, cover`; }
   else { pv.style.background=grad; pv.style.backgroundSize='cover'; }
 }
-/* GENMOJI-style fusion — ONE crisp emoji, no ghosting:
-   the 1st emoji is the face, drawn IN FRONT, fully solid.
-   The 2nd and 3rd tuck BEHIND it — so only their real parts poke out
-   (horns / ears / hats above the head, a sliver of the 2nd face at the
-   side), at 100% strength like a real emoji. A clean white sticker rim
-   wraps the whole thing so it reads as one single emoji. */
+/* Background pattern: the chosen emojis sit NEXT TO each other in a row,
+   each one BIG and crisp, with a clean white sticker rim. */
+function bgTileSize(emojis, S){
+  const n=Math.max(1,(emojis&&emojis.length)||0);
+  return { w:Math.round(S*0.72*n + S*0.20), h:Math.round(S*0.85) };
+}
 function fusedEmojiCanvas(emojis, S){
-  const cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const {w,h}=bgTileSize(emojis,S);
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
   const c=cv.getContext('2d');
   if(!emojis || !emojis.length) return cv;
-  const glyph=(e,dx,dy,scale)=>{
-    const l=document.createElement('canvas'); l.width=l.height=S;
-    const lc=l.getContext('2d');
-    lc.textAlign='center'; lc.textBaseline='middle';
-    lc.font=(S*0.54*(scale||1))+'px serif';
-    lc.fillText(e, S/2+(dx||0), S/2+S*0.03+(dy||0));
-    return l;
-  };
-  const off=document.createElement('canvas'); off.width=off.height=S;
+  const off=document.createElement('canvas'); off.width=w; off.height=h;
   const oc=off.getContext('2d');
-  oc.drawImage(glyph(emojis[0],0,0,1),0,0);                       // the face — solid, in front
-  oc.globalCompositeOperation='destination-over';                 // others hide BEHIND it
-  if(emojis[1]) oc.drawImage(glyph(emojis[1], S*0.12, S*0.05, 1.02),0,0);   // peeks out the right side
-  if(emojis[2]) oc.drawImage(glyph(emojis[2], 0, -S*0.17, 0.98),0,0);       // horns/ears/hat above the head
-  oc.globalCompositeOperation='source-over';
-  // clean white sticker rim, then the crisp art on top
+  oc.textAlign='center'; oc.textBaseline='middle';
+  oc.font=(S*0.60)+'px serif';
+  const gap=S*0.72;
+  emojis.forEach((e,idx)=>{ oc.fillText(e, S*0.10 + gap*idx + gap/2, h/2 + S*0.03); });
+  // white sticker rim + crisp art on top
   c.save(); c.shadowColor='#ffffff'; c.shadowBlur=S*0.028;
   for(let k=0;k<4;k++) c.drawImage(off,0,0);
   c.restore();
   c.drawImage(off,0,0);
   c.textAlign='center'; c.textBaseline='middle';
   c.font=(S*0.085)+'px serif';
-  c.fillText('✨', S*0.13, S*0.22);
-  c.fillText('✨', S*0.88, S*0.66);
+  c.fillText('✨', S*0.10, h*0.16);
+  c.fillText('✨', w-S*0.10, h*0.80);
   return cv;
 }
 function bgComboUrl(emojis, alpha, size){
   const S=size||140;
-  const cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const {w,h}=bgTileSize(emojis,S);
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
   const c=cv.getContext('2d');
   c.globalAlpha = alpha==null ? 0.22 : alpha;
   c.drawImage(fusedEmojiCanvas(emojis,S), 0, 0);
@@ -187,8 +180,9 @@ function applyLobbyBg(){
   const el=document.getElementById('lobbyScreen'); if(!el) return;
   const grad=`linear-gradient(105deg, ${bgL()} 0%, ${bgR()} 100%)`;
   if(SAVE.bgEmojis && SAVE.bgEmojis.length){
-    el.style.background=`url("${bgComboUrl(SAVE.bgEmojis,0.34)}") repeat, ${grad}`;
-    el.style.backgroundSize='140px 140px, cover';
+    const ts=bgTileSize(SAVE.bgEmojis,170);
+    el.style.background=`url("${bgComboUrl(SAVE.bgEmojis,0.5,170)}") repeat, ${grad}`;
+    el.style.backgroundSize=`${ts.w}px ${ts.h}px, cover`;
   } else { el.style.background=grad; el.style.backgroundSize='cover'; }
 }
 
