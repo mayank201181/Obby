@@ -33,7 +33,7 @@ function initMaker(){
     mp, hostSide, zMe, zFoe,
     mode:'build',                 // 'build' | 'test'
     combined:false, meDone:false, foeDone:false,
-    sel:'brick', color:'#cdb8ff',
+    sel:'brick', color:'#cdb8ff', len:100,
     pieces:[],                    // every placed piece {k,x,y,col,dir,mine,ref?}
     spikes:[], shooters:[], finishes:[], shots:[], fx:[],
     hudTxt:'', saveIdx:null, loadedWith:null,
@@ -60,7 +60,7 @@ function makerSend(d){
 function onMakerNet(msg){
   const M=Game.makerC; if(!M) return;
   switch(msg.a){
-    case 'add': makerPlace(M, {k:msg.k, x:msg.x, y:msg.y, col:msg.col, dir:msg.dir}, false); break;
+    case 'add': makerPlace(M, {k:msg.k, x:msg.x, y:msg.y, col:msg.col, dir:msg.dir, w:msg.w}, false); break;
     case 'rm':  { const pc=M.pieces.find(p=>!p.mine && p.x===msg.x && p.y===msg.y && p.k===msg.k); if(pc) makerRemove(M,pc); break; }
     case 'done': M.foeDone=!!msg.on; renderMakerActs();
                  toast(msg.on ? '🎉 Your friend finished building — go try their obby!' : '🔨 Your friend is building again…'); break;
@@ -70,6 +70,9 @@ function onMakerNet(msg){
 
 /* ---------- placing pieces ---------- */
 const MAKER_COLORS=['#cdb8ff','#ffc7e6','#9be7a0','#9cc4ff','#ffe177','#ff8f8f','#ffffff','#6b5b78'];
+/* stretch! how long the next platform-y piece will be */
+const MAKER_LENGTHS=[ {w:60,label:'▬ Short'}, {w:100,label:'▬▬ Normal'}, {w:160,label:'▬▬▬ Long'}, {w:240,label:'▬▬▬▬ MEGA'} ];
+const MAKER_STRETCHY={brick:1, mover:1, pushR:1, pushL:1, vanish:1, bouncy:1};
 const MAKER_PIECES=[
   {k:'brick',    ico:'🟦', name:'Platform'},
   {k:'mover',    ico:'↔️', name:'Mover'},
@@ -88,19 +91,20 @@ function makerPlace(M, pc, mineFromSave){
   if(M.pieces.length>=MAKER.MAX_PIECES){ toast('Your obby is FULL! (400 pieces)'); return null; }
   const g=MAKER.GRID, x=pc.x, y=pc.y;
   const piece={k:pc.k, x, y, col:pc.col||'#cdb8ff', dir:pc.dir||1, mine:mineFromSave!==false && pc.mine!==false};
+  if(pc.w) piece.w=pc.w;                    // chosen stretch length
   if(mineFromSave===false) piece.mine=false;
   let ref=null;
   if(pc.k==='brick'){
     // a real obby platform: wide, thin, jump-through from below
-    ref={id:'mk'+x+'_'+y, type:'mplat', x, y, w:100, h:18, col:piece.col};
+    ref={id:'mk'+x+'_'+y, type:'mplat', x, y, w:pc.w||100, h:18, col:piece.col};
   } else if(pc.k==='mover'){
-    ref={id:'mk'+x+'_'+y, type:'mover', x, y, w:80, h:18, base:x, amp:60, omega:(2*Math.PI)/1400, phase:(x+y)%6.28, dx:0};
+    ref={id:'mk'+x+'_'+y, type:'mover', x, y, w:pc.w||80, h:18, base:x, amp:60, omega:(2*Math.PI)/1400, phase:(x+y)%6.28, dx:0};
   } else if(pc.k==='pushR' || pc.k==='pushL'){
-    ref={id:'mk'+x+'_'+y, type:'conveyor', x, y, w:80, h:18, dir:pc.k==='pushR'?1:-1};
+    ref={id:'mk'+x+'_'+y, type:'conveyor', x, y, w:pc.w||80, h:18, dir:pc.k==='pushR'?1:-1};
   } else if(pc.k==='vanish'){
-    ref={id:'mk'+x+'_'+y, type:'disappear', x, y, w:g, h:18, crumbleMs:1500};
+    ref={id:'mk'+x+'_'+y, type:'disappear', x, y, w:pc.w||g, h:18, crumbleMs:1500};
   } else if(pc.k==='bouncy'){
-    ref={id:'mk'+x+'_'+y, type:'bouncy', x, y, w:60, h:18};
+    ref={id:'mk'+x+'_'+y, type:'bouncy', x, y, w:pc.w||60, h:18};
   } else if(pc.k==='spike'){
     M.spikes.push(piece);
   } else if(pc.k==='shooter'){
@@ -128,14 +132,17 @@ function makerTap(sx,sy){
   const x=(sx-Game.W/2)/s + Game.cam.x, y=(sy-Game.H/2)/s + Game.cam.y;
   if(!(x>=M.zMe.x0 && x<=M.zMe.x1) || y>MAKER.FLOOR_TOP || y<40){ toast('Build inside YOUR zone!'); return true; }
   const g=MAKER.GRID, gx=Math.floor(x/g)*g, gy=Math.floor(y/g)*g;
-  const here=M.pieces.find(p=>p.mine && x>=p.x && x<=p.x+((p.ref&&p.ref.w)||g) && y>=p.y && y<=p.y+((p.ref&&p.ref.h)||g));
+  // platforms are thin (18px) — treat every piece as at least a grid cell tall
+  // so tapping just under one still counts (much easier to erase)
+  const here=M.pieces.find(p=>p.mine && x>=p.x && x<=p.x+Math.max((p.ref&&p.ref.w)||g, g) && y>=p.y && y<=p.y+Math.max((p.ref&&p.ref.h)||g, g));
   if(M.sel==='erase'){
     if(here){ makerRemove(M,here); makerSend({a:'rm', k:here.k, x:here.x, y:here.y}); SFX.click(); }
     return true;
   }
   if(here) return true;                     // one piece per spot
-  const pc=makerPlace(M, {k:M.sel, x:gx, y:gy, col:M.color, mine:true});
-  if(pc){ makerSend({a:'add', k:pc.k, x:pc.x, y:pc.y, col:pc.col, dir:pc.dir}); SFX.click(); }
+  const w = MAKER_STRETCHY[M.sel] ? M.len : 0;
+  const pc=makerPlace(M, {k:M.sel, x:gx, y:gy, col:M.color, w, mine:true});
+  if(pc){ makerSend({a:'add', k:pc.k, x:pc.x, y:pc.y, col:pc.col, dir:pc.dir, w:pc.w}); SFX.click(); }
   return true;
 }
 
@@ -148,8 +155,12 @@ function renderMakerBar(){
   bar.innerHTML = MAKER_PIECES.map(p=>
     `<button class="btn ${M.sel===p.k?'pink':'ghost'} small" style="width:auto;pointer-events:auto" onclick="makerSel('${p.k}')">${p.ico} ${p.name}</button>`
   ).join('') +
-  `<div class="build-colours">`+MAKER_COLORS.map(col=>`<div class="bcol${M.color===col?' sel':''}" style="background:${col}" onclick="makerColor('${col}')"></div>`).join('')+`</div>`;
+  `<div class="build-colours">`+MAKER_COLORS.map(col=>`<div class="bcol${M.color===col?' sel':''}" style="background:${col}" onclick="makerColor('${col}')"></div>`).join('')+`</div>` +
+  (MAKER_STRETCHY[M.sel] ? `<div style="display:flex;gap:4px;align-items:center">`+MAKER_LENGTHS.map(L=>
+    `<button class="btn ${M.len===L.w?'blue':'ghost'} small" style="width:auto;pointer-events:auto" onclick="makerLen(${L.w})">${L.label}</button>`
+  ).join('')+`</div>` : '');
 }
+function makerLen(w){ const M=Game.makerC; if(M){ M.len=w; SFX.click(); renderMakerBar(); } }
 function renderMakerActs(){
   const el=document.getElementById('makerActs'); if(!el) return;
   const M=Game.makerC; if(!M){ el.style.display='none'; return; }
@@ -211,7 +222,7 @@ function makerSave(){
   if(!SAVE.myObbys) SAVE.myObbys=[];
   const friend = M.mp ? ((mpRemoteList()[0]||{}).name||'a friend') : M.loadedWith;
   const data={ name: null, with: friend||null, created: Date.now(),
-    pieces: M.pieces.map(p=>({k:p.k, x:p.x, y:p.y, col:p.col, dir:p.dir})) };
+    pieces: M.pieces.map(p=>({k:p.k, x:p.x, y:p.y, col:p.col, dir:p.dir, w:p.w})) };
   if(M.saveIdx!=null && SAVE.myObbys[M.saveIdx]){
     data.name=SAVE.myObbys[M.saveIdx].name;
     SAVE.myObbys[M.saveIdx]=data;
