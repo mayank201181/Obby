@@ -662,8 +662,8 @@ function usePower(power){
       if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
         const d=Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2));
         if(d<bd){ bd=d; best=r; } } }
-      if(!best || bd>600){ Game.powerCdUntil=Game.t+400;
-        if(typeof toast==='function') toast('🥸 Get closer to a friend to swap places!'); return; }
+      if(!best){ Game.powerCdUntil=Game.t+400;                    // works from ANYWHERE — any distance
+        if(typeof toast==='function') toast('🥸 No friend around to swap with!'); return; }
       const myX=Math.round(p.x), myY=Math.round(p.y);
       if(typeof mpSendSwap==='function') mpSendSwap(best.id, myX, myY);
       p.x=best.x; p.y=best.y; p.vx=0; p.vy=0; p.invuln=Math.max(p.invuln,600);

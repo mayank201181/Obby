@@ -52,19 +52,8 @@ function initLobby(){
   const nameIn=document.getElementById('nameInput');
   nameIn.value=SAVE.name||'';
   nameIn.addEventListener('input',()=>{ SAVE.name=nameIn.value.slice(0,12); persist(); });
-  // background picker
-  const bp=document.getElementById('bgPicker');
-  bp.innerHTML='';
-  BG_COLORS.forEach(c=>{
-    const d=document.createElement('div');
-    d.className='swatch'+(SAVE.bg===c?' selected':'');
-    d.style.background=c;
-    d.onclick=()=>{ SAVE.bg=c; persist(); document.body.style.setProperty('--lobby-bg',c);
-      [...bp.children].forEach(x=>x.classList.remove('selected')); d.classList.add('selected');
-      applyLobbyBg();
-    };
-    bp.appendChild(d);
-  });
+  // background picker — tapping a colour opens the Background Maker
+  renderBgPicker();
   applyLobbyBg();
   updateCoinDisplays();
   startPreview('lobbyPreview');
@@ -76,9 +65,104 @@ function initLobby(){
   if(typeof ensurePetFeed==='function') ensurePetFeed();
   startMusicIfOn('lobby');
 }
+/* ---------------- Background Maker 🎨 ----------------
+   Two colours (left + right of the gradient) and up to 3 emojis that get
+   MIXED into one mashup glyph, tiled all over the background. */
+const BG_EMOJIS=[
+  '😀','😂','😍','😎','🤩','🥳','😜','🤪','😇','🥰','😈','🤖','👻','💀','👽','🤡',
+  '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🐔',
+  '🦄','🐲','🦖','🦕','🐙','🦑','🦀','🐠','🐬','🐳','🦈','🐊','🦚','🦜','🦉','🦇',
+  '🌸','🌺','🌻','🌷','🌹','🍀','🌿','🌴','🌵','🍄','🌈','⭐','🌟','✨','⚡','🔥',
+  '❄️','🌊','☁️','🌙','☀️','🪐','🌍','☄️','💫','🌪️','🫧','💎','🔮','🧿','🎈','🎀',
+  '🍕','🍔','🌭','🍟','🌮','🍿','🍩','🍪','🧁','🍰','🍭','🍬','🍫','🍦','🍎','🍉',
+  '🍓','🍒','🍑','🥭','🍍','🥑','🥕','🌽','🍇','🍌','🍋','🥝','🧀','🥨','🍣','🍙',
+  '⚽','🏀','🏈','🎾','🎳','🎯','🎮','🕹️','🎲','🧩','🛹','🚀','🛸','🏎️','🚂','⛵','🚁',
+  '🎸','🥁','🎺','🎷','🎻','🎤','🎧','🎹','👑','🎩','🕶️','💰','🪙','🏆','🥇','🎁',
+  '💩','🤠','🥷','🧙','🧚','🧜‍♀️','🧞','🦸','🦹','🎃','⛄','🗿','🏰','🗼','🌋','🏝️',
+];
+function renderBgPicker(){
+  const bp=document.getElementById('bgPicker'); if(!bp) return;
+  bp.innerHTML='';
+  BG_COLORS.forEach(c=>{
+    const d=document.createElement('div');
+    d.className='swatch'+((bgL()===c||bgR()===c)?' selected':'');
+    d.style.background=c;
+    d.onclick=()=>openBgMaker(c);
+    bp.appendChild(d);
+  });
+}
+function bgL(){ return SAVE.bgL || SAVE.bg || '#bcd9ff'; }
+function bgR(){ return SAVE.bgR || SAVE.bg || '#d9c6ff'; }
+let bgSide='L', bgMix=[];
+function openBgMaker(col){
+  bgMix=(SAVE.bgEmojis||[]).slice(0,3);
+  if(col){ if(bgSide==='L') SAVE.bgL=col; else SAVE.bgR=col; persist(); }
+  openModal('bgModal'); renderBgMaker(); applyLobbyBg(); renderBgPicker();
+}
+function bgSetSide(side){ bgSide=side; SFX.click(); renderBgMaker(); }
+function bgPickColor(c){
+  if(bgSide==='L') SAVE.bgL=c; else SAVE.bgR=c;
+  persist(); SFX.click(); renderBgMaker(); applyLobbyBg(); renderBgPicker();
+}
+function bgToggleEmoji(i){
+  const e=BG_EMOJIS[i];
+  const at=bgMix.indexOf(e);
+  if(at>=0) bgMix.splice(at,1);
+  else { if(bgMix.length>=3){ toast('3 emojis max — tap one to unpick it!'); return; } bgMix.push(e); }
+  SFX.click(); renderBgMaker();
+}
+function bgClearEmojis(){ bgMix=[]; SAVE.bgEmojis=[]; persist(); applyLobbyBg(); renderBgMaker(); SFX.click(); }
+function bgMakerDone(){
+  SAVE.bgEmojis=bgMix.slice(0,3); persist();
+  applyLobbyBg(); closeModal('bgModal');
+  toast(SAVE.bgEmojis.length ? '🎨 New background — your emoji mix is EVERYWHERE!' : '🎨 New background!');
+  SFX.win();
+}
+function renderBgMaker(){
+  const colEl=document.getElementById('bgMkColors'); if(!colEl) return;
+  colEl.innerHTML=BG_COLORS.map(c=>
+    `<div class="swatch${(bgSide==='L'?bgL():bgR())===c?' selected':''}" style="background:${c};width:34px;height:34px;border-radius:10px" onclick="bgPickColor('${c}')"></div>`).join('');
+  const bL=document.getElementById('bgSideL'), bR=document.getElementById('bgSideR');
+  if(bL){ bL.className='btn '+(bgSide==='L'?'blue':'ghost')+' small'; bR.className='btn '+(bgSide==='R'?'blue':'ghost')+' small'; }
+  const em=document.getElementById('bgMkEmojis');
+  em.innerHTML=BG_EMOJIS.map((e,i)=>{
+    const at=bgMix.indexOf(e);
+    return `<span onclick="bgToggleEmoji(${i})" style="cursor:pointer;padding:3px;border-radius:8px;position:relative;${at>=0?'background:#ffd6ef;outline:2px solid #ff7ed8;':''}">${e}${at>=0?`<span style="position:absolute;top:-4px;right:-2px;font-size:10px;background:#ff7ed8;color:#fff;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center">${at+1}</span>`:''}</span>`;
+  }).join('');
+  const mix=document.getElementById('bgMkMix');
+  if(bgMix.length){
+    const url=bgComboUrl(bgMix,1,64);
+    mix.innerHTML=`<span style="font-size:20px">${bgMix.join(' + ')} =</span> <img src="${url}" style="width:44px;height:44px;vertical-align:middle"/>`;
+  } else mix.innerHTML='<span class="muted">no emojis picked (plain colours)</span>';
+  const pv=document.getElementById('bgMkPreview');
+  const grad=`linear-gradient(105deg, ${bgL()} 0%, ${bgR()} 100%)`;
+  if(bgMix.length){ pv.style.background=`url("${bgComboUrl(bgMix,0.35)}") repeat, ${grad}`; pv.style.backgroundSize='70px 70px, cover'; }
+  else { pv.style.background=grad; pv.style.backgroundSize='cover'; }
+}
+/* draw the 2-3 chosen emojis OVERLAPPING so they read as one mashup glyph */
+function bgComboUrl(emojis, alpha, size){
+  const S=size||140, cv=document.createElement('canvas'); cv.width=cv.height=S;
+  const c=cv.getContext('2d'); c.globalAlpha=alpha==null?0.22:alpha;
+  c.textAlign='center'; c.textBaseline='middle';
+  const cx=S/2, cy=S/2, u=S/140;
+  if(emojis.length===1){ c.font=(64*u)+'px serif'; c.fillText(emojis[0], cx, cy); }
+  else if(emojis.length===2){
+    c.font=(58*u)+'px serif'; c.fillText(emojis[0], cx-8*u, cy+8*u);
+    c.font=(40*u)+'px serif'; c.fillText(emojis[1], cx+24*u, cy-20*u);
+  } else if(emojis.length>=3){
+    c.font=(56*u)+'px serif'; c.fillText(emojis[0], cx, cy+10*u);
+    c.font=(34*u)+'px serif'; c.fillText(emojis[1], cx-26*u, cy-26*u);
+    c.font=(34*u)+'px serif'; c.fillText(emojis[2], cx+28*u, cy-24*u);
+  }
+  return cv.toDataURL();
+}
 function applyLobbyBg(){
-  document.getElementById('lobbyScreen').style.background =
-    `linear-gradient(135deg, ${SAVE.bg} 0%, var(--purple) 60%, var(--blue) 120%)`;
+  const el=document.getElementById('lobbyScreen'); if(!el) return;
+  const grad=`linear-gradient(105deg, ${bgL()} 0%, ${bgR()} 100%)`;
+  if(SAVE.bgEmojis && SAVE.bgEmojis.length){
+    el.style.background=`url("${bgComboUrl(SAVE.bgEmojis,0.34)}") repeat, ${grad}`;
+    el.style.backgroundSize='140px 140px, cover';
+  } else { el.style.background=grad; el.style.backgroundSize='cover'; }
 }
 
 /* ---------------- Customize / Shop ---------------- */

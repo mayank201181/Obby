@@ -218,6 +218,9 @@ function defaultSave(){
     accessory:'none',
     face:'classic',
     bg:'#bcd9ff',
+    bgL:'',                // Background Maker: left gradient colour
+    bgR:'',                // Background Maker: right gradient colour
+    bgEmojis:[],           // Background Maker: up to 3 emojis mixed into the pattern
     ownedSkins:['mint','sky','bubble'],
     ownedAccessories:['none'],
     ownedFaces:['classic','wink'],
