@@ -131,28 +131,35 @@ function renderBgMaker(){
   }).join('');
   const mix=document.getElementById('bgMkMix');
   if(bgMix.length){
-    const url=bgComboUrl(bgMix,1,64);
-    mix.innerHTML=`<span style="font-size:20px">${bgMix.join(' + ')} =</span> <img src="${url}" style="width:44px;height:44px;vertical-align:middle"/>`;
+    const url=bgComboUrl(bgMix,1,96);
+    mix.innerHTML=`<span style="font-size:20px">${bgMix.join(' + ')} =</span> <img src="${url}" style="width:52px;height:52px;vertical-align:middle"/>`;
   } else mix.innerHTML='<span class="muted">no emojis picked (plain colours)</span>';
   const pv=document.getElementById('bgMkPreview');
   const grad=`linear-gradient(105deg, ${bgL()} 0%, ${bgR()} 100%)`;
   if(bgMix.length){ pv.style.background=`url("${bgComboUrl(bgMix,0.35)}") repeat, ${grad}`; pv.style.backgroundSize='70px 70px, cover'; }
   else { pv.style.background=grad; pv.style.backgroundSize='cover'; }
 }
-/* draw the 2-3 chosen emojis OVERLAPPING so they read as one mashup glyph */
+/* GENMOJI-style fusion: all chosen emojis are drawn in the SAME spot at the
+   SAME size, but each one only keeps a slice — 1st = left side, 2nd = right
+   side, 3rd = the top (ears / horn / hair). Stitched together they make ONE
+   brand-new emoji, like the baby of all three. */
 function bgComboUrl(emojis, alpha, size){
   const S=size||140, cv=document.createElement('canvas'); cv.width=cv.height=S;
-  const c=cv.getContext('2d'); c.globalAlpha=alpha==null?0.22:alpha;
+  const c=cv.getContext('2d');
   c.textAlign='center'; c.textBaseline='middle';
-  const cx=S/2, cy=S/2, u=S/140;
-  if(emojis.length===1){ c.font=(64*u)+'px serif'; c.fillText(emojis[0], cx, cy); }
+  c.globalAlpha=alpha==null?0.22:alpha;
+  const cx=S/2, cy=S/2;
+  const draw=e=>{ c.font=(S*0.56)+'px serif'; c.fillText(e, cx, cy+S*0.03); };
+  const slice=(x,y,w,h,e)=>{ c.save(); c.beginPath(); c.rect(x,y,w,h); c.clip(); draw(e); c.restore(); };
+  if(emojis.length<=1){ if(emojis[0]) draw(emojis[0]); }
   else if(emojis.length===2){
-    c.font=(58*u)+'px serif'; c.fillText(emojis[0], cx-8*u, cy+8*u);
-    c.font=(40*u)+'px serif'; c.fillText(emojis[1], cx+24*u, cy-20*u);
-  } else if(emojis.length>=3){
-    c.font=(56*u)+'px serif'; c.fillText(emojis[0], cx, cy+10*u);
-    c.font=(34*u)+'px serif'; c.fillText(emojis[1], cx-26*u, cy-26*u);
-    c.font=(34*u)+'px serif'; c.fillText(emojis[2], cx+28*u, cy-24*u);
+    slice(0,0,cx,S, emojis[0]);                 // left half
+    slice(cx,0,cx,S, emojis[1]);                // right half
+  } else {
+    const topH=cy-S*0.08;                       // the top band = 3rd emoji's ears/horn/hair
+    slice(0,topH,cx,S-topH, emojis[0]);         // bottom-left face
+    slice(cx,topH,cx,S-topH, emojis[1]);        // bottom-right face
+    slice(0,0,S,topH, emojis[2]);               // top of the head
   }
   return cv.toDataURL();
 }
