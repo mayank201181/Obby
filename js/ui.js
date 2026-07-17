@@ -139,51 +139,40 @@ function renderBgMaker(){
   if(bgMix.length){ pv.style.background=`url("${bgComboUrl(bgMix,0.35)}") repeat, ${grad}`; pv.style.backgroundSize='70px 70px, cover'; }
   else { pv.style.background=grad; pv.style.backgroundSize='cover'; }
 }
-/* GENMOJI-style fusion — polished so it reads like a REAL single emoji:
-   the 1st emoji stays WHOLE as the base (so there are never gaps), the 2nd
-   emoji's features FADE IN across the right side, and the 3rd emoji melts
-   onto the top of the head (ears / horn / hair) with a soft blend. A gentle
-   sticker glow welds everything into one creature. */
+/* GENMOJI-style fusion — ONE crisp emoji, no ghosting:
+   the 1st emoji is the face, drawn IN FRONT, fully solid.
+   The 2nd and 3rd tuck BEHIND it — so only their real parts poke out
+   (horns / ears / hats above the head, a sliver of the 2nd face at the
+   side), at 100% strength like a real emoji. A clean white sticker rim
+   wraps the whole thing so it reads as one single emoji. */
 function fusedEmojiCanvas(emojis, S){
   const cv=document.createElement('canvas'); cv.width=cv.height=S;
   const c=cv.getContext('2d');
   if(!emojis || !emojis.length) return cv;
-  const layer=(e, dy, scale)=>{
+  const glyph=(e,dx,dy,scale)=>{
     const l=document.createElement('canvas'); l.width=l.height=S;
     const lc=l.getContext('2d');
     lc.textAlign='center'; lc.textBaseline='middle';
-    lc.font=(S*0.56*(scale||1))+'px serif';
-    lc.fillText(e, S/2, S/2 + S*0.03 + (dy||0));
-    return {l, lc};
+    lc.font=(S*0.54*(scale||1))+'px serif';
+    lc.fillText(e, S/2+(dx||0), S/2+S*0.03+(dy||0));
+    return l;
   };
   const off=document.createElement('canvas'); off.width=off.height=S;
   const oc=off.getContext('2d');
-  oc.drawImage(layer(emojis[0],0,1).l, 0, 0);            // whole base creature
-  if(emojis[1]){                                          // right side fades in
-    const r=layer(emojis[1],0,1);
-    const g=r.lc.createLinearGradient(S*0.34,0,S*0.62,0);
-    g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,1)');
-    r.lc.globalCompositeOperation='destination-in';
-    r.lc.fillStyle=g; r.lc.fillRect(0,0,S,S);
-    oc.drawImage(r.l,0,0);
-  }
-  if(emojis[2]){                                          // top of head melts on
-    const t=layer(emojis[2], -S*0.13, 0.92);
-    const g=t.lc.createLinearGradient(0,S*0.18,0,S*0.44);
-    g.addColorStop(0,'rgba(0,0,0,1)'); g.addColorStop(1,'rgba(0,0,0,0)');
-    t.lc.globalCompositeOperation='destination-in';
-    t.lc.fillStyle=g; t.lc.fillRect(0,0,S,S);
-    oc.drawImage(t.l,0,0);
-  }
-  // sticker weld: a soft pale rim + tiny sparkles = one polished emoji
-  c.save();
-  c.shadowColor='rgba(255,255,255,0.9)'; c.shadowBlur=S*0.045;
-  c.drawImage(off,0,0); c.drawImage(off,0,0);
+  oc.drawImage(glyph(emojis[0],0,0,1),0,0);                       // the face — solid, in front
+  oc.globalCompositeOperation='destination-over';                 // others hide BEHIND it
+  if(emojis[1]) oc.drawImage(glyph(emojis[1], S*0.12, S*0.05, 1.02),0,0);   // peeks out the right side
+  if(emojis[2]) oc.drawImage(glyph(emojis[2], 0, -S*0.17, 0.98),0,0);       // horns/ears/hat above the head
+  oc.globalCompositeOperation='source-over';
+  // clean white sticker rim, then the crisp art on top
+  c.save(); c.shadowColor='#ffffff'; c.shadowBlur=S*0.028;
+  for(let k=0;k<4;k++) c.drawImage(off,0,0);
   c.restore();
+  c.drawImage(off,0,0);
   c.textAlign='center'; c.textBaseline='middle';
-  c.font=(S*0.09)+'px serif';
-  c.fillText('✨', S*0.16, S*0.24);
-  c.fillText('✨', S*0.86, S*0.62);
+  c.font=(S*0.085)+'px serif';
+  c.fillText('✨', S*0.13, S*0.22);
+  c.fillText('✨', S*0.88, S*0.66);
   return cv;
 }
 function bgComboUrl(emojis, alpha, size){
