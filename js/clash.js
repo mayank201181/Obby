@@ -2,7 +2,7 @@
    1v1 castle battle — vs the Builder Bot (solo) or a FRIEND (room code).
 
    BUILD PHASE (1/3/5 min): both sides build a castle from coloured square
-   bricks in their own zone. Cannons, stun traps cost 🪙10 each. You also
+   bricks in their own zone. Cannons, stun traps cost 🪙3 each. You also
    hide your 🏀 ball somewhere in your castle.
 
    BATTLE PHASE: no more building! Cross the middle, smash enemy bricks with
@@ -16,7 +16,7 @@
 const CLASH = {
   GRID:40, FLOOR_TOP:516, W:2200,
   ZONE_L:{x0:40, x1:840}, ZONE_R:{x0:1360, x1:2160},
-  COST:10, WIN_COINS:200,
+  COST:10, DEF_COST:3, WIN_COINS:200,
   BOT_SPEED:2.6, BOT_JUMP:-13,
 };
 
@@ -122,8 +122,8 @@ function renderClashBar(){
     bar.innerHTML =
       btn('brick','🧱 Brick', C.buildSel==='brick') +
       `<div class="build-colours">`+CLASH_COLORS.map(col=>`<div class="bcol${C.buildColor===col?' sel':''}" style="background:${col}" onclick="clashColor('${col}')"></div>`).join('')+`</div>` +
-      btn('cannon','💣 Cannon 🪙10', C.buildSel==='cannon') +
-      btn('trap','🪤 Trap 🪙10', C.buildSel==='trap') +
+      btn('cannon','💣 Cannon 🪙3', C.buildSel==='cannon') +
+      btn('trap','🪤 Trap 🪙3', C.buildSel==='trap') +
       btn('ball','🏀 Hide Ball', C.buildSel==='ball') +
       btn('erase','❌ Remove', C.buildSel==='erase');
   } else {
@@ -179,14 +179,14 @@ function clashBuildAt(C,x,y){
     SFX.click(); return;
   }
   if(C.buildSel==='cannon'){
-    if(SAVE.coins<CLASH.COST){ toast('Need 🪙10 for a cannon!'); return; }
-    SAVE.coins-=CLASH.COST; persist(); updateCoinDisplays();
+    if(SAVE.coins<CLASH.DEF_COST){ toast('Need 🪙3 for a cannon!'); return; }
+    SAVE.coins-=CLASH.DEF_COST; persist(); updateCoinDisplays();
     C.cannons.push({x:gx+20, y:gy+20, mine:true, lastFire:0});
     clashSend({a:'cannon', x:gx+20, y:gy+20}); SFX.chest(); return;
   }
   if(C.buildSel==='trap'){
-    if(SAVE.coins<CLASH.COST){ toast('Need 🪙10 for a trap!'); return; }
-    SAVE.coins-=CLASH.COST; persist(); updateCoinDisplays();
+    if(SAVE.coins<CLASH.DEF_COST){ toast('Need 🪙3 for a trap!'); return; }
+    SAVE.coins-=CLASH.DEF_COST; persist(); updateCoinDisplays();
     const ty=Math.min(y,CLASH.FLOOR_TOP-6);
     C.traps.push({x, y:ty, mine:true});
     clashSend({a:'trap', x, y:ty}); SFX.chest(); return;
