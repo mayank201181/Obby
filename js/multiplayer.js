@@ -228,7 +228,12 @@ function mpOnMessage(conn,msg){
     }
     case 'confuse': {
       if(MP.isHost) mpRelay(conn,msg);
-      if(msg.target===MP.selfId && typeof onConfusedNet==='function') onConfusedNet();
+      if(msg.target===MP.selfId && typeof onConfusedNet==='function') onConfusedNet(msg.secs);
+      break;
+    }
+    case 'flash': {   // ☀️ Sun Spirit — blinding light
+      if(MP.isHost) mpRelay(conn,msg);
+      if(msg.target===MP.selfId && typeof onFlashedNet==='function') onFlashedNet(msg.from);
       break;
     }
     case 'clash': {
@@ -383,7 +388,8 @@ function mpSendSlow(){ mpSend({t:'slow', from:MP.selfId}); }
 /* Mr. Swap: switch places with a friend (they teleport to my old spot) */
 function mpSendSwap(targetId, x, y){ mpSend({t:'swap', from:MP.selfId, target:targetId, x, y}); }
 /* Clown: reverse a friend's controls for 4 seconds */
-function mpSendConfuse(targetId){ mpSend({t:'confuse', from:MP.selfId, target:targetId}); }
+function mpSendConfuse(targetId, secs){ mpSend({t:'confuse', from:MP.selfId, target:targetId, secs}); }
+function mpSendFlash(targetId){ mpSend({t:'flash', from:MP.selfId, target:targetId}); }
 /* Alien: morph a specific friend into an animal / face / accessory for the round */
 function mpSendMorph(targetId, d){ mpSend({t:'morph', from:MP.selfId, target:targetId,
   emoji:d.emoji, grant:d.grant, face:d.face, acc:d.acc, kind:d.kind}); }

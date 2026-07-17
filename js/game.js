@@ -85,7 +85,15 @@ const POWER_META = {
   herotime:  {emoji:'🦸', label:'HERO',   cd:11000},  // Super Blob — 6s invincible + infinite jumps
   eruption:  {emoji:'🌋', label:'ERUPT',  cd:6000},   // Volcano — ring of fireballs in every direction
   miracle:   {emoji:'👼', label:'HALO',   cd:14000},  // Angel — 8s invincible feather-float
-  swap:      {emoji:'🥸', label:'SWAP',   cd:7000},   // Mr. Swap — switch places with the nearest friend
+  swap:      {emoji:'🥸', label:'SWAP',   cd:7000},   // Mr. Swap — switch places with a friend anywhere
+  cyclone:   {emoji:'🌪️', label:'SPIN',   cd:7000},   // Storm Djinn — BE the tornado for 4s
+  sunflare:  {emoji:'☀️', label:'FLASH',  cd:6000},   // Sun Spirit — blind nearby friends with light
+  portal:    {emoji:'🌀', label:'PORTAL', cd:6000},   // Portal Blob — drop a portal, zip back to it
+  hypno:     {emoji:'👁️', label:'HYPNO',  cd:8000},   // Hypno Blob — reverse EVERY friend's controls, whole map
+  bubbletrap:{emoji:'🫧', label:'BUBBLE', cd:6000},   // Bubble Witch — trap nearby friends in bubbles
+  meteor:    {emoji:'☄️', label:'METEOR', cd:9000},   // Meteor King — global meteor shower
+  rebirth:   {emoji:'🐦‍🔥', label:'REBIRTH',cd:12000},  // Solar Phoenix — 12s where falling can't stop you
+  fireworks: {emoji:'🎆', label:'BOOM',   cd:6000},   // Firework Fox — stunning bursts + sky launch
   honk:      {emoji:'🤡', label:'HONK',   cd:8000},   // Clown — reverse nearby friends' controls 4s
   eggsplat:  {emoji:'🥚', label:'EGGS',   cd:4000},   // Chicken — throw 3 stunning eggs
   freeze:    {emoji:'🧊', label:'FREEZE', cd:3000},   // Yeti — 3s cooldown
@@ -296,6 +304,7 @@ function loadLevel(level){
   Game.placedPlatforms=[]; Game.platformCdUntil=0; Game.trailPoints=[];
   Game.bananas=[]; Game.poops=[]; Game.floatUntil=0; Game.lastSafe=null; Game.stunUntil=0; Game.moveLock=false;
   Game.powerCdUntil=0; Game.flyUntil=0; Game.phaseUntil=0; Game.invisUntil=0; Game.freezeEnemiesUntil=0;
+  Game.rebirthUntil=0; Game.portalMark=null; Game.flashUntil=0;
   Game.slowWorldUntil=0; Game.slowMoveUntil=0; Game.fire=[]; Game.morph=null; Game.morphPower='none'; Game.morphUntil=0;
   Game.decoy=null; Game.posTrail=[]; Game.trailT=0;   // Ninja decoy + Chrono rewind history
   Game.heroUntil=0;                                    // Super Blob hero-time timer
@@ -657,6 +666,74 @@ function usePower(power){
       for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🪽', x:p.x+p.w/2+(Math.random()*50-25), y:p.y+p.h/2+(Math.random()*40-20), vx:0, vy:-0.5, life:1.2, born:Game.t});
       SFX.checkpoint(); if(typeof toast==='function') toast('👼 MIRACLE — untouchable for 8 seconds!'); break;
     }
+    case 'cyclone': {                                     // 🌪️ Storm Djinn — BE the tornado
+      Game.power.dashUntil = Math.max(Game.power.dashUntil||0, Game.t+4000);
+      p.invuln = Math.max(p.invuln, 4000);
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<300 && typeof mpSendStun==='function') mpSendStun(r.id, 2); } }
+      for(let i=0;i<14;i++) Game.abilityFx.push({kind:'emoji', e:'🌪️', x:p.x+p.w/2+(Math.random()*60-30), y:p.y+p.h/2+(Math.random()*60-30), vx:(Math.random()*2-1)*2, vy:-1-Math.random(), life:1.2, born:Game.t});
+      addShake(5); SFX.rare(); if(typeof toast==='function') toast('🌪️ CYCLONE — you ARE the storm!'); break;
+    }
+    case 'sunflare': {                                    // ☀️ Sun Spirit — blinding light
+      let flr=0;
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<520){ if(typeof mpSendFlash==='function') mpSendFlash(r.id); flr++; } } }
+      Game.freezeEnemiesUntil = Math.max(Game.freezeEnemiesUntil||0, Game.t+3000);
+      for(let i=0;i<12;i++){ const an=i/12*Math.PI*2;
+        Game.abilityFx.push({kind:'emoji', e:'☀️', x:p.x+p.w/2+Math.cos(an)*26, y:p.y+p.h/2+Math.sin(an)*26, vx:Math.cos(an)*2.6, vy:Math.sin(an)*2.6, life:1, born:Game.t}); }
+      addShake(4); SFX.rare(); if(typeof toast==='function') toast(flr?('☀️ SUN FLARE — '+flr+' friend'+(flr>1?'s':'')+' blinded!'):'☀️ SUN FLARE!'); break;
+    }
+    case 'portal': {                                      // 🌀 Portal Blob — drop & return
+      if(Game.portalMark && Game.t < Game.portalMark.until){
+        p.x=Game.portalMark.x; p.y=Game.portalMark.y; p.vx=0; p.vy=0; p.invuln=Math.max(p.invuln,700);
+        for(let i=0;i<10;i++) Game.abilityFx.push({kind:'emoji', e:'🌀', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h/2+(Math.random()*30-15), vx:0, vy:-0.6, life:1, born:Game.t});
+        Game.portalMark=null;
+        SFX.jump(); if(typeof toast==='function') toast('🌀 ZIP — back through your portal!');
+      } else {
+        Game.portalMark={x:p.x, y:p.y, until:Game.t+25000};
+        Game.powerCdUntil = Game.t + 800;                 // quick refresh so you can zip back any time
+        SFX.chest(); if(typeof toast==='function') toast('🌀 Portal dropped! Press again to zip back (25s)');
+      } break;
+    }
+    case 'hypno': {                                       // 👁️ Hypno Blob — WHOLE-MAP reversed controls
+      let hyp=0;
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(typeof mpSendConfuse==='function'){ mpSendConfuse(r.id, 5); hyp++; } } }
+      for(let i=0;i<10;i++){ const an=i/10*Math.PI*2;
+        Game.abilityFx.push({kind:'emoji', e:'👁️', x:p.x+p.w/2, y:p.y+p.h/2, vx:Math.cos(an)*3, vy:Math.sin(an)*2-0.6, life:1.1, born:Game.t}); }
+      addShake(4); SFX.hit(); if(typeof toast==='function') toast(hyp?'👁️ HYPNOTIZED — every friend\'s controls are BACKWARDS!':'👁️ HYPNO stare!'); break;
+    }
+    case 'bubbletrap': {                                  // 🫧 Bubble Witch — trap friends, float yourself
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<430 && typeof mpSendStun==='function') mpSendStun(r.id, 3); } }
+      Game.floatUntil = Math.max(Game.floatUntil||0, Game.t+5000);
+      p.invuln = Math.max(p.invuln, 1500);
+      for(let i=0;i<14;i++) Game.abilityFx.push({kind:'emoji', e:'🫧', x:p.x+p.w/2+(Math.random()*70-35), y:p.y+p.h/2+(Math.random()*50-25), vx:(Math.random()*2-1)*0.8, vy:-0.8-Math.random(), life:1.4, born:Game.t});
+      SFX.chest(); if(typeof toast==='function') toast('🫧 BUBBLED! Friends are trapped and YOU float!'); break;
+    }
+    case 'meteor': {                                      // ☄️ Meteor King — global shower + space loot
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(typeof mpSendStun==='function') mpSendStun(r.id, 3); } }
+      Game.freezeEnemiesUntil = Math.max(Game.freezeEnemiesUntil||0, Game.t+5000);
+      SAVE.coins += 15; persist(); if(typeof updateCoinDisplays==='function') updateCoinDisplays();
+      for(let i=0;i<16;i++) Game.abilityFx.push({kind:'emoji', e:i%2?'☄️':'💥', x:p.x+p.w/2+(Math.random()*400-200), y:p.y-150-Math.random()*150, vx:-2-Math.random()*2, vy:4+Math.random()*3, life:1.5, born:Game.t});
+      addShake(8); SFX.rare(); if(typeof toast==='function') toast('☄️ METEOR SHOWER! Everyone\'s stunned — +15 space coins!'); break;
+    }
+    case 'rebirth': {                                     // 🐦‍🔥 Solar Phoenix — falling can't stop you
+      Game.rebirthUntil = Game.t + 12000;
+      p.invuln = Math.max(p.invuln, 1200);
+      for(let i=0;i<12;i++) Game.abilityFx.push({kind:'emoji', e:'🔥', x:p.x+p.w/2+(Math.random()*40-20), y:p.y+p.h/2+(Math.random()*40-20), vx:0, vy:-1.2, life:1.2, born:Game.t});
+      SFX.rare(); if(typeof toast==='function') toast('🐦‍🔥 REBIRTH MODE — for 12s no fall can stop you!'); break;
+    }
+    case 'fireworks': {                                   // 🎆 Firework Fox — bursts + launch + loot
+      if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
+        if(Math.hypot((r.x+17)-(p.x+p.w/2),(r.y+17)-(p.y+p.h/2))<470 && typeof mpSendStun==='function') mpSendStun(r.id, 2); } }
+      p.vy = -16; p.onGround=false; p.jumps=0;
+      SAVE.coins += 8; persist(); if(typeof updateCoinDisplays==='function') updateCoinDisplays();
+      for(let i=0;i<16;i++){ const an=i/16*Math.PI*2;
+        Game.abilityFx.push({kind:'emoji', e:i%2?'🎆':'🎇', x:p.x+p.w/2+Math.cos(an)*50, y:p.y+Math.sin(an)*50, vx:Math.cos(an)*2, vy:Math.sin(an)*2-1, life:1.3, born:Game.t}); }
+      addShake(6); SFX.rare(); if(typeof toast==='function') toast('🎆 FIREWORKS! +8 coins and UP you go!'); break;
+    }
     case 'swap': {                                        // 🥸 Mr. Swap — switcheroo with the nearest friend
       let best=null, bd=1e9;
       if(Game.multiplayer){ for(const r of mpRemoteList()){ if(typeof r.x!=='number') continue;
@@ -933,9 +1010,10 @@ function update(dt){
 
   // out of bounds (fell off bottom)
   if(p.y > Game.world.height + 240){
-    if(Game.petSaveFall && Game.lastSafe){    // Phoenix: pop back onto your last platform
-      p.x=Game.lastSafe.x; p.y=Game.lastSafe.y; p.vx=0; p.vy=0; p.invuln=600;
-      if(typeof toast==='function') toast('🔥 Rescued by your Phoenix!');
+    if((Game.petSaveFall || Game.t<(Game.rebirthUntil||0)) && Game.lastSafe){   // Phoenix rescue / 🐦‍🔥 Rebirth mode
+      p.x=Game.lastSafe.x; p.y=Game.lastSafe.y; p.vx=0; p.vy=0; p.invuln=Math.max(600, Game.t<(Game.rebirthUntil||0)?1200:600);
+      if(Game.t<(Game.rebirthUntil||0)){ for(let i=0;i<8;i++) Game.abilityFx.push({kind:'emoji', e:'🔥', x:p.x+p.w/2+(Math.random()*30-15), y:p.y+p.h/2+(Math.random()*30-15), vx:0, vy:-1, life:1, born:Game.t}); }
+      if(typeof toast==='function') toast(Game.t<(Game.rebirthUntil||0) ? '🐦‍🔥 REBORN in flames!' : '🔥 Rescued by your Phoenix!');
     } else respawn();
   }
 
@@ -1773,12 +1851,19 @@ function onSwappedNet(x, y){
   addShake(4); SFX.hit(); if(typeof toast==='function') toast('🥸 SWITCHEROO! You got swapped!');
 }
 /* a Clown honked me — controls reversed for 4 seconds */
-function onConfusedNet(){
+function onConfusedNet(secs){
   if(!Game.running) return;
-  Game.confuseUntil = Game.t + 4000;
+  Game.confuseUntil = Game.t + Math.min(8,Math.max(1,(+secs||4)))*1000;
   SFX.hit(); if(typeof toast==='function') toast('🤡 HONK! Your controls are REVERSED for 4s!');
 }
 /* a Yeti froze me solid */
+function onFlashedNet(senderId){                       // ☀️ someone sun-flared me
+  Game.flashUntil = Game.t + 3000;
+  addShake(4); SFX.hit();
+  const who=(typeof mpRemoteList==='function' && (mpRemoteList().find(r=>r.id===senderId)||{}).name)||'A friend';
+  if(typeof toast==='function') toast('☀️ '+who+' blinded you! TOO BRIGHT!');
+}
+
 function onFreezeNet(){
   if(!Game.running) return;
   Game.stunUntil = Math.max(Game.stunUntil||0, Game.t+2500);
@@ -3323,6 +3408,13 @@ function render(){
     ctx.restore();
     drawNameTag(ctx, p.x+p.w/2, p.y-10, 'You');
   } else if(!Game.spectating){
+    // 🌀 my dropped portal (pulses until it expires)
+    if(Game.portalMark && Game.t < Game.portalMark.until){
+      const pk=Game.portalMark, pulse=1+0.15*Math.sin(Game.t/150);
+      ctx.save(); ctx.translate(pk.x+17, pk.y+17); ctx.scale(pulse,pulse);
+      ctx.font='30px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha=0.85; ctx.fillText('🌀',0,0); ctx.restore(); ctx.globalAlpha=1;
+    }
     // 🥷 my own shadow decoy (shown faded so I can tell which one is fake)
     if(Game.decoy && Game.t < Game.decoy.until){
       ctx.save(); ctx.globalAlpha=0.55;
@@ -3378,6 +3470,14 @@ function render(){
     ctx.fillText(left, bx, by+1);
     ctx.font='11px serif'; ctx.fillText('🌈', bx, by-17);
     ctx.restore();
+  }
+  // ☀️ Sun Flare blind: a white-out that fades over 3 seconds
+  if(Game.t < (Game.flashUntil||0)){
+    const k=Math.min(1,(Game.flashUntil-Game.t)/3000);
+    ctx.fillStyle='rgba(255,255,244,'+(0.92*k).toFixed(3)+')';
+    ctx.fillRect(0,0,Game.W,Game.H);
+    if(k>0.25){ ctx.fillStyle='rgba(90,80,140,'+(0.7*k)+')'; ctx.font='bold 26px Nunito'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('☀️ TOO BRIGHT!', Game.W/2, Game.H/2); }
   }
   updateHudLive();
 }

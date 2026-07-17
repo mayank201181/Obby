@@ -53,6 +53,14 @@ const ABILITY_INFO = {
   flight:     '🦄 Rainbow Flight! Soar anywhere, invincible, for 5 seconds — ready again just 3s after you land',
   stomp:      '🦕 Mega Stomp! Crash down with a shockwave that flattens & stuns everyone near you',
   supernova:  '🌟 SUPERNOVA! Erupt in starlight — stun every rival, wipe nearby hazards, tame the boss & launch skyward, invincible',
+  cyclone:    '🌪️ CYCLONE! Become a living tornado for 4 seconds — super speed, invincible, and any friend near you when you spin up gets flung and stunned!',
+  sunflare:   '☀️ SUN FLARE! Blast blinding light — every friend near you gets a WHITED-OUT screen for 3 seconds and hazards freeze. They literally cannot see!',
+  portal:     '🌀 PORTAL! Drop a portal wherever you stand, keep going, then press again to ZIP back to it from anywhere. Sneaky shortcuts, safe retreats!',
+  hypno:      '👁️ HYPNO! Every single friend on the WHOLE MAP gets reversed controls for 5 seconds — left is right everywhere. Total chaos, no escape!',
+  bubbletrap: '🫧 BUBBLE TRAP! Trap every friend near you inside a bubble for 3 seconds while YOU float feather-light for 5 — bounce away giggling!',
+  meteor:     '☄️ METEOR SHOWER! Rain space rocks on the WHOLE map — every friend everywhere is stunned 3s, hazards freeze 5s, and you pocket +15 coins of space loot!',
+  rebirth:    '🐦‍🔥 REBIRTH! For 12 seconds you CANNOT be stopped by falling — tumble off anything and you burst back onto your platform in flames. Fear nothing!',
+  fireworks:  '🎆 FIREWORKS! Explode a ring of fireworks that stuns every friend nearby, launches YOU sky-high with refreshed jumps, and sprinkles +8 coins!',
   // ===== MYTHICAL activated power (strong, but below the secrets) =====
   cloudjump:  '☁️ Cloud Leap! Launch high off a cloud and refill your jumps in mid-air',
   // ===== TROLL powers =====
@@ -166,6 +174,14 @@ const CREATURES = [
   { id:'superblob', name:'Super Blob', emoji:'🦸', rarity:'secret', abilities:['herotime','speed3','tripleJump'],    sell:700 },
   { id:'volcano',   name:'Volcano',    emoji:'🌋', rarity:'secret', abilities:['eruption','speed3','highJump','doubleJump'], sell:700 },
   { id:'angel',     name:'Angel',      emoji:'👼', rarity:'secret', abilities:['miracle','glideStrong','tripleJump','speed3'],sell:700 },
+  { id:'stormdjinn',  name:'Storm Djinn',  emoji:'🌪️', rarity:'secret', abilities:['cyclone','speed3','tripleJump'],              sell:700 },
+  { id:'sunspirit',   name:'Sun Spirit',   emoji:'☀️', rarity:'secret', abilities:['sunflare','speed3','doubleJump','glide'],     sell:700 },
+  { id:'portalblob',  name:'Portal Blob',  emoji:'🌀', rarity:'secret', abilities:['portal','speed3','doubleJump','highJump'],    sell:700 },
+  { id:'hypnoblob',   name:'Hypno Blob',   emoji:'👁️', rarity:'secret', abilities:['hypno','speed3','doubleJump','glideStrong'],  sell:700 },
+  { id:'bubblewitch', name:'Bubble Witch', emoji:'🫧', rarity:'secret', abilities:['bubbletrap','glideStrong','speed3','tripleJump'], sell:700 },
+  { id:'meteorking',  name:'Meteor King',  emoji:'☄️', rarity:'secret', abilities:['meteor','speed3','doubleJump','highJump'],    sell:700 },
+  { id:'solarphoenix',name:'Solar Phoenix',emoji:'🐦‍🔥', rarity:'secret', abilities:['rebirth','speed3','tripleJump','glideStrong'], sell:700 },
+  { id:'fireworkfox', name:'Firework Fox', emoji:'🎆', rarity:'secret', abilities:['fireworks','speed3','doubleJump','highJump'], sell:700 },
 ];
 
 /* ===== the mega-roster: every pet below has its OWN unique signature perk —
@@ -710,7 +726,7 @@ function equippedAbilities(){
     canMagnet:   set.has('coinmagnet'),
     canShield:   set.has('autoshield'),
     glow:        set.has('starglow'),
-    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','blackhole','goldrush','herotime','eruption','miracle','swap','honk','eggsplat','cloudjump','hop'].find(pw=>set.has(pw)) || null,
+    power: ['polymorph','firebreath','freeze','vanish','phase','teleport','grapple','flight','stomp','supernova','lightning','rocket','slowtime','nightswarm','shadowdash','rewind','coinstorm','icebridge','blackhole','goldrush','herotime','eruption','miracle','cyclone','sunflare','portal','hypno','bubbletrap','meteor','rebirth','fireworks','swap','honk','eggsplat','cloudjump','hop'].find(pw=>set.has(pw)) || null,
   };
 }
 // creatures tagged as trolls (shown in their own collection section)
