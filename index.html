@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#d9c6ff"/>
+<title>Obby Blobs 🫧 — Climb to the Top!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css"/>
+</head>
+<body>
+<div class="bg-decor" id="bgDecor"></div>
+<div class="toast" id="toast"></div>
+
+<!-- ============ LOBBY ============ -->
+<section class="screen active" id="lobbyScreen">
+  <div class="topbar">
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+      <button class="btn ghost small" id="soundBtn" style="width:auto;padding:8px 12px" onclick="toggleSound()">🔊</button>
+      <button class="btn ghost small" id="musicBtn" style="width:auto;padding:8px 12px" onclick="openMusicPicker()">🎵</button>
+    </div>
+    <div style="text-align:right">
+      <div class="muted" style="margin-bottom:4px">🎨 Background</div>
+      <div class="bgpick" id="bgPicker"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h1 class="title">Obby Blobs</h1>
+    <p class="subtitle">Bounce, climb &amp; race to the top! 🫧</p>
+    <div class="preview-wrap"><canvas id="lobbyPreview"></canvas></div>
+    <input class="text" id="nameInput" maxlength="12" placeholder="Type your name…"/>
+    <button class="btn gold" id="todayBtn" onclick="openToday()">⭐ Today's Stuff <span class="badge" id="todayBadge" style="display:none"></span></button>
+    <button class="btn pink" onclick="openPlay()">▶ Play</button>
+    <button class="btn blue" onclick="openPets()">🐾 Pets &amp; Chests</button>
+    <div class="lobby-cols">
+      <div class="lobby-col">
+        <button class="btn ghost" onclick="openCustomize()">🎨 Customise</button>
+        <button class="btn ghost" onclick="openAchievements()">🏆 Badges</button>
+        <button class="btn ghost" onclick="openPlayground()">🐾 Playground</button>
+        <button class="btn ghost" onclick="openCafe()">🍔 Pet Café</button>
+        <button class="btn ghost" onclick="openMyObbys()">🛠️ My Obbys</button>
+      </div>
+      <div class="lobby-col">
+        <button class="btn ghost" id="questBtn" onclick="openQuests()">📋 Daily Quests</button>
+        <button class="btn ghost" onclick="openShop()">🛍️ Daily Shop <span class="badge" style="background:var(--gold);color:#7a5512">sale!</span></button>
+        <button class="btn ghost" id="dailyBtn" onclick="startDaily()">🗓️ Daily Challenge</button>
+        <button class="btn ghost" id="heistBtn" onclick="startHeist()">💰 Gold Heist</button>
+        <button class="btn ghost" id="chestBtn" onclick="openChest()">🎁 Daily Chest
+          <span class="badge" id="chestReadyDot" style="display:none">!</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PETS / CHESTS ============ -->
+<section class="screen" id="petsScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🐾 Pets &amp; Chests</h2>
+    <div class="tabs" id="petsTabs">
+      <div class="tab active" data-ptab="chests" onclick="setPetsTab('chests')">Chests 📦</div>
+      <div class="tab" data-ptab="collection" onclick="setPetsTab('collection')">Pets 🐰</div>
+      <div class="tab" data-ptab="fuse" onclick="setPetsTab('fuse')">Fuse 🧬</div>
+      <div class="tab" data-ptab="trade" onclick="setPetsTab('trade')">Trade 🔁</div>
+    </div>
+    <div class="scroll" id="petsBody"></div>
+  </div>
+</section>
+
+<!-- ============ MY OBBYS ============ -->
+<section class="screen" id="myObbysScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🛠️ My Obbys</h2>
+    <p class="hint">Every obby you saved from the Obby Maker — tap ▶ to play one!</p>
+    <div class="scroll" id="myObbysBody"></div>
+    <button class="btn pink" onclick="startMakerSolo()">➕ Build a new obby</button>
+  </div>
+</section>
+
+<!-- ============ AREA CLASH PICK ============ -->
+<section class="screen" id="clashPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🏰 Area Clash</h2>
+    <p class="hint">Build your castle from coloured bricks and hide your 🏀 ball inside. Cannons 💣, traps 🪤 and breaches ⛏️ cost 🪙10. When the timer ends it's BATTLE — steal their ball and carry it home to win <b>🪙200</b>! Tag the thief to get your ball back.</p>
+    <h3 style="margin:10px 0 4px">⏱ How long to build?</h3>
+    <button class="btn blue" onclick="startClash(1)">⏱ 1 minute<br><span style="font-size:12px;font-weight:700">quick scrap</span></button>
+    <button class="btn pink" onclick="startClash(3)">⏱ 3 minutes<br><span style="font-size:12px;font-weight:700">proper castle</span></button>
+    <button class="btn gold" onclick="startClash(5)">⏱ 5 minutes<br><span style="font-size:12px;font-weight:700">mega fortress</span></button>
+  </div>
+</section>
+
+<!-- ============ LEVEL MAP ============ -->
+<section class="screen" id="levelMapScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2 id="mapTitle">Pick a level</h2>
+    <div id="levelMapBody"></div>
+  </div>
+</section>
+
+<!-- ============ ACHIEVEMENTS ============ -->
+<section class="screen" id="achievementsScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🏆 Badges</h2>
+    <p class="hint" id="achProgress"></p>
+    <div class="scroll" id="achBody"></div>
+  </div>
+</section>
+
+<!-- ============ MUSIC PICKER ============ -->
+<section class="screen" id="musicScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🎵 Pick your music</h2>
+    <p class="hint">All piano — no lyrics. Tap one to play it.</p>
+    <div class="scroll" id="musicBody"></div>
+  </div>
+</section>
+
+<!-- ============ TODAY HUB ============ -->
+<section class="screen" id="todayScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>⭐ Today's Stuff</h2>
+    <p class="hint">Free rewards reset every day — come back daily to grab them all!</p>
+    <div class="scroll" id="todayBody"></div>
+  </div>
+</section>
+
+<!-- ============ LOGIN REWARDS ============ -->
+<section class="screen" id="loginScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🎁 Daily Login Rewards</h2>
+    <p class="hint" id="loginHint">Play every day for bigger and bigger prizes!</p>
+    <div class="login-grid" id="loginGrid"></div>
+    <button class="btn pink" id="loginClaimBtn" onclick="claimLoginDay()">Claim today's reward 🎁</button>
+  </div>
+</section>
+
+<!-- ============ PET CAFÉ (feeding) ============ -->
+<section class="screen" id="cafeScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🍔 Pet Café</h2>
+    <p class="hint">Catch food, merge <b>3</b> into a meal, and feed your pets to keep their powers! Each pet has a favourite. 🍽️</p>
+    <button class="btn gold" onclick="startFoodHunt()">🍽️ Food Hunt — catch food! (🪙20)</button>
+
+    <h3 style="margin:12px 0 4px">🍳 Make a meal (pick 3)</h3>
+    <div class="meal-tray" id="mealTray"></div>
+    <div class="meal-name" id="mealName"></div>
+    <div class="grid scroll" id="cafePantry" style="max-height:24vh"></div>
+
+    <h3 style="margin:14px 0 4px">🐾 Tap a pet to feed</h3>
+    <input id="cafeSearch" type="text" placeholder="🔍 Search pets… (type u for Unicorn!)" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:2px solid rgba(155,107,255,.35);background:rgba(255,255,255,.08);color:inherit;font:inherit;font-size:14px;margin-bottom:6px;outline:none"
+      oninput="cafeSearchChange(this.value)">
+    <div class="scroll" id="cafePets" style="max-height:32vh"></div>
+    <button class="btn pink" id="feedBtn" onclick="doFeed()">🍽️ Feed <span id="feedPetName">a pet</span></button>
+  </div>
+</section>
+
+<!-- ============ FOOD HUNT minigame ============ -->
+<section class="screen" id="foodHuntScreen" style="padding:0">
+  <div class="hud" style="pointer-events:none">
+    <div class="panel" id="fhTimer">⏱ 15s</div>
+    <div class="panel" id="fhCount">🍽️ 0</div>
+  </div>
+  <div class="fh-wrap"><canvas id="foodHuntCanvas"></canvas></div>
+</section>
+
+<!-- ============ PET PLAYGROUND ============ -->
+<section class="screen" id="playgroundScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="closePlayground()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🐾 Pet Playground</h2>
+    <p class="hint" id="playgroundHint">Tap your pets to play with them!</p>
+    <div class="playground-wrap"><canvas id="playgroundCanvas"></canvas></div>
+  </div>
+</section>
+
+<!-- ============ DAILY QUESTS ============ -->
+<section class="screen" id="questsScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>📋 Daily Quests</h2>
+    <p class="hint">Three new quests every day. Finish them for coins!</p>
+    <div id="questsBody"></div>
+  </div>
+</section>
+
+<!-- ============ DAILY SHOP ============ -->
+<section class="screen" id="shopScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🛍️ Daily Shop</h2>
+    <p class="hint">A fresh set of items every day — all on sale! Comes back tomorrow.</p>
+    <div class="scroll" id="shopBody"></div>
+  </div>
+</section>
+
+<!-- ============ CUSTOMIZE / SHOP ============ -->
+<section class="screen" id="customizeScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>Customise your Blob</h2>
+    <div class="preview-wrap"><canvas id="customPreview"></canvas></div>
+    <div class="tabs" id="customTabs">
+      <div class="tab active" data-tab="skins" onclick="setTab('skins')">Skins 🎨</div>
+      <div class="tab" data-tab="accessories" onclick="setTab('accessories')">Items 🎀</div>
+      <div class="tab" data-tab="trails" onclick="setTab('trails')">Trails ✨</div>
+      <div class="tab" data-tab="faces" onclick="setTab('faces')">Faces 😊</div>
+    </div>
+    <p class="hint">Skins 🪙100 · Items 🪙150 · Trails 🪙200 (Rainbow 🪙300) · ✨ rare = Daily Chest · Wear pets as skins in the Pets tab!</p>
+    <div class="grid scroll" id="customGrid"></div>
+  </div>
+</section>
+
+<!-- ============ PLAY MENU ============ -->
+<section class="screen" id="playScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="showScreen('lobbyScreen');initLobby()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>How do you want to play?</h2>
+
+    <h3 style="margin:6px 0 2px">🧍 Solo</h3>
+    <p class="hint" style="margin-top:0">Climb on your own — 5 levels, 10 checkpoints. Pick a difficulty:</p>
+    <div class="row">
+      <button class="btn blue" onclick="playSolo('easy')">🌸 Easy<br><span style="font-size:12px;font-weight:700">no guns</span></button>
+      <button class="btn pink" onclick="playSolo('hard')">🔥 Hard<br><span style="font-size:12px;font-weight:700">shooting guns!</span></button>
+    </div>
+    <button class="btn gold" onclick="startTower()">🏗️ Endless Tower<br><span style="font-size:12px;font-weight:700">climb as high as you can!</span></button>
+    <button class="btn gold" onclick="startMine()">⛏️ Coin Mine<br><span style="font-size:12px;font-weight:700">dig deep, bank the loot &amp; find a secret pet!</span></button>
+    <button class="btn blue" onclick="openDisasterPick()">🌪️ Natural Disaster<br><span style="font-size:12px;font-weight:700">build &amp; survive!</span></button>
+    <button class="btn blue" onclick="openTagPick()">🏃 Tag<br><span style="font-size:12px;font-weight:700">obby or furniture room!</span></button>
+    <button class="btn gold" onclick="openColorTagPick()">🌈 Colour Tag<br><span style="font-size:12px;font-weight:700">stand on the called colour!</span></button>
+    <button class="btn pink" onclick="openRolePick('copsrobbers')">🚓 Cops &amp; Robbers<br><span style="font-size:12px;font-weight:700">rob the bank or catch the robber!</span></button>
+    <button class="btn gold" onclick="openClashPick()">🏰 Area Clash<br><span style="font-size:12px;font-weight:700">build a castle, hide your ball &amp; raid theirs!</span></button>
+    <button class="btn blue" onclick="startMakerSolo()">🛠️ Obby Maker<br><span style="font-size:12px;font-weight:700">build your OWN obby &amp; save it!</span></button>
+
+    <hr style="border:none;border-top:2px dashed #efe7fb;margin:16px 0">
+
+    <h3 style="margin:6px 0 2px">🤝 Team — 2 players</h3>
+    <p class="hint" style="margin-top:0">Make a room, share the code with your friend, then solve co-op puzzles together — stand on both <b>A</b> &amp; <b>B</b> pads to make bridges appear!</p>
+    <button class="btn pink" onclick="createTeam()">➕ Create Team</button>
+    <div class="row">
+      <input class="text" id="joinCodeInput" maxlength="6" placeholder="ENTER TEAM CODE" style="text-transform:uppercase"/>
+    </div>
+    <button class="btn gold" onclick="joinRoomWithCode()">🔑 Join Team</button>
+  </div>
+</section>
+
+<!-- ============ DISASTER PICKER ============ -->
+<section class="screen" id="disasterPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🌪️ Pick a Disaster</h2>
+    <p class="hint">Choose which disaster to survive — or go Random!</p>
+    <div class="scroll" id="disasterPickBody"></div>
+  </div>
+</section>
+
+<!-- ============ TAG PICKER ============ -->
+<section class="screen" id="tagPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🏃 Tag — pick a style</h2>
+    <p class="hint">How do you want to play tag?</p>
+    <button class="btn pink" onclick="openRolePick('roomtag')">🛋️ Room Tag<br><span style="font-size:12px;font-weight:700">solo · furniture room, pick your side!</span></button>
+    <button class="btn blue" onclick="startObbyTagFriends()">🧗 Obby Tag<br><span style="font-size:12px;font-weight:700">with a friend · climb &amp; chase in a Team room</span></button>
+  </div>
+</section>
+
+<!-- ============ ROLE PICKER (solo runner vs tagger) ============ -->
+<section class="screen" id="rolePickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2 id="roleTitle">Pick your side</h2>
+    <p class="hint">Play against a bot — which side do you want to be?</p>
+    <button class="btn pink" id="roleRunBtn" onclick="startWithRole('runner')">🏃 You run</button>
+    <button class="btn blue" id="roleTagBtn" onclick="startWithRole('tagger')">😈 You're IT</button>
+  </div>
+</section>
+
+<!-- ============ COLOUR TAG PICKER ============ -->
+<section class="screen" id="colorTagPickScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="openPlay()">← Back</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2>🌈 Colour Tag</h2>
+    <p class="hint">The tagger calls a rainbow colour — stand on it before you get tagged! Pick a style:</p>
+    <button class="btn pink" onclick="openRolePick('colortag','room')">🛋️ Side-scrolling<br><span style="font-size:12px;font-weight:700">wide room, colour pads on the floor</span></button>
+    <button class="btn blue" onclick="openRolePick('colortag','obby')">🧗 Obby<br><span style="font-size:12px;font-weight:700">climb between colour platforms</span></button>
+    <p class="hint" style="margin-top:10px">Want to play with friends? Make a Team room and pick 🌈 Colour Tag!</p>
+  </div>
+</section>
+
+<!-- ============ ROOM LOBBY ============ -->
+<section class="screen" id="roomScreen">
+  <div class="topbar">
+    <button class="btn ghost small" onclick="leaveRoom()">← Leave</button>
+    <div class="coins"><span class="c"></span><span data-coins>0</span></div>
+  </div>
+  <div class="card">
+    <h2 id="roomTitle">Room</h2>
+    <div class="code-box" id="roomCodeBox">·····</div>
+    <p class="hint" id="roomHint">Share this code with your friend.</p>
+    <div class="players-list" id="rosterList"></div>
+    <p class="muted">Players: <span id="rosterCount">1</span></p>
+    <button class="btn blue small" id="tradeBtn" style="display:none;width:100%" onclick="startTrade()">🔁 Trade pets with your friend</button>
+
+    <div id="hostControls" style="display:none">
+      <p class="hint">Pick a mode:</p>
+      <div class="row" id="modeBtns" style="flex-wrap:wrap">
+        <button class="btn ghost small" data-mode="coop" onclick="selectRoomMode('coop')">🤝 Team-up</button>
+        <button class="btn ghost small" data-mode="race" onclick="selectRoomMode('race')">🏁 Race</button>
+        <button class="btn ghost small" data-mode="tag" onclick="selectRoomMode('tag')">🏃 Tag</button>
+        <button class="btn ghost small" data-mode="roomtag" onclick="selectRoomMode('roomtag')">🛋️ Room Tag</button>
+        <button class="btn ghost small" data-mode="colortag" onclick="selectRoomMode('colortag')">🌈 Colour Tag</button>
+        <button class="btn ghost small" data-mode="copsrobbers" onclick="selectRoomMode('copsrobbers')">🚓 Cops &amp; Robbers</button>
+        <button class="btn ghost small" data-mode="disaster" onclick="selectRoomMode('disaster')">🌪️ Disaster</button>
+        <button class="btn ghost small" data-mode="tower" onclick="selectRoomMode('tower')">🏗️ Tower</button>
+        <button class="btn ghost small" data-mode="mine" onclick="selectRoomMode('mine')">⛏️ Coin Mine</button>
+        <button class="btn ghost small" data-mode="heist" onclick="selectRoomMode('heist')">💰 Heist</button>
+        <button class="btn ghost small" data-mode="clash" onclick="selectRoomMode('clash')">🏰 Area Clash</button>
+        <button class="btn ghost small" data-mode="maker" onclick="selectRoomMode('maker')">🛠️ Obby Maker</button>
+      </div>
+      <div class="row" id="clashMinsRow" style="display:none">
+        <button class="btn ghost small" data-cmins="1" onclick="selectClashMins(1)">⏱ 1 min</button>
+        <button class="btn ghost small" data-cmins="3" onclick="selectClashMins(3)">⏱ 3 min</button>
+        <button class="btn ghost small" data-cmins="5" onclick="selectClashMins(5)">⏱ 5 min</button>
+      </div>
+      <p class="hint" id="modeDesc">Team-up: stand on both pads together to make bridges appear!</p>
+      <p class="hint">Difficulty:</p>
+      <div class="row" id="diffBtns">
+        <button class="btn ghost small" data-diff="easy" onclick="selectRoomDiff('easy')">🌸 Easy</button>
+        <button class="btn ghost small" data-diff="hard" onclick="selectRoomDiff('hard')">🔥 Hard</button>
+      </div>
+      <p class="hint">Easy has no shooting cannons · Hard has them.</p>
+      <button class="btn pink" onclick="hostStart()">🚀 Start Game</button>
+    </div>
+    <div id="guestWait" style="display:none">
+      <p class="timer-big">Waiting for host to start… 🫧</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAME ============ -->
+<section class="screen" id="gameScreen">
+  <canvas id="gameCanvas"></canvas>
+  <div id="gameOverlay">
+    <div class="hud">
+      <div style="display:flex;gap:8px;flex-direction:column">
+        <div class="panel" id="hudLevel">Level 1/5</div>
+        <div class="panel small" id="hudCp">⛳ 0/10</div>
+        <div class="panel small" id="hudPower" style="display:none"></div>
+      </div>
+      <div class="hud-btns">
+        <div class="panel" id="hudCoins">🪙 0</div>
+        <button class="btn ghost small" id="restartBtn" style="width:auto;pointer-events:auto;display:none" onclick="restartFromCheckpoint()">🔁 Restart</button>
+        <button class="btn ghost small" style="width:auto;pointer-events:auto" onclick="quitGame()">⏏ Quit</button>
+      </div>
+    </div>
+
+    <div class="emote-bar" id="emoteBar" style="display:none"></div>
+
+    <div class="controls">
+      <div class="dpad">
+        <button class="arrow-btn" id="leftBtn" aria-label="Move left">◀</button>
+        <button class="arrow-btn" id="rightBtn" aria-label="Move right">▶</button>
+      </div>
+      <button class="jbtn boost" id="boostBtn" style="display:none" onclick="sendBoost()">🙌<br><span style="font-size:10px">BOOST</span></button>
+      <button class="jbtn ability" id="abilityBtn" style="display:none">✨<br><span style="font-size:10px">PLATFORM</span></button>
+      <button class="jbtn" id="jumpBtn">⬆<br><span style="font-size:13px">JUMP</span></button>
+    </div>
+
+    <div class="spectate-bar" id="spectateBar" style="display:none">
+      <span id="spectateName">👁 Watching…</span>
+      <button class="btn ghost small" onclick="spectateNext()">Next 👁</button>
+      <button class="btn pink small" onclick="backToLobby()">Lobby</button>
+    </div>
+
+    <div class="build-bar" id="buildBar" style="display:none">
+      <button class="btn ghost small" id="buildToggle" onclick="toggleBuild()">🧱 Build</button>
+      <div class="build-colours" id="buildColours"></div>
+      <button class="btn ghost small" id="lavaProofBtn" onclick="toggleLavaProof()">🔥 Lava-proof 🪙20</button>
+    </div>
+
+    <div class="build-bar" id="clashBar" style="display:none"></div>
+    <div class="build-bar" id="makerBar" style="display:none;flex-wrap:wrap"></div>
+    <div id="makerActs" style="display:none;position:absolute;top:110px;right:16px;flex-direction:column;align-items:flex-end;gap:8px;z-index:6"></div>
+    <button class="btn gold" id="clashActBtn" onclick="clashAction()"
+      style="display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:132px;width:auto;padding:12px 22px;pointer-events:auto;z-index:5"></button>
+    <div class="camo-bar" id="camoBar" style="display:none"></div>
+    <div class="color-bar" id="colorBar" style="display:none"></div>
+  </div>
+</section>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-back" id="chestModal">
+  <div class="card">
+    <div id="chestBody"></div>
+    <button class="btn pink" id="chestClaim">Claim 🎁</button>
+    <button class="btn ghost" onclick="closeChest()">Close</button>
+  </div>
+</div>
+<div class="modal-back" id="winModal">
+  <div class="card" id="winBody"></div>
+</div>
+<div class="modal-back" id="petModal">
+  <div class="card" id="petModalBody"></div>
+</div>
+<div class="modal-back" id="tradeModal">
+  <div class="card" id="tradeModalBody"></div>
+</div>
+<div class="modal-back" id="morphModal">
+  <div class="card" id="morphModalBody"></div>
+</div>
+<div class="modal-back" id="pickModal">
+  <div class="card">
+    <div id="pickShopBody" style="max-height:58vh;overflow-y:auto"></div>
+    <button class="btn pink" onclick="closeModal('pickModal')">✅ Done — back to digging!</button>
+  </div>
+</div>
+
+<div class="modal-back" id="bgModal">
+  <div class="card" style="max-width:430px;width:100%">
+    <h2 style="margin:0 0 6px">🎨 Background Maker</h2>
+    <div id="bgMkPreview" style="height:64px;border-radius:14px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.12);margin-bottom:8px"></div>
+    <div class="muted" style="margin:2px 0 4px">Tap a colour — it goes on the side you picked:</div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px">
+      <button class="btn blue small" id="bgSideL" style="width:auto" onclick="bgSetSide('L')">⬅️ Left side</button>
+      <button class="btn ghost small" id="bgSideR" style="width:auto" onclick="bgSetSide('R')">Right side ➡️</button>
+    </div>
+    <div class="bgpick" id="bgMkColors" style="justify-content:center"></div>
+    <div class="muted" style="margin:10px 0 2px">Pick up to 3 emojis — they go BIG all over your background!</div>
+    <div id="bgMkMix" style="font-weight:800;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px"></div>
+    <div id="bgMkEmojis" style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;max-height:26vh;overflow-y:auto;font-size:22px;line-height:1"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn ghost small" style="flex:1" onclick="bgClearEmojis()">🚫 No pattern</button>
+      <button class="btn pink small" style="flex:1" onclick="bgMakerDone()">✅ Done!</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/peerjs.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/pets.js"></script>
+<script src="js/character.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/multiplayer.js"></script>
+<script src="js/controls.js"></script>
+<script src="js/game.js"></script>
+<script src="js/clash.js"></script>
+<script src="js/maker.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

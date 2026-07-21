@@ -1,0 +1,7 @@
+node_modules/
+scratch_*.mjs
+shot_*.png
+*.log
+.DS_Store
+.vercel
+.env*
